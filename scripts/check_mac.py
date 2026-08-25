@@ -106,7 +106,7 @@ def verificar_voz() -> None:
 
     if vozes and not de_pe:
         print("\n      Ouve-a já, sem servidor nenhum:")
-        print(f'        say -v {escolhida} "Olá Lara, eu sou o Zeca."')
+        print(f'        say -v {escolhida} "Olá Lara, eu sou a Lylla."')
         print("\n      E para comparar com as outras candidatas:")
         print("        python scripts/testar_vozes.py --cego")
 

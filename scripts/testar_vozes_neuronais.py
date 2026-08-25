@@ -26,11 +26,11 @@ pessoa.
 ## Motores (cada um no seu venv — as dependências brigam entre si)
 
     # A · XTTS — o primeiro a experimentar
-    python3.12 -m venv ~/.venvs/zeca-xtts && source ~/.venvs/zeca-xtts/bin/activate
+    python3.12 -m venv ~/.venvs/lylla-xtts && source ~/.venvs/lylla-xtts/bin/activate
     pip install torch torchaudio coqui-tts huggingface_hub
 
     # B · MLX — Qwen3 e Chatterbox, nativo em Metal
-    python3.12 -m venv ~/.venvs/zeca-mlx && source ~/.venvs/zeca-mlx/bin/activate
+    python3.12 -m venv ~/.venvs/lylla-mlx && source ~/.venvs/lylla-mlx/bin/activate
     pip install -U mlx-audio
 
 ⚠️ Nada disto foi testado nesta máquina — não há Mac nem acesso ao Hugging Face
@@ -54,7 +54,7 @@ REFERENCIA = RAIZ / "data" / "referencia.wav"
 REFERENCIA_TXT = RAIZ / "data" / "referencia.txt"
 
 FRASE = (
-    "Olá Lara! Eu sou o Zeca. "
+    "Olá Lara! Eu sou a Lylla. "
     "Tenho 2 rodas, 4 servos nos braços e 32 luzes em cada olho. "
     "Queres dar uma volta pela sala?"
 )
@@ -198,7 +198,7 @@ def motor_xtts(nome: str, repo: str | None, texto: str, dev: str) -> Path | None
     from TTS.tts.configs.xtts_config import XttsConfig
     from TTS.tts.models.xtts import Xtts
 
-    pasta = Path.home() / ".cache" / "zeca-xtts-ptpt"
+    pasta = Path.home() / ".cache" / "lylla-xtts-ptpt"
     pasta.mkdir(parents=True, exist_ok=True)
     for ficheiro in ("model.pth", "config.json", "vocab.json", "dvae.pth", "mel_stats.pth"):
         if not (pasta / ficheiro).is_file():
@@ -262,25 +262,25 @@ MOTORES = {
         "XTTS-v2 afinado para português europeu · clona a tua voz",
         lambda t, d: motor_xtts("xtts-ptpt", "Martim-Ramos-Neural/xtts-v2-antonio-oliveira-pt-pt", t, d),
         "pip install torch torchaudio coqui-tts huggingface_hub",
-        "zeca-xtts",
+        "lylla-xtts",
     ),
     "xtts-base": (
         "XTTS-v2 base · o controlo — deve soar BRASILEIRO",
         lambda t, d: motor_xtts("xtts-base", None, t, d),
         "pip install torch torchaudio coqui-tts",
-        "zeca-xtts",
+        "lylla-xtts",
     ),
     "qwen3": (
         "Qwen3-TTS 1.7B · Apache-2.0, o mais recente",
         lambda t, d: motor_mlx("qwen3", "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-8bit", t, None),
         "pip install -U mlx-audio",
-        "zeca-mlx",
+        "lylla-mlx",
     ),
     "chatterbox": (
         "Chatterbox multilingue v3 · MIT, mas lento",
         lambda t, d: motor_mlx("chatterbox", "mlx-community/chatterbox-multilingual-v3", t, "pt"),
         "pip install -U mlx-audio",
-        "zeca-mlx",
+        "lylla-mlx",
     ),
 }
 

@@ -1455,7 +1455,7 @@ telemóvel — vê pelos olhos do robô antes de ele ter olhos.
 Vai repetir isto vinte vezes.
 
 **A Lara faz:** Ouve as vozes candidatas às cegas (`scripts/testar_vozes.py --cego`),
-escolhe a do Zeca, e faz o robô contar anedotas com ela.
+escolhe a da Lylla, e faz o robô contar anedotas com ela.
 
 **O pai faz** (nada de soldar — o amplificador I2S saiu do plano, ver D6):
 1. reSpeaker XVF3800 numa porta USB do Pi; coluna na ficha **JST PH 2.0** da placa (a

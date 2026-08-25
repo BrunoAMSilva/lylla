@@ -33,11 +33,18 @@ def _iniciar():
     try:
         from picamera2 import Picamera2
 
+        from libcamera import Transform
+
         largura, altura = config.obter("faces.resolucao", [640, 480])
+        # A Camera Module 3 fica muitas vezes montada ao contrário (o cabo sai
+        # por cima). Rodar aqui, e não depois: o detetor de caras só encontra
+        # caras direitas — com a imagem invertida ele "não vê ninguém".
+        rodar = bool(config.obter("faces.rodar_180", False))
         _camara = Picamera2()
         _camara.configure(
             _camara.create_preview_configuration(
-                main={"size": (int(largura), int(altura)), "format": "RGB888"}
+                main={"size": (int(largura), int(altura)), "format": "RGB888"},
+                transform=Transform(hflip=rodar, vflip=rodar),
             )
         )
         _camara.start()

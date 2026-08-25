@@ -71,7 +71,7 @@ def arrancar() -> Maquina:
 
     maquina = Maquina()
     maquina.mudar(Estado.ATENTO)
-    speak.falar(f"Olá! Eu sou o {nome}.")
+    speak.falar(f"Olá! Chamo-me {nome}.")
     arms.acenar(2)
     maquina.mudar(Estado.A_DORMIR)
     return maquina

@@ -56,7 +56,7 @@ def carregar_personalidade() -> str:
             if not linha.strip().startswith("#")
         ]
         return "\n".join(linhas).strip()
-    return f"És o {config.nome_do_robo()}, um robô simpático. Falas português de Portugal."
+    return f"Chamas-te {config.nome_do_robo()} e és um robô simpático. Falas português de Portugal."
 
 
 def esta_ligado(timeout: float = 2.0) -> bool:

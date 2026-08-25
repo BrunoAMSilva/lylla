@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""OUVIR AS VOZES CANDIDATAS — e deixar a Lara escolher a do Zeca.
+"""OUVIR AS VOZES CANDIDATAS — e deixar a Lara escolher a da Lylla.
 
     pip install "piper-tts" phoonnx tugaphone
     python scripts/testar_vozes.py            # gera os ficheiros
@@ -41,7 +41,7 @@ MODELOS = RAIZ / "models"
 # Frase de teste: leva números e nomes próprios de propósito. É aí que as vozes
 # fracas se desmancham — a `tugão` não traz normalização de texto nenhuma.
 FRASE = (
-    "Olá Lara! Eu sou o Zeca. "
+    "Olá Lara! Eu sou a Lylla. "
     "Tenho 2 rodas, 4 servos nos braços e 32 luzes em cada olho. "
     "Queres dar uma volta pela sala?"
 )

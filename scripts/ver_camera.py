@@ -24,10 +24,10 @@ import threading
 from http import server
 
 PAGINA = """<!doctype html>
-<html lang="pt"><head><meta charset="utf-8"><title>Zeca — o que ele vê</title>
+<html lang="pt"><head><meta charset="utf-8"><title>Lylla — o que ela vê</title>
 <meta name="viewport" content="width=device-width, initial-scale=1"></head>
 <body style="margin:0;background:#161B22;color:#F4F6F8;font-family:sans-serif;text-align:center">
-<h2 style="margin:12px;font-weight:normal">O que o Zeca vê</h2>
+<h2 style="margin:12px;font-weight:normal">O que a Lylla vê</h2>
 <img src="stream.mjpg" alt="câmara do robô" style="max-width:100%;height:auto;border-radius:8px">
 </body></html>
 """

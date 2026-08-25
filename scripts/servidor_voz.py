@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""A VOZ DO ZECA — o serviço que corre no MAC.
+"""A VOZ DA LYLLA — o serviço que corre no MAC.
 
     python scripts/servidor_voz.py                 # Joana, porta 8420
     python scripts/servidor_voz.py --voz Catarina
@@ -43,7 +43,7 @@ import wave
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-CACHE = Path.home() / ".cache" / "zeca-voz"
+CACHE = Path.home() / ".cache" / "lylla-voz"
 MAX_CARACTERES = 1000
 PALAVRAS_POR_MINUTO = 180  # o ritmo natural do `say`
 
@@ -135,7 +135,7 @@ def vozes_instaladas() -> list[str]:
 
 
 class Manipulador(BaseHTTPRequestHandler):
-    server_version = "ZecaVoz/1.0"
+    server_version = "LyllaVoz/1.0"
 
     def log_message(self, formato, *args):  # noqa: A002
         print(f"   {self.address_string()} · {formato % args}")
@@ -186,7 +186,7 @@ class Manipulador(BaseHTTPRequestHandler):
 
 def servir(host: str, porta: int) -> None:
     servidor = ThreadingHTTPServer((host, porta), Manipulador)
-    print(f"\n🔊 A voz do Zeca está de pé em http://{host}:{porta}")
+    print(f"\n🔊 A voz da Lylla está de pé em http://{host}:{porta}")
     print(f"   motor: {_opcoes.motor} · voz: {_opcoes.voz} · cache: {CACHE}")
     print("   No Pi, põe isto no config/robot.local.yaml:")
     print(f"     voz:\n       servidor: \"http://{platform.node()}:{porta}/falar\"")

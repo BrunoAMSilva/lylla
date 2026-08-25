@@ -113,7 +113,7 @@ def _placa_por_omissao(nome: str) -> bool:
 def main() -> int:
     nome = config.nome_do_robo()
     print(f"\n{'=' * 62}")
-    print(f"  DIAGNÓSTICO DO {nome.upper()}")
+    print(f"  DIAGNÓSTICO · {nome.upper()}")
     print(f"{'=' * 62}")
 
     if config.a_simular():

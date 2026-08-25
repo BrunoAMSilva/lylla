@@ -8,7 +8,7 @@ robô existir.
 
 | | O quê | Quanto tempo | Precisa de quê |
 |---|---|---|---|
-| 1 | **A voz do Zeca** | 30 min | só o Mac |
+| 1 | **A voz da Lylla** | 30 min | só o Mac |
 | 2 | **O cartão** | uma tarde | tesoura e caixas |
 | 3 | **As caras** | sempre que ela quiser | só o Mac |
 | 4 | **O cérebro** | uma noite (download) | só o Mac |
@@ -18,7 +18,7 @@ robô existir.
 
 ---
 
-## 1 · A voz do Zeca — 30 minutos, e é o melhor primeiro passo
+## 1 · A voz da Lylla — 30 minutos, e é o melhor primeiro passo
 
 A voz corre no Mac. É lá que ela vive e é de lá que o robô a vai buscar.
 
@@ -26,7 +26,7 @@ A voz corre no Mac. É lá que ela vive e é de lá que o robô a vai buscar.
 português europeu e toca-as por ordem aleatória, sem dizer qual é qual:
 
 ```bash
-python3 -m venv ~/.venvs/zeca && source ~/.venvs/zeca/bin/activate
+python3 -m venv ~/.venvs/lylla && source ~/.venvs/lylla/bin/activate
 pip install phoonnx tugaphone piper-tts
 
 python scripts/testar_vozes.py --cego
@@ -51,7 +51,7 @@ Noutro terminal:
 ```bash
 curl -s -X POST http://localhost:8420/falar \
   -H "Content-Type: application/json" \
-  -d '{"texto": "Olá Lara. Eu sou o Zeca. Ainda não tenho corpo, mas já tenho voz."}' \
+  -d '{"texto": "Olá Lara. Eu sou a Lylla. Ainda não tenho corpo, mas já tenho voz."}' \
   -o ola.wav && afplay ola.wav
 ```
 

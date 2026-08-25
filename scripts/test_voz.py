@@ -28,7 +28,7 @@ FRASES = [
 
 def testar_falar(texto: str | None) -> int:
     nome = config.nome_do_robo()
-    print(f"\n🔊 A testar a voz do {nome}…")
+    print(f"\n🔊 {nome} — a testar a voz…")
     servidor = config.obter("voz.servidor")
     if servidor:
         print(f"   voz: {config.obter('voz.voz_mac', 'Joana')} · vinda de {servidor}")

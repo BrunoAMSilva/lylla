@@ -6,7 +6,7 @@
 # ============================================================================
 
 # O nome do robô. Escolhido pela Lara.
-nome: "Zeca"
+nome: "Lylla"
 
 # ----------------------------------------------------------------------------
 # MOTORES
@@ -115,6 +115,10 @@ faces:
                             # dizer "não te conheço" à Lara.
   fotos_por_pessoa: 8       # quantas fotos tirar ao registar alguém
   resolucao: [640, 480]     # maior = mais lento, não necessariamente melhor
+  rodar_180: false          # true se a câmara ficar montada ao contrário (cabo
+                            # a sair por cima). Confirmar com ver_camera.py:
+                            # se a imagem vier invertida, é isto — não é o
+                            # detetor que está avariado.
 
 # ----------------------------------------------------------------------------
 # VOZ
