@@ -1,0 +1,40 @@
+# ============================================================================
+# 🔒 PRIVACIDADE — nada disto vai para o Git. NUNCA.
+# ============================================================================
+# Assinaturas das caras da família. São dados biométricos de menores.
+data/faces/
+*.npz
+# Gravações de áudio — o robô não devia guardar nenhuma, mas por precaução.
+data/audio/
+*.wav
+*.mp3
+# Fotografias de teste
+data/fotos/
+*.jpg
+*.jpeg
+*.png
+!docs/**/*.png
+
+# ============================================================================
+# Modelos descarregados (são grandes — o download_models.py volta a buscá-los)
+# ============================================================================
+models/
+*.onnx
+*.tflite
+
+# ============================================================================
+# Python
+# ============================================================================
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# ============================================================================
+# Sistema
+# ============================================================================
+.DS_Store
+*.log
+config/robot.local.yaml

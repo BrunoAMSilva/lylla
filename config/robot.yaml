@@ -1,0 +1,231 @@
+# ============================================================================
+# CONFIGURAÇÃO DO ROBÔ
+#
+# Isto é o painel de controlo. Podes mudar qualquer valor aqui e ver o que
+# acontece — não parte nada. Se te enganares, apaga a linha e volta a correr.
+# ============================================================================
+
+# O nome do robô. Escolhido pela Lara.
+nome: "Zeca"
+
+# ----------------------------------------------------------------------------
+# MOTORES
+# ----------------------------------------------------------------------------
+motores:
+  velocidade: 0.5           # 0 a 1. Acima de 0.6 ele bate com força nos rodapés.
+  velocidade_max: 0.6       # limite de segurança — o código nunca passa daqui
+  compensacao_esq: 1.00     # se ele fugir para a direita, sobe este número
+  compensacao_dir: 1.00     # se ele fugir para a esquerda, sobe este
+  tempo_90_graus: 0.55      # segundos para rodar 90°. Medir e ajustar.
+  cm_por_segundo: 18.0      # quanto anda em 1 segundo à velocidade acima
+  timeout_s: 3.0            # nenhum comando dura mais que isto sem ser renovado
+
+# ----------------------------------------------------------------------------
+# SEGURANÇA — não mexer sem falar com o pai
+# ----------------------------------------------------------------------------
+seguranca:
+  distancia_min_cm: 25      # abaixo disto, para
+  distancia_aviso_cm: 40    # abaixo disto, abranda
+  verificar_precipicio: true
+
+# ----------------------------------------------------------------------------
+# A CARA — painel HUB75 64x32 comandado pelo ESP32
+#
+# As expressões em si vivem em config/expressoes.yaml. Aqui só está a ligação.
+# ----------------------------------------------------------------------------
+cara:
+  porta: "/dev/ttyUSB0"     # onde está o ESP32. Confirmar com:
+                            #   ls /dev/ttyUSB* /dev/ttyACM*
+                            # (alguns ESP32 aparecem como ttyACM0)
+  baud: 115200
+  brilho: 40                # 0 a 100. Acima de 60 é ofuscante num quarto,
+                            # e o painel aquece e come mais corrente.
+  expressao_inicial: "a_dormir"
+
+# ----------------------------------------------------------------------------
+# MODO SECRETÁRIA — o robô como companheiro, em cima da mesa da Lara
+#
+# É aqui que ele passa a maior parte do tempo. Repara em quem chega, segue com
+# os olhos, e entretém-se sozinho quando ninguém lhe liga. Nunca fala primeiro:
+# para conversar é preciso a palavra-chave.
+#
+# ⚠️ SEGURANÇA: em cima de uma secretária, uma queda de 75 cm parte o robô.
+#    Os sensores de precipício deixam de ser "bom ter" e passam a ser a coisa
+#    que impede o projeto de acabar num dia. Testar SEMPRE antes de o pôr na
+#    mesa — `python scripts/test_sensors.py`.
+# ----------------------------------------------------------------------------
+secretaria:
+  ativa: true
+  andar: true               # pode dar voltinhas na mesa? (só roda, nunca anda
+                            # em frente sozinho — ver companion.py)
+  velocidade_max: 0.25      # ⚠️ TETO ABSOLUTO na secretária. Aplica-se a TUDO,
+                            # incluindo ao que o LLM mandar fazer.
+  duracao_voltinha_s: 0.35
+
+  # Quanto custa olhar. Estes três números são o orçamento de CPU do robô.
+  fps_deteccao: 10          # vezes por segundo que procura uma cara
+  resolucao_deteccao: [320, 240]   # ⚠️ NÃO é a mesma de faces.resolucao.
+                            # Para saber ONDE está uma cara chega isto; para
+                            # saber QUEM É usa-se a imagem grande.
+  reidentificar_s: 4.0      # de quanto em quanto tempo confirma quem é
+  salto_outra_pessoa: 0.35  # se a cara saltar mais do que isto, reconhece já
+  frames_para_ausencia: 8   # ⚠️ quantas imagens seguidas sem cara antes de
+                            # dizer "não está lá ninguém". Sem isto, o robô
+                            # cumprimentava a Lara de cada vez que ela olhasse
+                            # para o caderno.
+  area_perto: 0.10          # cara a ocupar 10% da imagem = encostada ao robô
+
+  # Comportamento
+  segundos_ate_atividade: 90     # sozinho há tanto tempo → arranja que fazer
+  intervalo_atividades_s: 45     # e depois faz uma coisa de X em X segundos
+  arrefecimento_saudacao_s: 900  # ⚠️ 15 min. Cumprimentar de cada vez que ela
+                                 # se levanta para ir buscar água é irritante,
+                                 # não é simpático.
+
+# ----------------------------------------------------------------------------
+# MODO SEGUIR — andar atrás da Lara pela casa (FASE 16)
+#
+# ⚠️ VEM DESLIGADO. Ler a secção D17 do plano antes de o ligar: há uma conta
+#    de segurança (a que velocidade os sensores de precipício ainda travam a
+#    tempo) que decide se isto é aceitável em casa com escadas.
+#
+# A velocidade máxima aqui NÃO é conforto. É o resultado dessa conta:
+#   distância que o sensor vê à frente das rodas ≈ 5 cm
+#   menos a travagem de um robô de 2 kg .......... ≈ 5 cm
+#   sobra para a reação ......................... ≈ 0 cm  → margem nenhuma
+# Por isso: velocidade baixa, e um segundo sensor apontado ao chão à frente
+# (ver D17) se quisermos ir mais depressa.
+# ----------------------------------------------------------------------------
+seguir:
+  ativo: false              # ⚠️ fase 16. Não ligar antes dos sensores estarem
+                            #    montados, calibrados e testados nas escadas.
+  velocidade_max: 0.35      # ~40% mais lento que o limite do chão
+  area_seguir: 0.055        # cara mais pequena que isto = está longe, acelera
+  area_parar: 0.16          # cara maior que isto = já cheguei, paro
+  zona_morta: 0.12          # não corrigir a direção dentro disto (senão treme)
+  ganho_rotacao: 0.55       # quanto vira por unidade de erro
+
+# ----------------------------------------------------------------------------
+# CARAS
+# ----------------------------------------------------------------------------
+faces:
+  limiar: 0.45              # maior = mais exigente.
+                            # O valor oficial do OpenCV é 0.363. Subimos porque
+                            # é muito pior chamar "Lara" a uma visita do que
+                            # dizer "não te conheço" à Lara.
+  fotos_por_pessoa: 8       # quantas fotos tirar ao registar alguém
+  resolucao: [640, 480]     # maior = mais lento, não necessariamente melhor
+
+# ----------------------------------------------------------------------------
+# VOZ
+# ----------------------------------------------------------------------------
+voz:
+  # A VOZ VEM DO MAC. A Lara ouviu às cegas as vozes todas de português europeu
+  # e escolheu a Joana, que só existe no macOS. O Mac corre o
+  # scripts/servidor_voz.py; o Pi pede o WAV e guarda-o em data/voz/ para poder
+  # repetir a frase sem rede nenhuma.
+  #
+  # E SAI PELO reSPEAKER: a coluna liga-se à ficha JST da placa do XVF3800, não
+  # ao Pi. É a única forma de o cancelamento de eco funcionar (D6 do plano).
+  # Não há nada a configurar aqui — o reSpeaker é a placa de som por omissão
+  # graças ao /etc/asound.conf (Apêndice B). Se não houver som, começa por aí.
+  servidor: "http://mac.local:8420/falar"
+  voz_mac: "Joana"                   # Joana | Catarina | Joaquim
+  tempo_limite_s: 5                  # a partir daqui desiste e usa o recurso
+  velocidade_fala: 1.0               # 0.8 fala mais devagar; 1.2 mais depressa
+
+  # Recurso para frases NOVAS com o Mac desligado. Vazio = não usar o Piper.
+  # A `tugão` percebe-se mal (foi afinada de uma voz inglesa, 1,5 h de áudio).
+  modelo_tts: ""                     # "pt_PT-tugão-medium" para a ressuscitar
+  modelo_stt: "base"                 # tiny | base | small
+                                     # tiny = rápido mas erra · small = lento demais
+  idioma: "pt"
+  palavra_chave: "ola_robo"
+  limiar_palavra_chave: 0.6          # subir se ele acordar sozinho
+  silencio_para_parar_s: 1.0         # quanto silêncio marca o fim da frase
+
+# ----------------------------------------------------------------------------
+# CÉREBRO GRANDE (o LLM que corre no Mac)
+# ----------------------------------------------------------------------------
+llm:
+  host: "mac.local"         # nome do Mac na rede. Ver com: hostname
+  porta: 11434
+  modelo: "gemma4:12b"      # escolhido pelo tool calling fiável (~90%)
+  timeout_s: 20
+  max_historico: 12         # quantas mensagens ele se lembra
+  temperatura: 0.7          # 0 = sério e previsível · 1 = criativo e maluco
+  max_frases: 3             # respostas curtas — ele FALA, não escreve
+
+# ----------------------------------------------------------------------------
+# BRAÇOS — 5 servos no PCA9685 em 0x41, a 50 Hz
+#
+# LARA: os limites (min/max) são os ângulos em que o braço ainda NÃO bate no
+# corpo. Descobre-os na fase 8, movendo cada servo devagar. O robô nunca passa
+# destes números, mesmo que o código peça — é o que impede a mecânica de partir.
+# ----------------------------------------------------------------------------
+bracos:
+  i2c: 0x41                 # (o endereço vive SÓ aqui — ver nota na secção i2c)
+  us_min: 500               # microssegundos para 0°
+  us_max: 2500              # microssegundos para 180°
+  intervalo_s: 0.08         # ⚠️ pausa entre juntas ao fazer uma pose.
+                            # NÃO É ESTÉTICA, É ELÉTRICA: dois DS3218 a
+                            # arrancar juntos puxam ~6 A e o regulador dá 5 A.
+                            # Escalonar mantém o pico dentro da fonte.
+  juntas:
+    ombro_esq:    {canal: 0, min: 10,  max: 170}   # DS3218
+    cotovelo_esq: {canal: 1, min: 10,  max: 170}   # MG90S
+    ombro_dir:    {canal: 2, min: 10,  max: 170}   # DS3218
+    cotovelo_dir: {canal: 3, min: 10,  max: 170}   # MG90S
+    garra:        {canal: 4, min: 40,  max: 110}   # MG90S
+                            # ⚠️ o 'min' da garra NÃO deve ser o limite
+                            #    mecânico do servo — ela fecha com força
+                            #    suficiente para magoar um dedo pequeno
+
+# ----------------------------------------------------------------------------
+# BRILHO — os LEDs azuis de acento da sonda
+#
+# Vão nos canais que SOBRAM do PCA9685 dos motores (0x40), que corre a 1 kHz.
+# ⚠️ Não podiam ir no dos servos: a 50 Hz os LEDs tremeriam de forma visível.
+# ⚠️ Cada grupo precisa da SUA resistência em série (120 Ω para LEDs azuis a 5 V).
+# ----------------------------------------------------------------------------
+brilho:
+  canais:
+    base: 6                 # anel na base — onde o Astro teria os pés
+    peito: 7                # o painel do peito
+  repouso: 0.35             # brilho quando o robô está apenas ligado
+
+# ----------------------------------------------------------------------------
+# ENERGIA — leitura da bateria pelo ADS1115
+# ----------------------------------------------------------------------------
+energia:
+  canal_adc: 0
+  divisor: 5.545            # (R1+R2)/R2 com R1=100k e R2=22k
+                            # ⚠️ CALIBRAR na fase 7: mede com o multímetro e
+                            #    ajusta este número até a leitura bater certo
+  aviso_pct: 20             # abaixo disto, o robô diz que tem fome
+  critico_pct: 5            # abaixo disto, desliga-se sozinho
+  leituras_criticas: 3      # leituras críticas SEGUIDAS antes de desligar.
+                            # Uma só não chega: a tensão cai 0,3-0,5 V quando
+                            # os servos arrancam, e isso não é bateria fraca.
+
+# ----------------------------------------------------------------------------
+# PINOS (não mexer — está tudo explicado no PLANO.md, secção 6)
+# ----------------------------------------------------------------------------
+pinos:
+  pca_oe: 25                # ⚠️ Output Enable dos DOIS PCA9685, activo-baixo,
+                            # com pull-up de 10k para 3,3 V.
+                            # Se o Pi morrer, o pull-up desliga as saídas e os
+                            # motores param sozinhos. É a rede de segurança
+                            # mais importante do robô — não a tirem.
+  ultrassons_trigger: 23
+  ultrassons_echo: 24
+  precipicio_esq: 17
+  precipicio_centro: 27
+  precipicio_dir: 22
+i2c:
+  motores: 0x40             # PCA9685 #1 → TB6612 → motores (1 kHz)
+  tof: 0x29                 # VL53L1X
+  ads1115: 0x48             # tensão da bateria
+  # NOTA: o endereço dos servos NÃO está aqui — vive em bracos.i2c, que é
+  # onde o arms.py o vai buscar. Um valor em dois sítios é um valor que fica
+  # dessincronizado.

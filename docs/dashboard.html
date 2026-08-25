@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Projeto Robô da Lara</title>
+<style>
+  :root{
+    --ink:#16202b; --ink-2:#3d4b5c; --muted:#6b7684;
+    --bg:#f6f4f1; --card:#ffffff; --line:#e3ddd6;
+    --blue:#2f6fb4; --blue-soft:#e8f0f9;
+    --green:#2e7d5b; --green-soft:#e4f2eb;
+    --amber:#a86a08; --amber-soft:#fbf0dc;
+    --red:#b3413a; --red-soft:#fbe9e7;
+    --purple:#6b4fa3; --purple-soft:#efeaf8;
+    --radius:14px;
+    --shadow:0 1px 2px rgba(22,32,43,.06), 0 6px 20px rgba(22,32,43,.05);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --ink:#e9ecf0; --ink-2:#c0c8d2; --muted:#8d97a4;
+      --bg:#14181d; --card:#1c2229; --line:#2c343d;
+      --blue:#79aee8; --blue-soft:#1d2a38;
+      --green:#6cc79c; --green-soft:#172a22;
+      --amber:#e0aa5c; --amber-soft:#2c2418;
+      --red:#e88b83; --red-soft:#2e1d1c;
+      --purple:#b09be0; --purple-soft:#241f33;
+      --shadow:0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.25);
+    }
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1140px; margin:0 auto; padding:28px 20px 90px}
+
+  /* ---------- cabeçalho ---------- */
+  header{display:flex; gap:26px; align-items:center; flex-wrap:wrap; margin-bottom:26px}
+  .robo-face{
+    width:82px;height:82px;flex:none;border-radius:20px;background:var(--ink);
+    display:grid;place-items:center;box-shadow:var(--shadow)
+  }
+  .robo-face svg{width:56px;height:56px}
+  h1{font-size:27px; margin:0 0 3px; letter-spacing:-.02em; font-weight:700}
+  .sub{color:var(--muted); font-size:14px; margin:0}
+  .ring{margin-left:auto; display:flex; align-items:center; gap:15px}
+  .ring svg{transform:rotate(-90deg)}
+  .ring-num{font-size:26px;font-weight:700;line-height:1.1}
+  .ring-lbl{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em}
+
+  /* ---------- KPIs ---------- */
+  .kpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(178px,1fr)); gap:13px; margin-bottom:26px}
+  .kpi{background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:15px 17px; box-shadow:var(--shadow)}
+  .kpi .lbl{font-size:11.5px; text-transform:uppercase; letter-spacing:.07em; color:var(--muted); font-weight:600}
+  .kpi .val{font-size:25px; font-weight:700; margin-top:5px; letter-spacing:-.02em}
+  .kpi .note{font-size:12.5px; color:var(--muted); margin-top:2px}
+  .bar{height:6px;background:var(--line);border-radius:99px;overflow:hidden;margin-top:9px}
+  .bar i{display:block;height:100%;border-radius:99px;transition:width .45s cubic-bezier(.4,0,.2,1)}
+
+  /* ---------- navegação ---------- */
+  nav{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:24px}
+  nav button{
+    font:inherit;font-size:13.5px;font-weight:600;cursor:pointer;
+    background:var(--card);color:var(--ink-2);border:1px solid var(--line);
+    padding:7px 15px;border-radius:99px;transition:.15s
+  }
+  nav button:hover{border-color:var(--blue);color:var(--blue)}
+  nav button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+
+  h2{font-size:13px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);
+     margin:36px 0 14px;font-weight:700}
+
+  /* ---------- fases ---------- */
+  .fase{
+    background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    margin-bottom:11px;overflow:hidden;box-shadow:var(--shadow);transition:.2s
+  }
+  .fase.done{border-color:var(--green)}
+  .fase-top{
+    display:flex;gap:14px;align-items:center;padding:15px 18px;cursor:pointer;user-select:none
+  }
+  .fase-top:hover{background:var(--blue-soft)}
+  .num{
+    width:34px;height:34px;flex:none;border-radius:10px;display:grid;place-items:center;
+    font-weight:700;font-size:14px;background:var(--blue-soft);color:var(--blue)
+  }
+  .fase.done .num{background:var(--green-soft);color:var(--green)}
+  .fase-ttl{font-weight:650;font-size:15.5px;flex:1;min-width:150px}
+  .fase-meta{font-size:12.5px;color:var(--muted);display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  .pill{font-size:11px;font-weight:650;padding:2.5px 9px;border-radius:99px;white-space:nowrap}
+  .pill.b{background:var(--blue-soft);color:var(--blue)}
+  .pill.g{background:var(--green-soft);color:var(--green)}
+  .pill.a{background:var(--amber-soft);color:var(--amber)}
+  .pill.p{background:var(--purple-soft);color:var(--purple)}
+  .chev{color:var(--muted);transition:transform .2s;flex:none}
+  .fase[open] .chev{transform:rotate(90deg)}
+  .fase-body{padding:0 18px 18px; border-top:1px solid var(--line); margin-top:-1px}
+  .fase-body>div:first-child{padding-top:15px}
+
+  .block{margin-bottom:15px}
+  .block .k{font-size:11.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:700;margin-bottom:4px}
+  .uau{background:var(--amber-soft);border-left:3px solid var(--amber);padding:10px 13px;border-radius:0 9px 9px 0;font-size:14px}
+  .pronto{background:var(--green-soft);border-left:3px solid var(--green);padding:10px 13px;border-radius:0 9px 9px 0;font-size:14px}
+
+  ul.check{list-style:none;padding:0;margin:0}
+  ul.check li{display:flex;gap:10px;align-items:flex-start;padding:5px 0;font-size:14.2px}
+  ul.check input{margin:4px 0 0;width:16px;height:16px;flex:none;accent-color:var(--green);cursor:pointer}
+  ul.check label{cursor:pointer;flex:1}
+  ul.check input:checked + label{color:var(--muted);text-decoration:line-through}
+  .who{font-size:11px;font-weight:700;padding:1px 7px;border-radius:5px;flex:none;margin-top:2px}
+  .who.L{background:var(--purple-soft);color:var(--purple)}
+  .who.P{background:var(--blue-soft);color:var(--blue)}
+
+  /* ---------- tabelas ---------- */
+  table{width:100%;border-collapse:collapse;font-size:13.8px;background:var(--card);
+        border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow)}
+  th{background:var(--blue-soft);color:var(--blue);text-align:left;padding:10px 13px;
+     font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;font-weight:700}
+  td{padding:9px 13px;border-top:1px solid var(--line);vertical-align:top}
+  td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  tr.tot td{font-weight:700;background:var(--blue-soft)}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;
+       background:var(--blue-soft);color:var(--blue);padding:1.5px 6px;border-radius:5px}
+  pre{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+      padding:14px 16px;overflow-x:auto;font-size:12.8px;line-height:1.75;box-shadow:var(--shadow)}
+  pre code{background:none;padding:0;color:var(--ink-2)}
+
+  .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:13px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+        padding:16px 18px;box-shadow:var(--shadow)}
+  .card h3{margin:0 0 9px;font-size:15px;font-weight:650}
+  .card p{margin:0 0 8px;font-size:14px;color:var(--ink-2)}
+  .warn{border-left:3px solid var(--red);background:var(--red-soft)}
+  .warn h3{color:var(--red)}
+
+  .hide{display:none !important}
+  footer{margin-top:44px;padding-top:20px;border-top:1px solid var(--line);
+         font-size:12.5px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+  footer button{font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;background:var(--card);
+                color:var(--ink-2);border:1px solid var(--line);padding:6px 13px;border-radius:8px}
+  footer button:hover{border-color:var(--blue);color:var(--blue)}
+  @media (max-width:640px){ .ring{margin-left:0;width:100%} h1{font-size:22px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="robo-face">
+    <svg viewBox="0 0 64 64" aria-hidden="true">
+      <rect x="6" y="14" width="52" height="40" rx="9" fill="#2c3540"/>
+      <circle cx="22" cy="32" r="8" fill="#6cc79c"/>
+      <circle cx="42" cy="32" r="8" fill="#6cc79c"/>
+      <circle cx="22" cy="32" r="3.2" fill="#14181d"/>
+      <circle cx="42" cy="32" r="3.2" fill="#14181d"/>
+      <rect x="29" y="4" width="6" height="10" rx="3" fill="#2c3540"/>
+      <circle cx="32" cy="4" r="4" fill="#e0aa5c"/>
+      <rect x="24" y="44" width="16" height="3.5" rx="1.75" fill="#4a5663"/>
+    </svg>
+  </div>
+  <div>
+    <h1>Projeto AstroSonda</h1>
+    <p class="sub">18 fases · ~4 meses · €890 · AstroSonda · Pi 5 + braços + mecânica do mBot2 + LLM na rede de casa</p>
+  </div>
+  <div class="ring">
+    <svg width="72" height="72" viewBox="0 0 72 72">
+      <circle cx="36" cy="36" r="30" fill="none" stroke="var(--line)" stroke-width="8"/>
+      <circle id="ringArc" cx="36" cy="36" r="30" fill="none" stroke="var(--green)"
+              stroke-width="8" stroke-linecap="round"
+              stroke-dasharray="188.5" stroke-dashoffset="188.5"
+              style="transition:stroke-dashoffset .5s cubic-bezier(.4,0,.2,1)"/>
+    </svg>
+    <div>
+      <div class="ring-num" id="pctTxt">0%</div>
+      <div class="ring-lbl">concluído</div>
+    </div>
+  </div>
+</header>
+
+<div class="kpis">
+  <div class="kpi">
+    <div class="lbl">Fases concluídas</div>
+    <div class="val" id="kFases">0 <span style="font-size:15px;color:var(--muted);font-weight:500">/ 17</span></div>
+    <div class="bar"><i id="bFases" style="width:0;background:var(--green)"></i></div>
+  </div>
+  <div class="kpi">
+    <div class="lbl">Tarefas feitas</div>
+    <div class="val" id="kTasks">0</div>
+    <div class="bar"><i id="bTasks" style="width:0;background:var(--blue)"></i></div>
+  </div>
+  <div class="kpi">
+    <div class="lbl">Já comprado</div>
+    <div class="val" id="kEur">€0</div>
+    <div class="note">de €890 previstos</div>
+    <div class="bar"><i id="bEur" style="width:0;background:var(--amber)"></i></div>
+  </div>
+  <div class="kpi">
+    <div class="lbl">A seguir</div>
+    <div class="val" id="kNext" style="font-size:17px;line-height:1.35">Fase 0 · O caderno</div>
+    <div class="note" id="kNextNote">Escolher o nome do robô</div>
+  </div>
+</div>
+
+<nav id="nav">
+  <button data-view="fases" aria-pressed="true">Fases</button>
+  <button data-view="compras" aria-pressed="false">Compras</button>
+  <button data-view="tecnico" aria-pressed="false">Referência técnica</button>
+  <button data-view="decisoes" aria-pressed="false">Decisões</button>
+</nav>
+
+<!-- ══════════════════════════ FASES ══════════════════════════ -->
+<section id="v-fases">
+  <div id="fases"></div>
+</section>
+
+<!-- ══════════════════════════ COMPRAS ══════════════════════════ -->
+<section id="v-compras" class="hide">
+  <h2>Encomenda 1 · O cérebro e a voz — fases 1-3 · comprar já</h2>
+  <table id="t1"></table>
+  <h2>Encomenda 2 · A cara e a energia — fases 3-5 · encomendar durante a fase 2</h2>
+  <table id="t2"></table>
+  <h2>Encomenda 3 · Movimento, braços e sentidos — fases 6-8</h2>
+  <table id="t3"></table>
+  <h2>Encomenda 4 · Ouvidos e aspeto — fases 10-13</h2>
+  <table id="t4"></table>
+  <h2>Sobressalentes — coisas partem-se num projeto de 4 meses</h2>
+  <table id="t5"></table>
+
+  <h2>Encomenda 0 · A bancada — antes de tudo o resto</h2>
+  <div class="nota" style="border-left:3px solid var(--purple);background:rgba(107,79,163,.08);padding:10px 14px;border-radius:0 9px 9px 0;margin-bottom:12px;font-size:14px">
+    <strong>Ferramentas, não peças.</strong> Duram uma vida e servem para tudo — por isso
+    <strong>não entram no total do robô</strong>, tal como a impressora 3D.
+  </div>
+  <table id="t0"></table>
+
+  <h2>Armadilhas caras — ler antes de encomendar</h2>
+  <div class="grid2">
+    <div class="card warn">
+      <h3>Cabo CSI adaptador 22→15 pinos</h3>
+      <p>O Pi 5 mudou de conector e <strong>todas</strong> as câmaras Raspberry Pi vêm com o
+      cabo antigo de 15 pinos. Sem o adaptador a câmara simplesmente <strong>não liga</strong>.
+      É o erro nº1 de quem vem do Pi 4 — e é preciso com qualquer câmara, nova ou velha.
+      É o cabo <strong>oficial</strong> da Raspberry Pi (SC1128 na Botnroll, SC1892 na Mauser)
+      e custa <strong>€1,20</strong>.</p>
+    </div>
+    <div class="card warn">
+      <h3>HC-SR04<strong>P</strong>, não HC-SR04</h3>
+      <p>O modelo normal devolve 5&nbsp;V no pino Echo e <strong>destrói</strong> o GPIO
+      de 3,3&nbsp;V do Pi. São €1,30 de diferença e um Pi de €95 de risco.</p>
+    </div>
+    <div class="card warn">
+      <h3>Acelerador de IA (TPU/NPU): não é preciso</h3>
+      <p>O <strong>Coral USB</strong> está morto — a Google arquivou o repositório em abril de
+      2026 e o PyCoral está preso ao Python 3.9. O <strong>AI HAT+ 26 TOPS</strong> (€130) só
+      faz visão, e o CPU do Pi 5 já reconhece caras a 15–25 FPS quando bastam 5. O
+      <strong>AI HAT+ 2</strong> (€220) corre mesmo LLM e Whisper no Pi, mas <strong>só um
+      modelo de cada vez</strong> — o Whisper tem de sair para o LLM entrar. E o TTS e o STT
+      já correm no Pi sem acelerador nenhum. Ver D8b no plano.</p>
+    </div>
+    <div class="card warn">
+      <h3>Servos nunca nos pinos de 5&nbsp;V do Pi</h3>
+      <p>Esses pinos vêm do rail de entrada, a jusante do chip que monitoriza quedas de
+      tensão. O pico de arranque de um servo <strong>reinicia o Pi ou corrompe o cartão
+      SD</strong>. Barramento de 6&nbsp;V próprio; só a massa é partilhada.</p>
+    </div>
+    <div class="card warn">
+      <h3>Power bank não serve como bateria única</h3>
+      <p>Quase nenhuma negoceia o perfil PD de 5&nbsp;V/5&nbsp;A. Sem isso o Pi limita
+      <strong>todas</strong> as portas USB a 600&nbsp;mA no total — e o array de microfones
+      fica sem corrente. Pack + reguladores dedicados.</p>
+    </div>
+    <div class="card warn">
+      <h3>Medir a pinagem do mBot2 antes de cortar</h3>
+      <p>A Makeblock <strong>não publica</strong> a pinagem do conector dos motores. São
+      provavelmente 6 fios, mas é suposição. E se o encoder for alimentado a 5&nbsp;V,
+      precisa de level shifter para o GPIO de 3,3&nbsp;V do Pi.</p>
+    </div>
+  </div>
+
+  <h2>Onde comprar</h2>
+  <table>
+    <tr><th>Loja</th><th>País</th><th>Nota</th></tr>
+    <tr><td><strong>Botnroll</strong></td><td>🇵🇹 PT</td><td>Melhor preço no Pi 5 (€95,90 os 4&nbsp;GB) e bom catálogo de sensores. Primeira paragem.</td></tr>
+    <tr><td><strong>PTRobotics</strong></td><td>🇵🇹 PT</td><td>Bom catálogo, mas €131,98 pelo <em>mesmo</em> Pi 5 de 4&nbsp;GB. Diferença de €36.</td></tr>
+    <tr><td><strong>BerryBase</strong></td><td>🇩🇪 DE</td><td>Muito bom em módulos pequenos (MAX7219 a €4,90). Contar com portes.</td></tr>
+    <tr><td><strong>The Pi Hut</strong></td><td>🇬🇧 UK</td><td>Referência Adafruit/Pimoroni. Atenção a taxas alfandegárias.</td></tr>
+  </table>
+</section>
+
+<!-- ══════════════════════════ TÉCNICO ══════════════════════════ -->
+<section id="v-tecnico" class="hide">
+  <h2>Mapa de pinos — imprimir e colar na parede</h2>
+  <table>
+    <tr><th>GPIO</th><th>Pino</th><th>Ligado a</th><th>Função</th></tr>
+    <tr><td><code>2</code></td><td>3</td><td>2× PCA9685, ADS1115, VL53L1X</td><td>I2C SDA</td></tr>
+    <tr><td><code>3</code></td><td>5</td><td>idem</td><td>I2C SCL</td></tr>
+    <tr><td><code>25</code></td><td>22</td><td><strong>OE dos dois PCA9685</strong> (pull-up 10&nbsp;kΩ)</td><td>Paragem por hardware</td></tr>
+    <tr><td><code>8</code></td><td>24</td><td>MAX7219 (olhos)</td><td>SPI0 CE0</td></tr>
+    <tr><td><code>10</code></td><td>19</td><td>MAX7219 (olhos)</td><td>SPI0 MOSI</td></tr>
+    <tr><td><code>11</code></td><td>23</td><td>MAX7219 (olhos)</td><td>SPI0 SCLK</td></tr>
+    <tr><td><code>17</code></td><td>11</td><td>TCRT5000 ch1</td><td>Precipício esquerda</td></tr>
+    <tr><td><code>18</code></td><td>12</td><td>MAX98357A</td><td>I2S BCLK</td></tr>
+    <tr><td><code>19</code></td><td>35</td><td>MAX98357A</td><td>I2S LRCLK</td></tr>
+    <tr><td><code>21</code></td><td>40</td><td>MAX98357A</td><td>I2S DIN</td></tr>
+    <tr><td><code>22</code></td><td>15</td><td>TCRT5000 ch3</td><td>Precipício direita</td></tr>
+    <tr><td><code>23</code></td><td>16</td><td>HC-SR04P</td><td>Trigger</td></tr>
+    <tr><td><code>24</code></td><td>18</td><td>HC-SR04P</td><td>Echo</td></tr>
+    <tr><td><code>27</code></td><td>13</td><td>TCRT5000 ch2</td><td>Precipício centro</td></tr>
+    <tr><td><code>5</code></td><td>29</td><td>Encoder esq. canal A</td><td><em>ligado, à espera da v2</em></td></tr>
+    <tr><td><code>6</code></td><td>31</td><td>Encoder esq. canal B</td><td><em>ligado, à espera da v2</em></td></tr>
+    <tr><td><code>12</code></td><td>32</td><td>Encoder dir. canal A</td><td><em>ligado, à espera da v2</em></td></tr>
+    <tr><td><code>13</code></td><td>33</td><td>Encoder dir. canal B</td><td><em>ligado, à espera da v2</em></td></tr>
+    <tr><td>—</td><td>CSI</td><td>Camera Module 3</td><td>Via cabo adaptador 22→15</td></tr>
+    <tr><td>—</td><td>USB</td><td>reSpeaker XVF3800</td><td>4 microfones com AEC</td></tr>
+  </table>
+
+  <h2>Endereços I2C</h2>
+  <table>
+    <tr><th>Chip</th><th>Endereço</th><th>Para quê</th></tr>
+    <tr><td>PCA9685 #1</td><td><code>0x40</code></td><td>Motores, a 1&nbsp;kHz (via TB6612FNG)</td></tr>
+    <tr><td>PCA9685 #2</td><td><code>0x41</code></td><td>Servos, a 50&nbsp;Hz (soldar jumper A0)</td></tr>
+    <tr><td>VL53L1X</td><td><code>0x29</code></td><td>Distância a laser, até 4&nbsp;m</td></tr>
+    <tr><td>ADS1115</td><td><code>0x48</code></td><td>Tensão da bateria</td></tr>
+  </table>
+
+  <h2>Alimentação — uma bateria, três barramentos</h2>
+  <div class="card">
+    <p>Uma power bank com duas saídas <em>parece</em> a resposta a "uma bateria só", mas
+    quase nenhuma negoceia 5&nbsp;V/5&nbsp;A — e sem isso o Pi limita <strong>todas</strong>
+    as portas USB a 600&nbsp;mA, o que deixa o array de microfones sem corrente.</p>
+<pre><code>LiFePO4 4S (12,8 V) ──► fusível 10 A ──► interruptor principal
+       │
+       ├──► buck 5,1 V / 5 A ──► Raspberry Pi 5
+       ├──► buck 5,7 V / 6 A ──► 5 servos        <span style="color:var(--muted)">← 5,7 e não 6,0: o MG90S é 4,8-6,0 V</span>
+       └──► buck 7,4 V / 5 A ──► TB6612 ──► 2 motores
+
+       ═══════ MASSA COMUM A TUDO (star ground) ═══════</code></pre>
+    <p style="margin-top:10px">Continua a ser <strong>uma bateria, um carregador, um
+    interruptor</strong> — e cada consumidor tem o seu regulador, que é o que impede os
+    motores de reiniciarem o Pi.</p>
+    <p><strong>A massa comum não é opcional.</strong> Sem ela o I2C não comunica de forma
+    fiável e vão perder uma tarde a perceber porquê.</p>
+    <p>⚠️ O regulador não faz negociação USB-PD, por isso o Pi assume 3&nbsp;A. A correção
+    é <code>usb_max_current_enable=1</code> no <code>/boot/firmware/config.txt</code> — só
+    seguro porque o regulador dá mesmo 5&nbsp;A.</p>
+  </div>
+
+  <h2>As duas paragens de emergência</h2>
+  <div class="grid2">
+    <div class="card">
+      <h3>O pino OE — contra o software falhar</h3>
+      <p>O PCA9685 é <em>latching</em>: uma vez escrito um valor, continua a gerar aquele
+      PWM <strong>para sempre</strong>, mesmo que o Pi morra. Um <code>kill -9</code>
+      deixaria os motores a rodar até a bateria acabar.</p>
+      <p>O OE está no <strong>GPIO&nbsp;25</strong> com pull-up de 10&nbsp;kΩ: Pi vivo →
+      LOW → saídas ligadas; Pi morto → o pull-up puxa para HIGH → <strong>saídas
+      desligadas</strong>. A falha segura é o estado natural — não depende de nenhuma
+      linha de Python chegar a correr.</p>
+    </div>
+    <div class="card">
+      <h3>O botão vermelho — contra o robô fazer asneira</h3>
+      <p>Corta a potência dos servos e dos motores, mas <strong>não a do Pi</strong>: o robô
+      para de se mexer instantaneamente e continua a falar e a explicar o que aconteceu.
+      Um botão que desliga tudo assusta; este ensina.</p>
+      <p>⚠️ Tem de ser <strong>DPST (dois polos)</strong>. Com um polo só, os barramentos
+      de 5,7&nbsp;V e 7,4&nbsp;V ficariam ligados um ao outro através do botão.</p>
+    </div>
+  </div>
+
+  <h2>Comandos de emergência</h2>
+<pre><code>sudo systemctl stop robo          <span style="color:var(--muted)"># PARAR TUDO</span>
+journalctl -u robo -n 100         <span style="color:var(--muted)"># o que correu mal?</span>
+python scripts/check_health.py    <span style="color:var(--muted)"># verificação completa</span>
+
+i2cdetect -y 1                    <span style="color:var(--muted)"># 0x40 motores · 0x41 servos · 0x29 ToF · 0x48 bateria</span>
+ls /dev/spi*                      <span style="color:var(--muted)"># olhos</span>
+libcamera-hello --list-cameras    <span style="color:var(--muted)"># câmara (deve listar 1)</span>
+arecord -l  &amp;&amp;  aplay -l          <span style="color:var(--muted)"># o XVF3800 aparece?</span>
+python scripts/test_power.py      <span style="color:var(--muted)"># quanta bateria resta</span>
+python scripts/test_arms.py       <span style="color:var(--muted)"># poses e gestos</span>
+
+vcgencmd measure_temp             <span style="color:var(--muted)"># temperatura</span>
+vcgencmd get_throttled            <span style="color:var(--muted)"># 0x0 = alimentação OK</span>
+
+curl http://mac.local:11434/api/tags   <span style="color:var(--muted)"># o Mac serve o LLM?</span></code></pre>
+
+  <h2>Quando alguma coisa não funciona</h2>
+  <div class="card">
+    <p>Ensinar este método à Lara vale mais do que qualquer fase.</p>
+    <ol style="margin:8px 0 0;padding-left:20px;font-size:14px;color:var(--ink-2);line-height:1.9">
+      <li><strong>É hardware ou software?</strong> Corre o script de teste isolado.</li>
+      <li><strong>É alimentação?</strong> <code>vcgencmd get_throttled</code>. Mede as tensões com o multímetro.</li>
+      <li><strong>Já funcionou alguma vez?</strong> Se sim, o que mudou desde então?</li>
+      <li><strong>Divide ao meio.</strong> Comenta metade do código. O erro está na metade que ficou?</li>
+      <li><strong>Lê a mensagem de erro até ao fim.</strong> A resposta está lá 80% das vezes.</li>
+      <li><strong>Explica o problema em voz alta ao robô.</strong> A sério — funciona. Chama-se <em>rubber duck debugging</em>, e agora o pato tem olhos de LED e acena.</li>
+      <li>Só agora: procurar na Internet.</li>
+    </ol>
+  </div>
+
+  <h2>Quatro conversas para ter pelo caminho</h2>
+  <div class="grid2">
+    <div class="card">
+      <h3>Fase 4 · Engenharia sem manual</h3>
+      <p>«A Makeblock não nos diz o que faz cada fio deste motor. Vamos descobrir, com um
+      multímetro e paciência.» Poucas coisas dão mais confiança a uma criança do que isto.</p>
+    </div>
+    <div class="card">
+      <h3>Fase 9 · Privacidade</h3>
+      <p>«Este robô conhece a tua cara. Quem é que devia poder decidir isso?»
+      Mostrem-lhe o ficheiro com os 128 números. Apaguem uma pessoa à frente dela.</p>
+    </div>
+    <div class="card">
+      <h3>Fase 11 · O que é um LLM</h3>
+      <p>Mudem o system prompt à frente dela e vejam a personalidade mudar. Provoquem uma
+      alucinação de propósito — perguntem algo muito específico sobre a família e vejam-no
+      inventar com toda a confiança. É a melhor vacina possível.</p>
+    </div>
+    <div class="card">
+      <h3>Fase 12 · Autonomia e limites</h3>
+      <p>«Se ele pode andar e mexer os braços sozinho, quem é responsável quando parte alguma coisa?»</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════ DECISÕES ══════════════════════════ -->
+<section id="v-decisoes" class="hide">
+  <h2>As escolhas que definem o projeto</h2>
+  <div id="decisoes"></div>
+</section>
+
+<footer>
+  <span id="saveNote">O progresso fica guardado no endereço da página.</span>
+  <button id="btnCopy">Copiar link com o progresso</button>
+  <button id="btnReset">Recomeçar do zero</button>
+</footer>
+
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════
+   DADOS
+   ═══════════════════════════════════════════════════════════════════ */
+const L='L', P='P';   // quem faz: Lara / Pai
+
+const FASES = [
+{n:0,t:'O caderno e o inventário',dur:'1-2 h',sem:'antes de comprar',cor:'p',
+ obj:'Uma ideia partilhada do que se vai construir, e saber exatamente o que já temos.',
+ uau:'O robô passa a ter nome. Uma coisa com nome merece atenção; um "projeto" não.',
+ pronto:'O robô tem nome, 9 grelhas desenhadas, inventário no caderno, e a encomenda 1 feita.',
+ tarefas:[[L,'Escolher o NOME do robô — não avançar sem isto'],[L,'DESENHAR A VARIANTE DELA do Astro — o fato de sonda espacial ainda não existe no jogo'],[L,'Desenhar as caras dele — pelo menos 9 formas de olhos (o Astro não tem boca)'],[L,'Escrever "o meu robô vai conseguir ___" (5 coisas)'],[L,'Inventariar e fotografar: mBot2, ESP32, placas CAN'],[P,'Negociar o que fica de fora do âmbito'],[P,'Fazer a encomenda 1']]},
+
+{n:0.5,t:'Aprender a soldar',dur:'2 h',sem:'antes do Pi chegar',cor:'p',
+ obj:'Fazer ~100 juntas numa placa que não vale nada, para a primeira junta a sério não ser numa placa de €96.',
+ uau:'Uma junta boa. Brilhante, com forma de cone, agarrada ao pino E à placa — e a partir daí vê-se logo a diferença para uma junta má.',
+ pronto:'Existe uma placa de prática cheia de juntas, e as últimas vinte são visivelmente melhores que as primeiras vinte. Ninguém se queimou.',
+ nota:'A REGRA: aquece-se o pino E a placa ao mesmo tempo, conta-se até dois, e só então se toca com a solda NO PINO, não na ponta do ferro. A solda corre para o sítio quente. Se ficar em bola e não agarrar, o metal estava frio — não é falta de solda. · O único trabalho a sério do projeto são 18 juntas nos três reguladores (fase 5). Tudo o resto foi comprado já soldado.',
+ tarefas:[[P,'Montar a bancada num sítio COM JANELA, ventoinha a puxar o ar'],[P,'Ver 2-3 vídeos de "how to solder through-hole" antes de ligar o ferro'],[P,'Estanhar a ponta antes de a pousar — sempre'],[P,'Fazer o kit de prática do princípio ao fim'],[P,'Desfazer metade das juntas com a malha — desfazer é metade da competência'],[L,'Ver as primeiras 10 juntas e explicar em voz alta o que acontece'],[L,'Experimentar na placa de prática, com o pai ao lado a cada junta'],[L,'Endireitar terminais e cortar o que sobra']]},
+
+{n:1,t:'O cérebro acorda',dur:'2-3 h',sem:'semana 1',cor:'b',
+ obj:'Um Raspberry Pi a arrancar, na rede, acessível por SSH do Mac, sem teclado nem ecrã.',
+ uau:'Escrever um comando no Mac e ver o LED do Pi a piscar do outro lado da mesa.',
+ pronto:'ssh lara@robo.local funciona sem palavra-passe, e o ola.py corre.',
+ tarefas:[[L,'Gravar o cartão microSD com o Raspberry Pi Imager'],[L,'Configurar Wi-Fi, utilizador e SSH nas definições avançadas'],[L,'Montar o dissipador e ligar a corrente'],[L,'Entrar por SSH a partir do Mac'],[L,'Escrever o primeiro programa: print("Olá, eu sou o …")'],[P,'apt update && full-upgrade'],[P,'raspi-config: ativar I2C, SPI e câmara'],[P,'Chaves SSH sem palavra-passe + VS Code Remote-SSH']]},
+
+{n:2,t:'O robô fala',dur:'2 h',sem:'semana 2',cor:'b',
+ obj:'O robô diz em voz alta, com voz portuguesa, qualquer frase que se escreva.',
+ uau:'A Lara escreve falar("A Lara é a melhor") e a placa nua em cima da mesa diz aquilo.',
+ pronto:'Uma frase escrita é dita em voz alta, em pt-PT, em menos de 1 segundo.',
+ nota:'Pusemos a voz ANTES de tudo o resto de propósito: dá resultado em 20 minutos e faz o robô parecer vivo imediatamente. Motores e alimentação dão trabalho e demoram.',
+ tarefas:[[P,'Soldar os 5 fios do MAX98357A e a coluna'],[P,'config.txt: dtparam=i2s=on + dtoverlay=hifiberry-dac'],[L,'pip install piper-tts'],[L,'Descarregar a voz pt_PT-tugão-medium'],[L,'Fazer o robô dizer o nome dele'],[L,'Fazer o robô contar uma anedota']]},
+
+{n:3,t:'A cara ganha vida',dur:'3 h',sem:'semana 3',cor:'b',
+ obj:'Um painel RGB de 64×32 desenhado pelo ESP32, com transição suave entre expressões.',
+ uau:'Os olhos MUDAM DE FORMA suavemente de uma emoção para a outra. E depois vem o coração vermelho. É aqui que deixa de ser eletrónica e passa a ser personagem.',
+ pronto:'As 15 caras funcionam, o morph é suave, o coração é vermelho, e a Lara mudou uma expressão sozinha.',
+ nota:'A lição é diferente das outras: UMA FORMA PODE SER DESCRITA POR NÚMEROS. Não se desenha o "feliz" — descreve-se (rx, ry, arco) e o computador desenha. O morph sai de graça: são números, basta interpolá-los. ⚠️ O ESP32 é que renderiza, a 60 fps — o Pi só manda o nome. Custo para o Pi: zero.',
+ tarefas:[[P,'Ligar o painel HUB75 ao ESP32 (13 fios — vale a pena um shield)'],[P,'⚠️ Alimentar o painel do barramento 5,1 V com fio grosso e fusível PRÓPRIO'],[P,'Instalar ESP32-HUB75-MatrixPanel-DMA e carregar o firmware'],[P,'Ligar o ESP32 ao Pi por USB: python scripts/test_eyes.py --ping'],[L,'Correr test_eyes.py e ver todas as caras'],[L,'Abrir o bot-face no browser e mexer nos sliders'],[L,'Copiar os números para o config/expressoes.yaml — sem recompilar nada'],[L,'Inventar caras novas e escolher a cor de cada uma'],[L,'Pôr o acrílico preto à frente e ver a diferença']]},
+
+{n:4,t:'A autópsia do mBot2',dur:'2-3 h',sem:'semana 4',cor:'a',
+ obj:'Extrair chassis, motores e rodas do mBot2, e descobrir a pinagem do conector que a Makeblock não publica.',
+ uau:'Ligar uma pilha a dois fios e ver a roda girar. "Este motor agora é nosso."',
+ pronto:'Os dois motores rodam com uma pilha, a pinagem está desenhada no caderno, e o chassis está limpo.',
+ nota:'A lição desta fase: "ninguém nos deu o manual desta peça. Descobrimo-lo nós, com um multímetro e paciência." É assim que se faz engenharia quando a documentação não existe.',
+ tarefas:[[L,'Fotografar cada passo ANTES de desmontar'],[L,'Desmontar o mBot2'],[L,'Medir continuidade: quais os fios do motor (M+/M−)?'],[L,'Medir os 4 fios do encoder: VCC, GND, canal A, canal B'],[L,'Testar: motor + pilha de 4,5 V. Roda? Inverte os fios?'],[L,'Desenhar a pinagem no caderno'],[P,'Verificar a tensão do encoder — se for 5 V, precisa de level shifter'],[P,'Cortar e re-terminar os cabos com conectores decentes']]},
+
+{n:5,t:'O coração — o sistema de energia',dur:'3-4 h',sem:'semana 5',cor:'a',
+ obj:'Uma bateria, três barramentos, fusíveis, interruptor e botão de emergência.',
+ uau:'Carregar no interruptor e ver três LEDs verdes acenderem. O robô tem corrente própria pela primeira vez.',
+ pronto:'As três tensões dentro de ±2% com o Pi ligado. vcgencmd get_throttled dá 0x0. O botão de emergência corta 6 V e 7,4 V mas não os 5 V.',
+ nota:'⚠️ ESTA É A FASE DO PAI e não há atalhos. Uma inversão de polaridade mata um Pi de €95. Regra absoluta: verificar duas vezes, sempre com a bateria desligada. O papel da Lara é ser a cientista que mede.',
+ tarefas:[[P,'Ajustar as 3 tensões com o multímetro ANTES de ligar carga'],[P,'Cablagem em estrela desde os terminais, fio 18 AWG'],[P,'Fusível principal 10 A + fusível por ramal'],[P,'Interruptor principal e botão de emergência'],[P,'Condensadores de bulk (2200 µF servos, 1000 µF motores)'],[P,'config.txt: usb_max_current_enable=1'],[L,'Medir e registar as 3 tensões no caderno, com e sem carga'],[L,'Queimar um fusível de propósito, para ver o que faz'],[L,'Testar o botão de emergência']]},
+
+{n:6,t:'As rodas andam',dur:'3 h',sem:'semana 6',cor:'b',
+ obj:'O robô move-se por comando.',
+ uau:'Anda. Depois de cinco semanas de peças em cima da mesa, aquilo atravessa a sala.',
+ pronto:'Anda 1 metro razoavelmente a direito, roda 90°, e para. A dança corre do início ao fim.',
+ nota:'Um dos motores vai andar ao contrário — acontece sempre, estão montados em espelho. Discutam se se corrige nos fios ou no código.',
+ tarefas:[[L,'Aparafusar o Pi e a protoboard ao chassis de alumínio (M4)'],[L,'Testar cada motor isoladamente'],[L,'Descobrir e corrigir o motor invertido'],[L,'Escrever frente(), tras(), esquerda(), direita(), parar()'],[L,'Programar uma DANÇA com expressões nos olhos'],[P,'Ligar os 2 PCA9685 (soldar jumper A0 no segundo → 0x41)'],[P,'Ligar o TB6612 ao PCA9685 0x40 a 1 kHz'],[P,'Confirmar i2cdetect -y 1 → 0x40 e 0x41']]},
+
+{n:7,t:'O robô não se magoa',dur:'2-3 h',sem:'semana 7',cor:'b',
+ obj:'Evita paredes, não cai da mesa, e sabe quanta bateria tem.',
+ uau:'Passeia sozinho pela sala durante dez minutos. E quando fica com pouca bateria, diz que tem fome.',
+ pronto:'10 minutos sem bater e sem cair. A leitura de bateria bate certo com o multímetro a ±0,2 V.',
+ tarefas:[[L,'Montar o HC-SR04P à frente'],[L,'Montar os 3 sensores de precipício virados para baixo'],[L,'Escrever o comportamento de fuga a obstáculos'],[L,'Testar em cima da mesa (com a mão por baixo!)'],[L,'Calibrar o ADS1115 com o multímetro'],[L,'Escrever o aviso de bateria fraca'],[P,'Divisor resistivo para o ADS1115 (12,8 V → <3,3 V)'],[P,'Paragem de emergência em software + atexit']]},
+
+{n:8,t:'Os braços',dur:'4 h',sem:'semana 8',cor:'g',
+ obj:'Dois braços com ombro e cotovelo, e uma garra que agarra.',
+ uau:'O robô acena. Um robô que acena deixa de ser um objeto.',
+ pronto:'Os 5 servos movem-se sem o Pi reiniciar. acenar() é reconhecível como um aceno. A garra segura um lápis.',
+ nota:'⚠️ Se o Pi reiniciar quando os servos se mexem, o problema é de alimentação, não de código: mais bulk, fio mais grosso, ou um regulador só para os servos.',
+ tarefas:[[P,'Barramento de 6 V dedicado com 2200 µF de bulk'],[P,'Confirmar que os servos NUNCA tocam nos pinos de 5 V do Pi'],[L,'Correr test_arms.py --juntas SEM os braços colados'],[L,'Montar os servos nos suportes'],[L,'Descobrir os limites de cada junta à mão e anotá-los'],[L,'Escrever os gestos: acenar, apontar, festejar'],[L,'Fazer o robô pegar num lápis']]},
+
+{n:9,t:'O robô vê',dur:'4 h · 2 sessões',sem:'semanas 9-10',cor:'g',
+ obj:'Reconhecer as caras da família.',
+ uau:'A Lara passa à frente e ele diz "Olá, Lara!" — e acena. Este é o pico emocional do projeto inteiro.',
+ pronto:'Reconhece 4 pessoas em 5 tentativas cada. Diz "não te conheço" a um estranho.',
+ nota:'Conversa obrigatória sobre privacidade — mostrem-lhe o ficheiro com os 128 números e apaguem alguém à frente dela.',
+ tarefas:[[L,'Ligar a câmara (com o cabo adaptador!) e tirar a 1ª foto'],[L,'Correr o detetor e ver o retângulo à volta da cara'],[L,'Testar os limites: pouca luz, de lado, várias caras'],[L,'EXPERIÊNCIA: cronometrar 100 imagens a 160×120, 320×240 e 640×480 e fazer o gráfico'],[L,'Registar toda a família com o enrol_face.py'],[L,'Juntar tudo: "Olá, {nome}!" + acenar'],[P,'pip install opencv-python + modelos YuNet e SFace'],[P,'CONVERSA sobre privacidade e consentimento']]},
+
+{n:10,t:'O robô ouve',dur:'4 h · 2 sessões',sem:'semanas 11-12',cor:'g',
+ obj:'Acordar com a palavra-chave, transcrever, E PODER SER INTERROMPIDO.',
+ uau:'O robô está a meio de uma frase, a Lara fala por cima, e ele cala-se e escuta. É isto que separa um brinquedo de um assistente.',
+ pronto:'Palavra-chave a 3 m com ≤1 falso positivo por hora, INCLUINDO enquanto o robô fala. Frase de 5 s transcrita em ≤5 s.',
+ nota:'É o AEC em hardware do XVF3800 que torna isto possível — o cancelamento de eco acontece dentro do chip do microfone, não no Pi.',
+ tarefas:[[P,'Montar o XVF3800 no topo, o mais LONGE possível dos motores'],[L,'Gravar as amostras da palavra de ativação'],[L,'Treinar o modelo com livekit-wakeword'],[L,'Medir: distância? com música? falsos positivos/hora?'],[L,'Instalar o faster-whisper e transcrever uma frase'],[L,'TESTAR A INTERRUPÇÃO: falar por cima de um poema longo'],[P,'Ciclo com VAD + medir a latência de cada etapa']]},
+
+{n:11,t:'O cérebro grande',dur:'3 h',sem:'semana 13',cor:'g',
+ obj:'Ligar o robô ao LLM que corre no Mac.',
+ uau:'A Lara faz uma pergunta que ninguém programou — "porque é que o céu é azul?" — e o robô responde. Bem.',
+ pronto:'5 perguntas seguidas com resposta coerente em ≤5 s. Com o Mac desligado, diz que o cérebro grande está a dormir.',
+ nota:'Mudar o system prompt à frente dela e ver a personalidade mudar é a lição mais valiosa do projeto sobre o que os LLMs são.',
+ tarefas:[[P,'No Mac: launchctl setenv OLLAMA_HOST "0.0.0.0:11434"'],[P,'ollama pull gemma4:12b'],[P,'Cliente HTTP com timeout, histórico e health check'],[L,'ESCREVER O SYSTEM PROMPT — a personalidade é dela'],[L,'Fazer uma versão "robô mal-humorado" e comparar'],[L,'Provocar uma alucinação de propósito e discuti-la'],[L,'Conversar com ele durante meia hora']]},
+
+{n:12,t:'O robô obedece',dur:'3 h',sem:'semana 14',cor:'g',
+ obj:'O LLM controla o corpo todo — rodas, olhos e braços.',
+ uau:'"Robô, cumprimenta a avó." E ele vira-se, acena e diz olá. Ninguém programou "cumprimentar a avó".',
+ pronto:'8 em 10 ordens faladas resultam na ação certa. Parâmetros fora dos limites são recusados.',
+ nota:'Testar ordens INDIRECTAS é onde está a magia: "Robô, foge!" → recua. "Dá-me cinco!" → vê-se o que ele inventa com um braço.',
+ tarefas:[[L,'Testar ordens diretas: anda, vira, acena, fica triste'],[L,'Testar ordens indiretas: "foge!", "estou triste", "dá-me cinco"'],[L,'Anotar as ordens que falham — é a lista de melhorias'],[P,'Tool calling com validação estrita de parâmetros'],[P,'Manter as ferramentas em 9 ou menos']]},
+
+{n:13,t:'O corpo grande',dur:'4 h ou mais',sem:'semana 15',cor:'a',
+ obj:'Deixar de ser uma base de alumínio com fios e passar a ser uma personagem de 35-40 cm.',
+ uau:'Deixa de ser \"o robô do projeto\" e passa a ser AQUELE boneco. As pessoas reconhecem-no antes de ele dizer uma palavra.',
+ pronto:'Liga-se o interruptor, não se toca em mais nada, e passados 40 s ele diz "olá" sozinho. Aguenta 3 horas.',
+ nota:'CARTÃO PRIMEIRO. Sempre. Uma cabeça em cartão demora 2 horas; uma cabeça impressa demora um fim de semana e não se corrige. E o acrílico preto de difusão é o que transforma 128 LEDs numa cara.',
+ tarefas:[[L,'Decidir a estética (voltar aos desenhos da fase 0)'],[L,'Construir o corpo em cartão + cola quente'],[L,'Usar uma semana e descobrir o que está errado'],[L,'Corrigir — e só então contraplacado ou 3D'],[L,'Pintar e decorar'],[L,'Descobrir que é preciso aceder à bateria e ao SD sem desmontar'],[P,'Bateria o mais baixa possível (centro de gravidade)'],[P,'Organizar cabos, ventilação, systemctl enable robo']]},
+
+{n:14,t:'Personalidade',dur:'3 h',sem:'semana 16',cor:'a',
+ obj:'Deixar de ser uma demo técnica e passar a ser aquele robô.',
+ uau:'Ele faz coisas quando ninguém está a falar com ele. Olha em volta. Espreguiça os braços. Adormece.',
+ pronto:'O robô faz algo interessante quando está sozinho. A Lara mostrou-o a um amigo e quis mostrar outra vez.',
+ tarefas:[[L,'Comportamentos ociosos: o que faz quando ninguém fala com ele?'],[L,'Cumprimentar pessoas diferentes de forma diferente'],[L,'Modo offline: olhos a dormir + 5 frases gravadas'],[L,'Uma rotina de "bom dia"'],[L,'Um jogo: escondidas, Simão diz (com braços!), adivinhas'],[P,'Máquina de estados limpa em vez de um emaranhado de ifs']]},
+
+{n:15,t:'Mostrar ao mundo',dur:'2 h',sem:'semana 17',cor:'a',
+ obj:'Fechar o projeto com um artefacto que dure mais do que o robô.',
+ uau:'O vídeo. Daqui a dez anos, o caderno e o vídeo valem mais que o robô.',
+ pronto:'Existe um vídeo. O código está no Git com o nome da Lara nos commits.',
+ tarefas:[[L,'Gravar um vídeo de 2 minutos — ela apresenta'],[L,'Escrever o README com as fotos das fases'],[L,'Apresentar na escola (opcional, mas imbatível)'],[P,'Escolher no máximo 2 upgrades da v2 — senão nunca acaba']]},
+{n:16,t:'"Segue-me"',dur:'5-6 h',sem:'depois da 15',cor:'m',
+ obj:'O robô anda atrás da Lara pela casa. Foi ela que pediu.',
+ uau:'Ela levanta-se, diz "segue-me", e ele vai atrás.',
+ pronto:'Segue-a de uma ponta à outra do corredor sem bater. E PARA NAS ESCADAS, dez vezes em dez.',
+ tarefas:[[L,'Descobrir porque é que ele te perde quando lhe viras as costas'],[L,'Trocar o detetor de caras por um cv2.TrackerKCF'],[L,'Ver quantos segundos o tracker aguenta, e o que o faz perder-se'],[L,'Afinar zona_morta, ganho_rotacao e area_parar no robot.yaml'],[P,'⚠️ 2º VL53L1X apontado ao chão 30 cm à frente, com XSHUT (D17)'],[P,'⚠️ BARREIRA FÍSICA NAS ESCADAS antes de ligar o modo'],[P,'Medir a velocidade REAL do robô — o teste de segurança depende dela'],[P,'CONVERSA: porque é mais difícil seguir alguém do que reconhecê-la?']]},
+];
+
+const COMPRAS = {
+ t1:[['Raspberry Pi 5 · 4 GB','Botnroll',95.90,1],['Fonte oficial USB-C 27 W (bancada)','Botnroll',13.90,1],
+     ['Cartão microSD 64 GB A2','qualquer',14.00,1],['Active Cooler oficial','Botnroll',5.50,1],
+     ['Jumpers, breadboard, parafusos M2.5/M3','qualquer',17.00,1],
+     ['⚠️ MAX98357A — versão COM PINOS SOLDADOS','AliExpress',8.00,2],
+     ['Coluna 3 W · 4 Ω','qualquer',5.00,2],
+     ['Camera Module 3 · 76° · autofoco','Botnroll',32.80,9],   // €29,99 na Mauser
+     ['⚠️ Cabo CSI oficial 22→15 pinos · 200 mm','Botnroll',1.20,9]],
+ t2:[['⚠️ Painel HUB75 64×32 RGB (P2.5) — a cara','The Pi Hut',20.00,3],
+     ['Cablagem HUB75 ↔ ESP32 (shield/protoboard)','qualquer',12.00,3],
+     ['Pack LiFePO4 4S 12,8 V ~6 Ah com BMS','eBay.de',60.00,5],
+     ['Carregador LiFePO4 14,6 V','eBay.de',22.00,5],
+     ['Regulador 5 V/5 A (Pololu D24V50F5) → Pi','Botland',35.00,5],
+     ['⚠️ Regulador 5,7 V/6 A → servos (não 5 A!)','Botland',42.00,5],
+     ['Regulador 7,4 V/5 A → motores','Botland',35.00,5],
+     ['⚠️ Fusíveis, interruptor, BOTÃO EMERGÊNCIA (DPST)','qualquer',24.00,5],
+     ['Conectores WAGO 221-413 — potência sem soldar','qualquer',12.00,5],
+     ['XT60 pigtails (já com fio) + fio 18/22 AWG','qualquer',20.00,5],
+     ['Condensadores bulk (2200 µF, 1000 µF, 100 nF)','qualquer',10.00,5],
+     ['Protoboard tamanho HAT + barras de pinos','qualquer',8.00,5]],
+ t3:[['⚠️ 2× PCA9685 — CLONES já soldados (não o Adafruit)','AliExpress',16.00,6],
+     ['TB6612FNG — SparkFun \'with Headers\'','SparkFun',14.00,6],
+     ['⭐ 3× sensor de toque TTP223 (com pinos)','AliExpress',6.00,14],
+     ['⚠️ Sensor HC-SR04P (3,3 V, não o normal)','Botnroll',4.90,7],
+     ['Sensor ToF VL53L1X (4 m, I2C)','Botnroll',16.95,7],
+     ['Sensor de precipício TCRT5000 3CH','Botnroll',7.95,7],
+     ['ADS1115 — versão com pinos já soldados','AliExpress',8.00,7],
+     ['2× servo digital DS3218 (~20 kg·cm) — ombros','qualquer',36.00,8],
+     ['3× servo MG90S — cotovelos e garra','qualquer',18.00,8],
+     ['Horns, braçadeiras e parafusos para servos','qualquer',15.00,8]],
+ t4:[['reSpeaker XVF3800 USB — 4 mics com AEC','The Pi Hut',60.00,10],
+     ['Contraplacado, acrílico, cartão, tintas, cola','papelaria',35.00,13],
+     ['Parafusos, espaçadores M3, cantoneiras','qualquer',20.00,13],
+     ['⚠️ Acrílico PRETO de difusão (~170×90 mm)','acrylglas-shop',14.00,13],
+     ['LEDs azuis (20x) + resistências 120 Ω','qualquer',6.00,13],
+     ['Vinil espelhado / tinta cromada — a calote','papelaria',9.00,13],
+     ['Filamento PLA branco + azul + PETG','filamentos.pt',45.00,13],
+     ['Impressão 3D por serviço — se não houver impressora','serviço',40.00,13]],
+ t5:[['1× MG90S, 1× TB6612, fusíveis e cabos extra','qualquer',25.00,'—']],
+};
+
+const FERRAMENTAS = [
+ ['Estação de soldar com base pesada (936/Yihua)',30.00,'⚠️ Com uma criança por perto, o SUPORTE PESADO importa mais que o ferro'],
+ ['Solda SEM CHUMBO 0,7 mm, 100 g',14.00,'Apaga a questão do chumbo. É o que a FIRST Robotics exige'],
+ ['Fluxo em caneta, no-clean',8.00,'Com sem-chumbo deixa de ser luxo'],
+ ['Lã de latão',6.00,'Melhor que a esponja molhada: não arrefece a ponta de repente'],
+ ['Ponta chisel 2,4 mm de reserva',5.00,'⚠️ Chisel, não agulha — a agulha é a pior e é a que toda a gente experimenta'],
+ ['Malha dessoldadora + bomba',10.00,'Desfazer erros. Vão precisar nas primeiras 20 juntas'],
+ ['Terceira mão',8.00,'Duas mãos seguram ferro e solda; não sobra nenhuma para a placa'],
+ ['Alicate de corte flush + descarnador',18.00,'O descarnador é usado em todas as fases'],
+ ['Óculos de proteção (2 pares)',8.00,'⚠️ O risco ocular é o terminal cortado a saltar, não o fumo'],
+ ['Kit de prática (Whadda WSI102)',15.00,'⚠️ €15 contra o risco de destruir um Pi de €96. Não é opcional'],
+ ['Multímetro (se não tiverem)',25.00,'Central na fase 4 (pinagem dos motores) e na 5 (ajustar reguladores)'],
+ ['Ventoinha USB pequena',12.00,'RECOMENDADO (não conta no total). A PUXAR o ar para longe das caras',false],
+];
+
+const DECISOES = [
+ ['Reutilizar o mBot2 — só a mecânica','€0 poupados',
+  'O CyberPi <em>pode</em> ser comandado pelo Pi (a Makeblock publicou o pacote <code>makeblock</code> no PyPI), mas cada comando é um round-trip de dezenas de ms e não há forma de escrever um programa autónomo que ouça a porta USB. Então ficamos com a parte boa: <strong>chassis de alumínio com furos M4, dois motores com encoder (7,4 V, 39,6:1, ≤750 mA) e as rodas</strong>. O shield não funciona sem o CyberPi. ⚠️ A pinagem do conector dos motores não é publicada — medir com multímetro antes de cortar.'],
+ ['Microfone: reSpeaker XVF3800','€60',
+  '<strong>A resposta à pergunta "USB é mesmo a melhor opção?" é sim — mas um USB diferente.</strong> Vários microfones só ajudam se algo fizer beamforming, e o ganho é modesto (4 mics ≈ 6 dB). O que interessa mesmo num robô que fala é o <strong>AEC</strong> — e o AEC é um problema mono, não precisa de vários microfones. Sem ele, a Lara tem de esperar que o robô se cale antes de falar. Este chip faz AEC, beamforming e DOA em hardware, e aparece como áudio USB standard: <strong>zero drivers</strong>. Mesmo silício do Reachy Mini.'],
+ ['Uma bateria LiFePO4, três barramentos','€193',
+  'Uma power bank com duas saídas <em>parece</em> a resposta a "uma bateria só", mas é uma armadilha: quase nenhuma negoceia 5 V/5 A, e sem isso o Pi limita <strong>todas</strong> as portas USB a 600 mA — o que mata o array de microfones. A solução correta é um pack + reguladores dedicados: continua a ser uma bateria, um carregador, um interruptor. <strong>LiFePO4 porque a química LFP não tem fuga térmica auto-alimentada</strong> — com uma criança a parafusar coisas por perto, essa troca é fácil de fazer.'],
+ ['NÃO trocar o Pi por Arduino ou Pi Zero','—',
+  'Um Arduino não corre isto — não é "mais lento", é impossível. E a poupança seria pequena: o Pi 5 gasta 3 W em repouso e 8,8 W em carga; passar tempo real para um MCU poupa <strong>10-20% do sistema, não 50%</strong>, porque é o Whisper e o OpenCV que gastam. <strong>A bateria é barata; o cérebro não.</strong> A resposta a "quanto tempo dura" é uma bateria maior, não um cérebro menor. O que o MCU dá é fiabilidade — e fica para a v2 com o ESP32, que tem 8 contadores de quadratura em hardware.'],
+ ['Braços: 2 DoF + garra','€69',
+  'Ombro (DS3218 digital, ~20 kg·cm) + cotovelo (MG90S) em cada braço, e uma garra. Cálculo: braço de 15 cm com 80 g na ponta ≈ 3 kg·cm; com fator 3 → 9 kg·cm no ombro. Com 3+ DoF e servos deste preço, a folga mecânica torna a cinemática inversa inútil. ⚠️ <strong>Servos nunca nos pinos de 5 V do Pi</strong> — o inrush reinicia o SoC ou corrompe o cartão SD.'],
+ ['Motores por I2C, sem HAT','€23',
+  '<strong>É aqui que 90% dos projetos de Pi 5 falham.</strong> O RPi.GPIO não funciona no Pi 5 (chip RP1 novo) e o pigpio também não. Dois PCA9685 por I2C resolvem tudo: 0x40 a 1 kHz para o TB6612 dos motores, 0x41 a 50 Hz para os servos. São dois porque o chip só tem uma frequência para os 16 canais — servos querem 50 Hz e motores a 50 Hz rosnam. Bónus: sem HAT, desaparece o problema do stacking header.'],
+ ['O aspeto: AstroSonda','€72',
+  'Não é uma réplica do Astro Bot — é uma <strong>variante própria</strong>, a versão sonda espacial, com rodas em vez de pernas. No jogo há dezenas de fatos; o de sonda ainda não existe, e só vai existir depois de a Lara o desenhar. <strong>Isto não é decoração: é o que torna o projeto dela.</strong> As sete regras de forma (cabeça a 40% da altura, sem boca, olhos azuis nunca vermelhos, faceplate escuro, braços finos, base com anel de luz, calote cromada) estão na folha <code>design-astrosonda.html</code>.'],
+ ['Soldadura: quase nenhuma','18 juntas',
+  'O pai nunca soldou — e isso mudou linhas da lista de compras, porque muitos módulos existem em duas versões e a diferença de preço é ao contrário do que se espera. <strong>Os clones do PCA9685 vêm totalmente soldados; o da Adafruit obrigaria a 48 juntas de servo.</strong> O TB6612 tem versão SparkFun "with Headers". No caminho de potência não se solda de todo: <strong>XT60 pigtails</strong> (fio soldado de fábrica) e <strong>WAGO 221</strong> (32 A nominal, aprovações DNV/ABS/Lloyd\'s — qualificados para vibração a bordo de navios). Sobram <strong>18 juntas</strong>, todas nos três reguladores. Vale a pena aprender à mesma: são 4 horas e elimina a causa nº1 de robôs que "às vezes funcionam".'],
+ ['A cara: HUB75 64×32 RGB no ESP32','€32',
+  'Mudou depois de existir o <strong>bot-face</strong>: a grelha alvo é 32×16 até 64×32, e já lá estava uma expressão <code>heart</code>. E o Astro <strong>mostra mesmo corações vermelhos</strong> — um olho inteiro vermelho é a linguagem dos inimigos, um ícone colorido não. <strong>O ESP32 que estava parado passa a desenhar</strong> a 60 fps por DMA; o Pi só manda o nome da expressão (~40 bytes na série). Zero pinos do Pi usados — o HUB75 precisaria de 13, e cinco chocavam com os sensores e o I2S. As caras são paramétricas e vivem no <code>expressoes.yaml</code>: a Lara muda um número e a cara muda, sem recompilar nada.'],
+ ['Caras: OpenCV YuNet + SFace','grátis',
+  'A biblioteca que toda a gente recomenda — <code>face_recognition</code> — está <strong>morta</strong>: última versão de fevereiro de 2020, e obriga a compilar o dlib (30-60 min num Pi, e falha por falta de memória). O OpenCV moderno já traz tudo: <code>pip install opencv-python</code>, um comando, 15-25 FPS no Pi 5.'],
+ ['Voz: Piper "pt_PT-tugão"','grátis',
+  'Existe <strong>exatamente uma</strong> voz de português europeu de qualidade nos modelos abertos, e é esta. 63 MB, menos de 1 segundo por frase no Pi 5. Quase todas as alternativas (Kokoro, Vosk, os Whisper afinados) só têm português do Brasil.'],
+ ['Cérebro: gemma4:12b no Mac','grátis',
+  'A razão não é o português — é o <strong>tool calling</strong>. Medições de 2026 dão ~90% de fiabilidade ao Gemma 4, contra ~30% do Mistral Nemo. Um robô que obedece a 3 em cada 10 ordens é um brinquedo partido. <strong>Menção honrosa:</strong> o AMÁLIA-9B, LLM aberto feito para português europeu por um consórcio nacional — mas não documenta tool calling, por isso fica só para o modo conversa.'],
+ ['CAN bus: guardado para a v2','—',
+  'Temos duas placas com CAN (o RP2040 CAN Feather e o Feather M4 CAN Express). Mas o valor do CAN é multi-nó, cablagens longas e ambiente eletromagneticamente hostil — para 20 cm entre duas placas, UART ou USB é mais simples e mais fácil de depurar. Fica como lição da v2: "a linguagem que os carros falam" é um tema excelente aos 12-13 anos.'],
+];
+
+/* ═══════════════════════════════════════════════════════════════════
+   ESTADO — guardado no hash do URL (sem browser storage)
+   ═══════════════════════════════════════════════════════════════════ */
+let feito = new Set();
+
+function lerHash(){
+  try{
+    const h = decodeURIComponent(location.hash.replace(/^#/,''));
+    if(h) feito = new Set(h.split(',').filter(Boolean));
+  }catch(e){ feito = new Set(); }
+}
+function gravarHash(){
+  const s = [...feito].join(',');
+  history.replaceState(null,'', s ? '#'+encodeURIComponent(s) : location.pathname);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   RENDER
+   ═══════════════════════════════════════════════════════════════════ */
+const esc = s => String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+function renderFases(){
+  document.getElementById('fases').innerHTML = FASES.map(f=>{
+    const ids = f.tarefas.map((_,i)=>`f${f.n}t${i}`);
+    const n = ids.filter(i=>feito.has(i)).length;
+    const done = n===ids.length;
+    return `<details class="fase${done?' done':''}" ${f.n<=1?'open':''}>
+      <summary class="fase-top">
+        <span class="num" style="${String(f.n).includes('.')?'font-size:12px':''}">${done?'✓':f.n}</span>
+        <span class="fase-ttl">${esc(f.t)}</span>
+        <span class="fase-meta">
+          <span class="pill ${f.cor}">${esc(f.sem)}</span>
+          <span>${esc(f.dur)}</span>
+          <span>${n}/${ids.length}</span>
+        </span>
+        <svg class="chev" width="14" height="14" viewBox="0 0 16 16" fill="none">
+          <path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </summary>
+      <div class="fase-body">
+        <div class="block"><div class="k">Objetivo</div><div>${esc(f.obj)}</div></div>
+        <div class="block"><div class="k">Momento "uau"</div><div class="uau">${esc(f.uau)}</div></div>
+        ${f.nota?`<div class="block"><div class="k">Nota</div><div style="color:var(--ink-2)">${f.nota}</div></div>`:''}
+        <div class="block"><div class="k">Tarefas</div>
+          <ul class="check">${f.tarefas.map(([w,txt],i)=>{
+            const id = ids[i];
+            return `<li>
+              <input type="checkbox" id="${id}" ${feito.has(id)?'checked':''}>
+              <span class="who ${w}">${w==='L'?'Lara':'Pai'}</span>
+              <label for="${id}">${esc(txt)}</label>
+            </li>`;
+          }).join('')}</ul>
+        </div>
+        <div class="block" style="margin-bottom:0"><div class="k">Critério de pronto</div>
+          <div class="pronto">${esc(f.pronto)}</div></div>
+      </div>
+    </details>`;
+  }).join('');
+
+  document.querySelectorAll('.check input').forEach(cb=>{
+    cb.addEventListener('change',()=>{
+      cb.checked ? feito.add(cb.id) : feito.delete(cb.id);
+      gravarHash(); atualizar(); renderFases();
+    });
+  });
+}
+
+function renderCompras(){
+  // As ferramentas mostram-se, mas NÃO contam para o orçamento do robô.
+  const tf = document.getElementById('t0');
+  if(tf){
+    const totF = FERRAMENTAS.filter(l=>l[3]!==false).reduce((s,l)=>s+l[1],0);
+    tf.innerHTML = `<tr><th style="width:34px"></th><th>Item</th><th class="n">Preço</th><th>Porquê</th></tr>` +
+      FERRAMENTAS.map((l,i)=>{
+        const id = `w_${i}`;
+        return `<tr>
+          <td><input type="checkbox" class="ferr" id="${id}" ${feito.has(id)?'checked':''}></td>
+          <td><label for="${id}" style="cursor:pointer">${esc(l[0])}</label></td>
+          <td class="n">€${l[1].toFixed(2)}</td>
+          <td style="color:var(--muted)">${esc(l[2])}</td></tr>`;
+      }).join('') +
+      `<tr class="tot"><td></td><td>Total da bancada (essenciais)</td><td class="n">€${totF.toFixed(2)}</td><td></td></tr>`;
+    tf.querySelectorAll('.ferr').forEach(cb=>{
+      cb.addEventListener('change',()=>{ cb.checked ? feito.add(cb.id) : feito.delete(cb.id); gravarHash(); });
+    });
+  }
+  for(const [key,linhas] of Object.entries(COMPRAS)){
+    const tot = linhas.reduce((s,[,,p])=>s+p,0);
+    document.getElementById(key).innerHTML =
+      `<tr><th style="width:34px"></th><th>Peça</th><th>Precisa na fase</th><th>Fornecedor</th><th class="n">Preço</th></tr>` +
+      linhas.map((l,i)=>{
+        const id = `c_${key}_${i}`;
+        return `<tr>
+          <td><input type="checkbox" class="buy" id="${id}" data-eur="${l[2]}" ${feito.has(id)?'checked':''}></td>
+          <td><label for="${id}" style="cursor:pointer">${esc(l[0])}</label></td>
+          <td><span class="pill b">${typeof l[3]==='number' ? 'fase '+l[3] : l[3]}</span></td>
+          <td style="color:var(--muted)">${esc(l[1])}</td>
+          <td class="n">€${l[2].toFixed(2)}</td></tr>`;
+      }).join('') +
+      `<tr class="tot"><td></td><td>Total</td><td></td><td></td><td class="n">€${tot.toFixed(2)}</td></tr>`;
+  }
+  document.querySelectorAll('.buy').forEach(cb=>{
+    cb.addEventListener('change',()=>{
+      cb.checked ? feito.add(cb.id) : feito.delete(cb.id);
+      gravarHash(); atualizar();
+    });
+  });
+}
+
+function renderDecisoes(){
+  document.getElementById('decisoes').innerHTML =
+    `<div class="grid2">` + DECISOES.map(([t,preco,txt])=>
+      `<div class="card"><h3>${esc(t)} <span class="pill b" style="margin-left:4px">${esc(preco)}</span></h3>
+       <p>${txt}</p></div>`).join('') + `</div>`;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   MÉTRICAS
+   ═══════════════════════════════════════════════════════════════════ */
+function atualizar(){
+  const totalT = FASES.reduce((s,f)=>s+f.tarefas.length,0);
+  const feitasT = FASES.reduce((s,f)=>
+    s + f.tarefas.filter((_,i)=>feito.has(`f${f.n}t${i}`)).length, 0);
+
+  const fasesFeitas = FASES.filter(f=>
+    f.tarefas.every((_,i)=>feito.has(`f${f.n}t${i}`))).length;
+
+  let eur = 0, eurTotal = 0;
+  for(const [key,linhas] of Object.entries(COMPRAS))
+    linhas.forEach((l,i)=>{ eurTotal += l[2]; if(feito.has(`c_${key}_${i}`)) eur += l[2]; });
+
+  const pct = totalT ? feitasT/totalT : 0;
+  document.getElementById('pctTxt').textContent = Math.round(pct*100)+'%';
+  document.getElementById('ringArc').style.strokeDashoffset = (188.5*(1-pct)).toFixed(1);
+
+  document.getElementById('kFases').innerHTML =
+    fasesFeitas + ' <span style="font-size:15px;color:var(--muted);font-weight:500">/ 17</span>';
+  document.getElementById('bFases').style.width = (fasesFeitas/17*100)+'%';
+
+  document.getElementById('kTasks').textContent = feitasT + ' / ' + totalT;
+  document.getElementById('bTasks').style.width = (pct*100)+'%';
+
+  document.getElementById('kEur').textContent = '€' + Math.round(eur);
+  document.getElementById('bEur').style.width = (eur/eurTotal*100)+'%';
+
+  const prox = FASES.find(f=>!f.tarefas.every((_,i)=>feito.has(`f${f.n}t${i}`)));
+  if(prox){
+    document.getElementById('kNext').textContent = `Fase ${prox.n} · ${prox.t}`;
+    const t = prox.tarefas.find((_,i)=>!feito.has(`f${prox.n}t${i}`));
+    document.getElementById('kNextNote').textContent = t ? t[1] : '';
+  }else{
+    document.getElementById('kNext').textContent = '🎉 Está feito!';
+    document.getElementById('kNextNote').textContent = 'Gravem o vídeo.';
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   NAVEGAÇÃO E BOTÕES
+   ═══════════════════════════════════════════════════════════════════ */
+document.getElementById('nav').addEventListener('click', e=>{
+  const b = e.target.closest('button'); if(!b) return;
+  document.querySelectorAll('#nav button').forEach(x=>x.setAttribute('aria-pressed', x===b));
+  ['fases','compras','tecnico','decisoes'].forEach(v=>
+    document.getElementById('v-'+v).classList.toggle('hide', v!==b.dataset.view));
+});
+
+document.getElementById('btnCopy').addEventListener('click', async ()=>{
+  const nota = document.getElementById('saveNote');
+  try{
+    await navigator.clipboard.writeText(location.href);
+    nota.textContent = '✅ Link copiado — guarda-o nos favoritos.';
+  }catch(e){
+    nota.textContent = 'Copia o endereço da barra do navegador — o progresso está lá.';
+  }
+  setTimeout(()=>nota.textContent='O progresso fica guardado no endereço da página.', 4000);
+});
+
+document.getElementById('btnReset').addEventListener('click', ()=>{
+  feito = new Set(); gravarHash(); renderFases(); renderCompras(); atualizar();
+});
+
+/* arranque */
+lerHash();
+renderFases();
+renderCompras();
+renderDecisoes();
+atualizar();
+</script>
+</body>
+</html>

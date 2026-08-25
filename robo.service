@@ -1,0 +1,39 @@
+# ============================================================================
+# Serviço do robô — arranca sozinho quando se liga a bateria.
+#
+# Instalar:
+#   sudo cp robo.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable robo
+#   sudo systemctl start robo
+#
+# Ver o que está a acontecer:
+#   journalctl -u robo -f
+#
+# PARAR TUDO:
+#   sudo systemctl stop robo
+# ============================================================================
+
+[Unit]
+Description=Robo da Lara
+After=network-online.target sound.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=lara
+WorkingDirectory=/home/lara/my-robot
+Environment="PATH=/home/lara/my-robot/.venv/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=/home/lara/my-robot/.venv/bin/python -m robot.main
+Restart=on-failure
+RestartSec=10
+
+# Nunca deixar os motores a andar se o processo morrer
+KillSignal=SIGTERM
+TimeoutStopSec=5
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
