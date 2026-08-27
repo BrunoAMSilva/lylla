@@ -1,0 +1,37 @@
+# ============================================================================
+# O CÉREBRO — dependências do mac mini (NÃO do robô)
+#
+# Instalar:  ./cerebro/instalar.sh
+# Ou à mão:  uv venv .venv-cerebro && uv pip install -r requirements-cerebro.txt
+#
+# ⚠️ NÃO instalar isto no Raspberry Pi. O Pi usa o requirements.txt.
+# ⚠️ O Mac do Bruno tem dois Python (o do python.org e o do Homebrew) e o
+#    `pip` e o `python3` não são o mesmo. Chamar sempre o do venv pelo
+#    caminho absoluto: .venv-cerebro/bin/python -m pip …
+# ============================================================================
+
+# --- O serviço --------------------------------------------------------------
+fastapi>=0.115
+uvicorn>=0.30
+websockets>=12          # o /v1/escutar; o uvicorn precisa disto para WebSockets
+python-multipart>=0.0.9      # para o /v1/turno receber o WAV em multipart
+PyYAML>=6.0
+numpy>=1.26,<3
+requests>=2.32
+
+# --- Ouvir ------------------------------------------------------------------
+# O parakeet-mlx é o motor principal: é o único modelo aberto com português
+# EUROPEU declarado no treino, e o descodificador TDT transcreve à medida que
+# o áudio chega (é o que o /v1/escutar usa). Só em Apple Silicon.
+parakeet-mlx>=0.3 ; platform_machine == "arm64" and sys_platform == "darwin"
+mlx-whisper>=0.4.2 ; platform_machine == "arm64" and sys_platform == "darwin"
+# Noutra máquina (ou para comparar), o faster-whisper em CPU.
+faster-whisper>=1.2.0
+
+# --- Falar ------------------------------------------------------------------
+# O mesmo Piper do robô: os modelos .onnx são bit a bit os mesmos ficheiros.
+piper-tts>=1.6.0
+
+# --- Desenvolvimento --------------------------------------------------------
+pytest>=8.0
+httpx>=0.27                  # o TestClient do FastAPI precisa dele

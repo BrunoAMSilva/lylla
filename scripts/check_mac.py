@@ -70,11 +70,24 @@ def _vozes_pt() -> list[str]:
 
 def _servidor_de_voz_de_pe(porta: int = 8420) -> bool:
     from urllib.request import urlopen
+    for caminho in ("/v1/saude", "/saude"):     # o cérebro, ou o antigo servidor de voz
+        try:
+            with urlopen(f"http://127.0.0.1:{porta}{caminho}", timeout=2):  # noqa: S310
+                return True
+        except Exception:  # noqa: BLE001
+            continue
+    return False
+
+
+def _cerebro_de_pe(porta: int = 8420) -> dict | None:
+    import json
+    from urllib.request import urlopen
+
     try:
-        with urlopen(f"http://127.0.0.1:{porta}/saude", timeout=2):  # noqa: S310
-            return True
+        with urlopen(f"http://127.0.0.1:{porta}/v1/saude", timeout=2) as r:  # noqa: S310
+            return json.load(r)
     except Exception:  # noqa: BLE001
-        return False
+        return None
 
 
 def verificar_voz() -> None:
@@ -99,7 +112,7 @@ def verificar_voz() -> None:
     de_pe = _servidor_de_voz_de_pe()
     linha(de_pe, "serviço de voz a correr",
           "http://localhost:8420" if de_pe else "",
-          comando="python scripts/servidor_voz.py")
+          comando="python -m cerebro.servidor")
 
     linha(shutil.which("afplay") is not None, "afplay (para ouvir aqui)",
           comando="(vem com o macOS — se falta, algo está muito errado)")
@@ -109,6 +122,34 @@ def verificar_voz() -> None:
         print(f'        say -v {escolhida} "Olá Lara, eu sou a Lylla."')
         print("\n      E para comparar com as outras candidatas:")
         print("        python scripts/testar_vozes.py --cego")
+
+
+def verificar_o_servico_do_cerebro() -> None:
+    seccao("O cérebro — o serviço de IA deste Mac")
+
+    saude = _cerebro_de_pe()
+    linha(bool(saude), "serviço do cérebro a correr",
+          f"http://localhost:8420  ({saude['nome']})" if saude else "",
+          comando="python -m cerebro.servidor        # ou ./cerebro/instalar.sh --servico")
+    if saude:
+        for parte, etiqueta in (("ouvir", "ouvir "), ("pensar", "pensar"), ("falar", "falar ")):
+            d = saude[parte]
+            ok = d.get("ligado", True)
+            linha(ok, f"{etiqueta} {d['motor']}", d.get("modelo") or d.get("voz", ""))
+        print("\n      Experimenta já, sem microfone nenhum:")
+        print('        python scripts/test_cerebro.py "segue-me!"')
+    else:
+        print("\n      Sem modelos instalados, para ver a API a andar:")
+        print("        python -m cerebro.servidor --teste")
+        print('        python scripts/test_cerebro.py "olá"')
+
+    import importlib.util
+    for pacote, porque in (("fastapi", "o serviço"),
+                           ("websockets", "escutar em contínuo"),
+                           ("parakeet_mlx", "ouvir (só em Apple Silicon)"),
+                           ("piper", "falar")):
+        linha(importlib.util.find_spec(pacote) is not None, f"{pacote} — {porque}",
+              comando="./cerebro/instalar.sh")
 
 
 def verificar_cerebro() -> None:
@@ -181,6 +222,7 @@ def main() -> int:
     print(f"\n{NEGRITO}🤖 Enquanto o Pi não chega — o que já está pronto no Mac{FIM}")
     verificar_codigo()
     verificar_voz()
+    verificar_o_servico_do_cerebro()
     verificar_cerebro()
     verificar_esp32()
     verificar_o_robo_todo()

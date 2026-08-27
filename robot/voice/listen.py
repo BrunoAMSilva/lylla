@@ -1,13 +1,29 @@
-"""OUVIR — grava até haver silêncio e transcreve com o faster-whisper.
+"""OUVIR — o microfone é do Pi; quem transcreve é o mac mini.
 
-Modelo: "base" com language="pt".
+╔══════════════════════════════════════════════════════════════════════════╗
+║  O QUE FICA AQUI E O QUE VAI PARA O MINI                                 ║
+║                                                                          ║
+║  Fica aqui: gravar, e decidir QUANDO A FRASE ACABOU. As duas coisas      ║
+║  têm de ser locais — a segunda é uma decisão que não pode depender da    ║
+║  rede, e é aqui que está o microfone.                                    ║
+║                                                                          ║
+║  Vai para o mini: transcrever. É pesado, e no Pi 5 o `base` corre a 1-2× ║
+║  o tempo real enquanto o `small` (o primeiro que percebe bem português)  ║
+║  fica mais lento que o tempo real. Não há Whisper local nenhum neste     ║
+║  ficheiro: com o mini desligado o robô não percebe o que lhe dizem, e    ║
+║  diz isso — em vez de carregar 500 MB de modelo no cartão SD para um     ║
+║  caso que a rede Tailscale torna raro.                                   ║
+╚══════════════════════════════════════════════════════════════════════════╝
 
-  · tiny  → rápido, mas erra demasiado
-  · base  → transcreve a ~1-2× o tempo real no Pi 5. É o ponto certo.
-  · small → mais preciso, mas MAIS LENTO QUE O TEMPO REAL. Insuportável.
+Duas maneiras de gravar:
 
-Não usamos o Vosk: está parado desde 2022 e só tem modelos de português
-do Brasil.
+  · `escutar_em_directo()` — um gerador que solta o áudio AOS BOCADOS
+    enquanto a pessoa fala. É o que o /v1/escutar usa, e o que faz o mini
+    transcrever ao mesmo tempo que ela fala.
+  · `gravar_wav()` — grava tudo e devolve um WAV no fim. É o caminho do
+    /v1/turno, que fica como recurso e para os scripts de teste.
+
+🔒 O áudio NUNCA é escrito em disco. Passa em memória e é descartado.
 """
 
 from __future__ import annotations
@@ -19,26 +35,115 @@ import numpy as np
 from robot import config
 
 TAXA = 16_000
-_modelo = None
-_iniciado = False
+BLOCO = 1280      # 80 ms, o mesmo da palavra-chave
+
+# ⚠️ ARMADILHA QUE JÁ NOS APANHOU UMA VEZ:
+# a tentação é medir o ruído de fundo nos primeiros blocos da gravação. Mas
+# isto começa LOGO A SEGUIR à palavra-chave — a pessoa já está a falar. O
+# limiar ficaria calibrado ao nível da voz dela e nunca mais disparava: o robô
+# gravava 10 s de nada e respondia "não percebi".
+#
+# Em vez disso: um chão ABSOLUTO (que apanha a fala mesmo que ela já tenha
+# começado) combinado com o mínimo observado até agora (que se adapta a uma
+# sala barulhenta).
+CHAO_ABSOLUTO = 0.012
 
 
-def _iniciar():
-    global _modelo, _iniciado
-    if _iniciado or config.a_simular():
-        _iniciado = True
-        return _modelo
-    _iniciado = True
-    try:
-        from faster_whisper import WhisperModel
+class _Silencio:
+    """Decide quando a frase acabou. Vive à parte para os dois caminhos de
+    gravação usarem exatamente a mesma regra."""
 
-        nome = config.obter("voz.modelo_stt", "base")
-        print(f"   a carregar o Whisper '{nome}'… (demora uns segundos)")
-        _modelo = WhisperModel(nome, device="cpu", compute_type="int8")
-    except Exception as erro:  # noqa: BLE001
-        print(f"⚠️  Whisper indisponível ({erro}). O robô não vai perceber o que dizes.")
-        _modelo = None
-    return _modelo
+    def __init__(self, silencio_s: float | None = None) -> None:
+        self.silencio_s = float(
+            silencio_s if silencio_s is not None
+            else config.obter("voz.silencio_para_parar_s", 1.0)
+        )
+        self.ruido_minimo = 1.0
+        self.falou = False
+        self._ultimo_som = time.monotonic()
+
+    def acabou(self, amostra: np.ndarray) -> bool:
+        energia = float(np.sqrt(np.mean(amostra.astype(np.float32) ** 2)))
+        self.ruido_minimo = min(self.ruido_minimo, energia)
+        if energia > max(CHAO_ABSOLUTO, self.ruido_minimo * 3.0):
+            self._ultimo_som = time.monotonic()
+            self.falou = True
+            return False
+        return self.falou and time.monotonic() - self._ultimo_som > self.silencio_s
+
+
+class Escuta:
+    """Os bocados de PCM de uma frase, à medida que o microfone os dá.
+
+    É um objeto e não uma função geradora por uma razão só: quem consome
+    precisa de saber **quanto pré-rolo** foi enviado, para o mini não contar
+    esse tempo como "tempo em que ela esteve a falar". Um gerador não tem
+    onde guardar isso.
+
+    >>> escuta = Escuta()
+    >>> for pedaco in escuta:
+    ...     websocket.send(pedaco)
+    >>> escuta.pre_rolo_s
+    1.6
+    """
+
+    def __init__(self, max_segundos: float = 10.0, silencio_s: float | None = None) -> None:
+        self.max_segundos = max_segundos
+        self.silencio_s = silencio_s
+        self.pre_rolo_s = 0.0
+        self.segundos = 0.0
+        self._gerador = self._correr()
+
+    def __iter__(self):
+        return self._gerador
+
+    def close(self) -> None:
+        self._gerador.close()
+
+    def _correr(self):
+        if config.a_simular():
+            config.sim("microfone → (simulação: nada gravado)")
+            return
+
+        from robot.voice import wakeword
+
+        # O PRÉ-ROLO: o que já estava em buffer quando a palavra disparou.
+        # Sem isto, o princípio da frase perdia-se no tempo que leva a fechar
+        # um stream e abrir outro — e as crianças não esperam.
+        anterior = wakeword.pre_rolo()
+        wakeword.esquecer_pre_rolo()
+        if anterior is not None and len(anterior):
+            self.pre_rolo_s = round(len(anterior) / TAXA, 2)
+            self.segundos = self.pre_rolo_s
+            yield anterior.astype("<i2").tobytes()
+
+        try:
+            import sounddevice as sd
+        except Exception as erro:  # noqa: BLE001
+            print(f"⚠️  Microfone indisponível ({erro}).")
+            return
+
+        detetor = _Silencio(self.silencio_s)
+        inicio = time.monotonic()
+        try:
+            with sd.InputStream(samplerate=TAXA, channels=1, dtype="int16",
+                                blocksize=BLOCO) as stream:
+                while time.monotonic() - inicio < self.max_segundos:
+                    dados, _ = stream.read(BLOCO)
+                    amostra = dados[:, 0]
+                    self.segundos += BLOCO / TAXA
+                    yield amostra.astype("<i2").tobytes()
+                    if detetor.acabou(amostra.astype(np.float32) / 32768.0):
+                        return
+        except GeneratorExit:
+            return          # quem consome desistiu: fechar o microfone e sair
+        except Exception as erro:  # noqa: BLE001
+            print(f"⚠️  Falha a gravar: {erro}")
+
+
+def escutar_em_directo(max_segundos: float = 10.0, silencio_s: float | None = None) -> Escuta:
+    """Uma frase, aos bocados, à medida que ela a diz. Ver `Escuta`."""
+    return Escuta(max_segundos, silencio_s)
 
 
 def gravar_ate_silencio(
@@ -46,15 +151,12 @@ def gravar_ate_silencio(
 ) -> np.ndarray | None:
     """Grava enquanto houver voz e para depois de um bocado de silêncio.
 
-    É assim que o robô sabe que a frase acabou, sem ninguém carregar num
-    botão. O limiar é adaptativo: mede o ruído de fundo no primeiro terço de
-    segundo e considera "voz" tudo o que estiver claramente acima disso.
+    É o caminho do /v1/turno: junta tudo e só no fim é que há alguma coisa
+    para enviar. O `escutar_em_directo()` faz o mesmo sem esperar pelo fim.
     """
     if config.a_simular():
         config.sim("microfone → (simulação: nada gravado)")
         return None
-    if silencio_s is None:
-        silencio_s = float(config.obter("voz.silencio_para_parar_s", 1.0))
 
     try:
         import sounddevice as sd
@@ -62,65 +164,41 @@ def gravar_ate_silencio(
         print(f"⚠️  Microfone indisponível ({erro}).")
         return None
 
-    # ⚠️ ARMADILHA QUE JÁ NOS APANHOU UMA VEZ:
-    # a tentação é medir o ruído de fundo nos primeiros blocos da gravação.
-    # Mas isto começa LOGO A SEGUIR à palavra-chave — a pessoa já está a
-    # falar. O limiar ficaria calibrado ao nível da voz dela e nunca mais
-    # disparava: o robô gravava 10 s de nada e respondia "não percebi".
-    #
-    # Em vez disso: um chão ABSOLUTO (que apanha a fala mesmo que ela já
-    # tenha começado) combinado com o mínimo observado até agora (que se
-    # adapta a uma sala barulhenta).
-    CHAO_ABSOLUTO = 0.012
-
-    bloco = 1024
+    detetor = _Silencio(silencio_s)
     blocos: list[np.ndarray] = []
-    ruido_minimo = 1.0
-    ultimo_som = time.monotonic()
     inicio = time.monotonic()
-    falou = False
-
     try:
         with sd.InputStream(
-            samplerate=TAXA, channels=1, dtype="float32", blocksize=bloco
+            samplerate=TAXA, channels=1, dtype="float32", blocksize=BLOCO
         ) as stream:
             while time.monotonic() - inicio < max_segundos:
-                dados, _ = stream.read(bloco)
+                dados, _ = stream.read(BLOCO)
                 amostra = dados[:, 0]
                 blocos.append(amostra.copy())
-                energia = float(np.sqrt(np.mean(amostra**2)))
-                ruido_minimo = min(ruido_minimo, energia)
-
-                limiar = max(CHAO_ABSOLUTO, ruido_minimo * 3.0)
-                if energia > limiar:
-                    ultimo_som = time.monotonic()
-                    falou = True
-                elif falou and time.monotonic() - ultimo_som > silencio_s:
+                if detetor.acabou(amostra):
                     break
     except Exception as erro:  # noqa: BLE001
-        print(f"⚠️  Falha ao gravar: {erro}")
+        print(f"⚠️  Falha a gravar: {erro}")
         return None
 
-    return np.concatenate(blocos) if falou and blocos else None
+    return np.concatenate(blocos) if detetor.falou and blocos else None
+
+
+def gravar_wav(max_segundos: float = 10.0) -> bytes | None:
+    """Grava uma frase e devolve-a já em WAV, pronta a ir para o mini."""
+    from robot.brain import cerebro
+
+    audio = gravar_ate_silencio(max_segundos)
+    return None if audio is None else cerebro.para_wav(audio, TAXA)
 
 
 def transcrever(audio: np.ndarray) -> str:
-    """Áudio → texto."""
-    modelo = _iniciar()
-    if modelo is None or audio is None:
+    """Áudio → texto, no mini. "" se ele não responder."""
+    if audio is None or not len(audio):
         return ""
-    try:
-        segmentos, _ = modelo.transcribe(
-            audio,
-            language=config.obter("voz.idioma", "pt"),
-            beam_size=1,          # 1 é bastante mais rápido e chega bem
-            vad_filter=True,
-            condition_on_previous_text=False,
-        )
-        return " ".join(s.text.strip() for s in segmentos).strip()
-    except Exception as erro:  # noqa: BLE001
-        print(f"⚠️  Falha a transcrever: {erro}")
-        return ""
+    from robot.brain import cerebro
+
+    return cerebro.transcrever(cerebro.para_wav(audio, TAXA))
 
 
 def ouvir(max_segundos: float = 10.0) -> str:
@@ -145,4 +223,9 @@ def ouvir(max_segundos: float = 10.0) -> str:
 
 
 def disponivel() -> bool:
-    return config.a_simular() or _iniciar() is not None
+    """Há alguma forma de perceber o que dizem? Só há uma: o mini."""
+    if config.a_simular():
+        return True
+    from robot.brain import cerebro
+
+    return cerebro.ligado()

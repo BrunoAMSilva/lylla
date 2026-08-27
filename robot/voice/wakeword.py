@@ -17,6 +17,8 @@ Como treinar a palavra em 2026:
 
 from __future__ import annotations
 
+from collections import deque
+
 import numpy as np
 
 from robot import config
@@ -26,6 +28,39 @@ BLOCO = 1280  # 80 ms — o tamanho que o openWakeWord espera
 
 _modelo = None
 _iniciado = False
+
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║  O PRÉ-ROLO — o que ficou para trás quando a palavra foi ouvida          ║
+# ║                                                                          ║
+# ║  Entre ouvir «Olá robô» e abrir a gravação passa-se tempo: fechar um     ║
+# ║  stream de áudio e abrir outro custa dezenas ou centenas de ms, e as     ║
+# ║  crianças não esperam — a Lara diz «Olá robô SEGUE-ME» de enfiada.       ║
+# ║  Esse princípio de frase caía no buraco entre os dois streams.           ║
+# ║                                                                          ║
+# ║  Como já estamos a ler blocos de 80 ms para a palavra-chave, guardá-los  ║
+# ║  numa fila circular não custa nada: 1,6 s de áudio são 50 KB. Quando a   ║
+# ║  palavra dispara, esses 1,6 s são a PRIMEIRA coisa que vai para o mini,  ║
+# ║  que começa a transcrever antes de o microfone reabrir sequer.           ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+
+SEGUNDOS_DE_PRE_ROLO = 1.6
+_pre_rolo: deque[np.ndarray] = deque(maxlen=int(SEGUNDOS_DE_PRE_ROLO * TAXA / BLOCO))
+
+
+def pre_rolo() -> np.ndarray | None:
+    """O áudio dos últimos ~1,6 s antes de a palavra ter disparado.
+
+    Devolve int16 mono a 16 kHz, ou None se não houver nada guardado (em
+    simulação, ou antes da primeira escuta).
+    """
+    if not _pre_rolo:
+        return None
+    return np.concatenate(list(_pre_rolo))
+
+
+def esquecer_pre_rolo() -> None:
+    """Deitar fora o que está guardado — depois de o usar, ou por privacidade."""
+    _pre_rolo.clear()
 
 
 def _iniciar():
@@ -86,6 +121,7 @@ def esperar_pela_palavra(timeout: float | None = None) -> bool:
             while timeout is None or time.monotonic() - inicio < timeout:
                 dados, _ = stream.read(BLOCO)
                 amostra = dados[:, 0]
+                _pre_rolo.append(amostra.copy())
 
                 if modelo is None:
                     # Substituto: qualquer som claramente alto serve.

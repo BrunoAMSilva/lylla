@@ -39,17 +39,18 @@ dela for outra, muda o `voz.voz_mac` no `config/robot.yaml`.
 > Se alguma voz não aparecer na lista das do Mac: Definições → Acessibilidade →
 > Conteúdo falado → Voz do sistema → Português (Portugal) → Gerir vozes.
 
-**Depois, põe a voz de pé.** Este é o serviço que o robô vai chamar pela rede de casa —
+**Depois, põe o cérebro de pé.** É o serviço que o robô vai chamar pela rede de casa —
 e que já podes usar hoje, sem robô nenhum:
 
 ```bash
-python scripts/servidor_voz.py
+./cerebro/instalar.sh          # no mac mini, uma vez
+python -m cerebro.servidor
 ```
 
 Noutro terminal:
 
 ```bash
-curl -s -X POST http://localhost:8420/falar \
+curl -s -X POST http://localhost:8420/v1/falar \
   -H "Content-Type: application/json" \
   -d '{"texto": "Olá Lara. Eu sou a Lylla. Ainda não tenho corpo, mas já tenho voz."}' \
   -o ola.wav && afplay ola.wav
@@ -57,6 +58,34 @@ curl -s -X POST http://localhost:8420/falar \
 
 Deixa-a escrever cinco frases que ela queira que ele diga um dia. Guardem-nas.
 São as frases do **modo offline** da fase 14.
+
+### E já dá para CONVERSAR com ela
+
+Sem microfone, sem coluna, sem robô — a escrever:
+
+```bash
+python scripts/test_cerebro.py
+```
+
+```
+👤 Lylla, segue-me até à cozinha!
+   [  26 ms] 👀 feliz
+   [ 900 ms] 🤖 «Claro! Vou atrás de ti.»  (48 KB)
+   ⚙️  seguir({'acao': 'comecar'})   (não executada — usa --executar)
+```
+
+A cara, a fala e a ação vêm as três na mesma resposta. Com `--tocar`, ouve-se.
+
+E se gravares uma frase (com o telemóvel serve), dá para ver o áudio a ir para
+o mini **enquanto ela fala**, que é como o robô vai funcionar:
+
+```bash
+python scripts/test_cerebro.py --escutar frase.wav
+```
+
+Deixa a Lara falar com ela e apontar o que soa mal — é assim que se afina o
+`config/personalidade.txt`, que é o ficheiro dela. Ver
+[`docs/AI-config.md`](docs/AI-config.md).
 
 ---
 

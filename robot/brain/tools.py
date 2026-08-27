@@ -13,179 +13,75 @@
 ║  que o browser lhe envia.                                                ║
 ╚══════════════════════════════════════════════════════════════════════════╝
 
-Poucas ferramentas, com opções fechadas. Os modelos pequenos funcionam bem
-com 6 a 8; acima disso começam a baralhar-se. Estamos em 10 — acima do
-confortável. Se o robô começar a escolher mal as ações, os primeiros cortes
-são: juntar `gesto` e `expressao` numa só, e tirar `distancia_a_frente`
-(que o robô raramente precisa de anunciar em voz alta).
+A LISTA de ações (nomes, argumentos, limites) vive em robot/brain/acoes.py —
+é o contrato entre o Pi e o cérebro no mac mini, e os dois leem-no do mesmo
+ficheiro. Aqui ficam só as IMPLEMENTAÇÕES: o que cada ação faz ao hardware,
+e a validação de segurança (sensores, precipício) que só o Pi pode fazer.
+
+Há implementações a mais em relação ao catálogo (expressao, quem_esta_aqui,
+distancia_a_frente, quanta_bateria). Já não são ações do LLM — o Pi manda
+essa informação no `contexto` de cada pergunta, o que poupa uma volta pela
+rede — mas continuam a servir aos scripts de teste e aos comandos diretos.
 """
 
 from __future__ import annotations
 
 import inspect
 
+from robot.brain import acoes, follow
 from robot.expressions import EXPRESSOES
 from robot.gestures import GESTOS
 from robot.hardware import arms, eyes, glow, motors, power, sensors
 
 # ---------------------------------------------------------------------------
-# Descrição no formato que o Ollama espera (JSON Schema)
+# O catálogo, no formato de tool calling do Ollama (para experiências; o
+# cérebro usa a saída estruturada — ver acoes.esquema_json)
 # ---------------------------------------------------------------------------
 
-FERRAMENTAS = [
-    {
-        "type": "function",
-        "function": {
-            "name": "mover",
-            "description": "Faz o robô andar para a frente ou para trás.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "direcao": {"type": "string", "enum": ["frente", "tras"]},
-                    "cm": {
-                        "type": "integer",
-                        "description": "Distância em centímetros, entre 5 e 50.",
-                    },
-                },
-                "required": ["direcao"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "virar",
-            "description": "Roda o robô no lugar. Negativo = esquerda, positivo = direita.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "graus": {
-                        "type": "integer",
-                        "description": "Entre -180 e 180.",
-                    }
-                },
-                "required": ["graus"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "expressao",
-            "description": "Muda a cara do robô. Usa isto sempre que a emoção mudar.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "nome": {"type": "string", "enum": sorted(EXPRESSOES)},
-                },
-                "required": ["nome"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "quem_esta_aqui",
-            "description": "Olha com a câmara e diz quem é a pessoa que está à frente.",
-            "parameters": {"type": "object", "properties": {}},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "distancia_a_frente",
-            "description": "Mede a distância em centímetros ao obstáculo mais próximo.",
-            "parameters": {"type": "object", "properties": {}},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "gesto",
-            "description": (
-                "Faz um gesto com os braços. Usa isto sempre que for natural: "
-                "acena ao cumprimentar, festeja quando há boas notícias, "
-                "encolhe os ombros quando não sabes."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "nome": {"type": "string", "enum": sorted(GESTOS)},
-                },
-                "required": ["nome"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "apontar",
-            "description": "Aponta com o braço numa direção.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "direcao": {
-                        "type": "string",
-                        "enum": ["esquerda", "direita", "cima", "frente"],
-                    },
-                },
-                "required": ["direcao"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "garra",
-            "description": "Abre ou fecha a mão do robô.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "acao": {"type": "string", "enum": ["abrir", "fechar"]},
-                },
-                "required": ["acao"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "quanta_bateria",
-            "description": "Diz quanta bateria resta ao robô.",
-            "parameters": {"type": "object", "properties": {}},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "dancar",
-            "description": "Faz uma pequena dança alegre.",
-            "parameters": {"type": "object", "properties": {}},
-        },
-    },
-]
+FERRAMENTAS = acoes.ferramentas_ollama()
 
 
 # ---------------------------------------------------------------------------
 # As implementações — cada uma valida antes de agir
 # ---------------------------------------------------------------------------
 
+
+class Recusa(str):
+    """Uma resposta que quer dizer «NÃO fiz o que me pediste».
+
+    Continua a ser uma string em todo o lado — imprime-se, formata-se e vai
+    para o LLM exatamente como antes. Serve só para quem chama poder
+    distinguir, sem adivinhar pelo texto:
+
+      · «Andei 20 cm.»                    → o robô já disse o que ia fazer.
+                                             Falar isto outra vez é repetir-se.
+      · «Não posso, está aí uma parede.»  → TEM de sair em voz alta, senão o
+                                             robô fica parado sem explicação.
+
+    Antes isto adivinhava-se por `resultado.startswith("Não")`, o que falha à
+    primeira frase que comece de outra maneira.
+    """
+
 def _mover(direcao: str = "frente", cm: int = 20, **_) -> str:
     if direcao not in ("frente", "tras"):
-        return f"Não sei o que é '{direcao}'. Só sei ir para a frente ou para trás."
+        return Recusa(f"Não sei o que é '{direcao}'. Só sei ir para a frente ou para trás.")
+    # ⚠️ Um valor que não se percebe é uma RECUSA, não os 20 cm por omissão.
+    #    Cair no valor por omissão é o robô inventar uma ordem que ninguém
+    #    deu — e a única maneira de o notarmos era vê-lo andar. O _virar já
+    #    fazia isto bem; o _mover não.
     try:
         cm = int(cm)
-    except (TypeError, ValueError):
-        cm = 20
+    except (TypeError, ValueError, OverflowError):
+        return Recusa("Não percebi quantos centímetros.")
     if not 5 <= cm <= 50:
-        return f"{cm} cm é demasiado. Só ando entre 5 e 50 cm de cada vez."
+        return Recusa(f"{cm} cm é demasiado. Só ando entre 5 e 50 cm de cada vez.")
 
     # A segurança física manda sempre mais que o LLM.
     if direcao == "frente" and not sensors.caminho_livre():
         eyes.expressao("surpreso")
-        return "Não posso — está alguma coisa à minha frente!"
+        return Recusa("Não posso — está alguma coisa à minha frente!")
     if sensors.ha_precipicio():
-        return "Não posso — estou à beira de uma queda!"
+        return Recusa("Não posso — estou à beira de uma queda!")
 
     motors.andar_cm(cm if direcao == "frente" else -cm)
     return f"Andei {cm} cm para {'a frente' if direcao == 'frente' else 'trás'}."
@@ -195,18 +91,18 @@ def _virar(graus: int = 90, **_) -> str:
     try:
         graus = int(graus)
     except (TypeError, ValueError):
-        return "Não percebi quantos graus."
+        return Recusa("Não percebi quantos graus.")
     if not -180 <= graus <= 180:
-        return f"{graus} graus é demasiado. Só rodo entre -180 e 180."
+        return Recusa(f"{graus} graus é demasiado. Só rodo entre -180 e 180.")
     if sensors.ha_precipicio():
-        return "Não me mexo — estou à beira de uma queda!"
+        return Recusa("Não me mexo — estou à beira de uma queda!")
     motors.virar_graus(graus)
     return f"Rodei {abs(graus)} graus para a {'direita' if graus > 0 else 'esquerda'}."
 
 
 def _expressao(nome: str = "neutro", **_) -> str:
     if nome not in EXPRESSOES:
-        return f"Não sei fazer a cara '{nome}'. Sei fazer: {', '.join(sorted(EXPRESSOES))}."
+        return Recusa(f"Não sei fazer a cara '{nome}'. Sei fazer: {', '.join(sorted(EXPRESSOES))}.")
     eyes.expressao(nome)
     return f"Fiquei com cara de {nome.replace('_', ' ')}."
 
@@ -224,7 +120,7 @@ def _distancia(**_) -> str:
 
 def _gesto(nome: str = "acenar", **_) -> str:
     if nome not in GESTOS:
-        return f"Não sei fazer o gesto '{nome}'. Sei: {', '.join(sorted(GESTOS))}."
+        return Recusa(f"Não sei fazer o gesto '{nome}'. Sei: {', '.join(sorted(GESTOS))}.")
     arms.gesto(nome)
     return f"Fiz o gesto: {nome.replace('_', ' ')}."
 
@@ -233,13 +129,13 @@ def _apontar(direcao: str = "frente", **_) -> str:
     try:
         arms.apontar(direcao)
     except ValueError as erro:
-        return str(erro)
+        return Recusa(str(erro))
     return f"Apontei para {direcao}."
 
 
 def _garra(acao: str = "abrir", **_) -> str:
     if acao not in ("abrir", "fechar"):
-        return "A minha mão só sabe abrir ou fechar."
+        return Recusa("A minha mão só sabe abrir ou fechar.")
     arms.garra(acao)
     return "Abri a mão." if acao == "abrir" else "Fechei a mão."
 
@@ -247,7 +143,7 @@ def _garra(acao: str = "abrir", **_) -> str:
 def _bateria(**_) -> str:
     pct = power.percentagem()
     if pct is None:
-        return "Não consigo medir a minha bateria."
+        return Recusa("Não consigo medir a minha bateria.")
     if pct <= 20:
         return f"Tenho {pct}% de bateria. Estou com fome!"
     return f"Tenho {pct}% de bateria."
@@ -257,10 +153,10 @@ def _dancar(**_) -> str:
     import time
 
     if sensors.ha_precipicio():
-        return "Aqui não danço — estou à beira de uma queda!"
+        return Recusa("Aqui não danço — estou à beira de uma queda!")
     if not sensors.caminho_livre():
         eyes.expressao("surpreso")
-        return "Não tenho espaço para dançar. Põe-me num sítio mais aberto!"
+        return Recusa("Não tenho espaço para dançar. Põe-me num sítio mais aberto!")
     eyes.expressao("feliz")
     glow.pulsar("base", periodo=0.35)
     for _i in range(2):
@@ -272,9 +168,31 @@ def _dancar(**_) -> str:
         time.sleep(0.3)
     motors.parar()
     arms.pose("descanso")
-    eyes.animar("contente")
+    # ⚠️ `expressao`, não `animar`: "contente" é uma CARA (config/expressoes.yaml
+    #    → expressoes), não uma animação. O animar() levantava ValueError e a
+    #    dança acabava com o robô a recitar a lista de animações que existem.
+    #    Passou despercebido enquanto o resultado das ações não era falado.
+    eyes.expressao("contente")
     glow.respirar("base")
     return "Dancei!"
+
+
+def _seguir(acao: str = "comecar", **_) -> str:
+    """Liga ou desliga o modo seguir. A conta de segurança (D17) manda:
+    com `seguir.ativo: false` no robot.yaml, o pedido é recusado com
+    palavras, não ignorado em silêncio."""
+    if acao not in ("comecar", "parar"):
+        return Recusa("Só sei começar ou parar de seguir.")
+    if acao == "parar":
+        follow.parar()
+        return "Fiquei aqui."
+    if not follow.permitido():
+        return Recusa("Ainda não me deixam andar atrás de ninguém. Fico aqui contigo.")
+    if sensors.ha_precipicio():
+        return Recusa("Não posso — estou à beira de uma queda!")
+    follow.comecar()
+    eyes.expressao("atento")
+    return "Vou atrás de ti!"
 
 
 IMPLEMENTACOES = {
@@ -288,6 +206,7 @@ IMPLEMENTACOES = {
     "garra": _garra,
     "quanta_bateria": _bateria,
     "dancar": _dancar,
+    "seguir": _seguir,
 }
 
 
@@ -304,9 +223,17 @@ def executar(nome: str, argumentos: dict) -> str:
     """
     funcao = IMPLEMENTACOES.get(nome)
     if funcao is None:
-        return f"Não sei fazer '{nome}'."
+        return Recusa(f"Não sei fazer '{nome}'.")
     if not isinstance(argumentos, dict):
         argumentos = {}
+
+    # O contrato primeiro: se a ação está no catálogo, os argumentos têm de
+    # bater certo com ele. O cérebro já filtrou, mas o Pi é quem mexe os
+    # motores — e quem mexe os motores não confia em ninguém.
+    if nome in acoes.ACOES:
+        ok, razao = acoes.validar({"nome": nome, "argumentos": argumentos})
+        if not ok:
+            return Recusa(f"Não posso fazer isso assim ({razao}).")
 
     # Deitar fora parâmetros que o LLM inventou, antes de chamar seja o que for.
     parametros = inspect.signature(funcao).parameters
@@ -319,4 +246,4 @@ def executar(nome: str, argumentos: dict) -> str:
     try:
         return funcao(**argumentos)
     except Exception as erro:  # noqa: BLE001
-        return f"Tentei mas não consegui: {erro}"
+        return Recusa(f"Tentei mas não consegui: {erro}")

@@ -26,12 +26,24 @@ pessoa.
 ## Motores (cada um no seu venv — as dependências brigam entre si)
 
     # A · XTTS — o primeiro a experimentar
-    python3.12 -m venv ~/.venvs/lylla-xtts && source ~/.venvs/lylla-xtts/bin/activate
-    pip install torch torchaudio coqui-tts huggingface_hub
+    python3 -m venv ~/.venvs/zeca-xtts
+    ~/.venvs/zeca-xtts/bin/python -m pip install torch torchaudio \
+        "coqui-tts[codec]" "transformers<5" huggingface_hub
 
     # B · MLX — Qwen3 e Chatterbox, nativo em Metal
-    python3.12 -m venv ~/.venvs/lylla-mlx && source ~/.venvs/lylla-mlx/bin/activate
-    pip install -U mlx-audio
+    python3 -m venv ~/.venvs/zeca-mlx
+    ~/.venvs/zeca-mlx/bin/python -m pip install -U mlx-audio
+
+O `[codec]` traz o `torchcodec`: a partir do PyTorch 2.9 a leitura de áudio
+saiu do `torchaudio` e passou para lá, e sem ele o `import TTS` rebenta logo.
+
+O `"transformers<5"` não é preciosismo: o coqui-tts pede `transformers>=4.57`
+sem limite de cima, o pip dá a 5.x, e a 5.x removeu a `isin_mps_friendly` que o
+XTTS importa. Sem o pin rebenta no import. A última boa é a 4.57.6.
+
+Chamar o Python do venv pelo caminho absoluto, sem `activate`, é de propósito:
+neste Mac o `pip` e o `python3` apontam para interpretadores diferentes, e este
+projeto já perdeu horas com isso.
 
 ⚠️ Nada disto foi testado nesta máquina — não há Mac nem acesso ao Hugging Face
    do lado de cá. Cada motor apanha o erro e diz-te o comando exato. Se algum
@@ -54,7 +66,7 @@ REFERENCIA = RAIZ / "data" / "referencia.wav"
 REFERENCIA_TXT = RAIZ / "data" / "referencia.txt"
 
 FRASE = (
-    "Olá Lara! Eu sou a Lylla. "
+    "Olá Lara! Eu sou o Lylla. "
     "Tenho 2 rodas, 4 servos nos braços e 32 luzes em cada olho. "
     "Queres dar uma volta pela sala?"
 )
@@ -66,6 +78,24 @@ FRASE_TESTE_SOTAQUE = (
     "Os pastéis de Belém estão excelentes. "
     "O Rodrigo trouxe o telemóvel e o comboio das seis."
 )
+
+
+# Dois relógios, e a distinção não é académica: a primeira corrida descarrega
+# 2 GB, e se isso contar como "tempo por frase" o número que sai é ficção.
+TEMPOS: dict[str, float] = {}
+
+
+def cronometrar(fase: str):
+    class _Relogio:
+        def __enter__(self):
+            self.inicio = time.monotonic()
+            return self
+
+        def __exit__(self, *_):
+            TEMPOS[fase] = time.monotonic() - self.inicio
+            return False
+
+    return _Relogio()
 
 
 def erro(motor: str, mensagem: object, ajuda: str = "") -> None:
@@ -188,9 +218,11 @@ def motor_xtts(nome: str, repo: str | None, texto: str, dev: str) -> Path | None
         os.environ.setdefault("COQUI_TOS_AGREED", "1")
         from TTS.api import TTS
 
-        tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to(dev)
-        tts.tts_to_file(text=texto, file_path=str(destino),
-                        speaker_wav=[str(referencia)], language="pt")
+        with cronometrar("carregar"):
+            tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to(dev)
+        with cronometrar("sintetizar"):
+            tts.tts_to_file(text=texto, file_path=str(destino),
+                            speaker_wav=[str(referencia)], language="pt")
         return destino
 
     import scipy.io.wavfile as wavfile
@@ -198,23 +230,25 @@ def motor_xtts(nome: str, repo: str | None, texto: str, dev: str) -> Path | None
     from TTS.tts.configs.xtts_config import XttsConfig
     from TTS.tts.models.xtts import Xtts
 
-    pasta = Path.home() / ".cache" / "lylla-xtts-ptpt"
+    pasta = Path.home() / ".cache" / "zeca-xtts-ptpt"
     pasta.mkdir(parents=True, exist_ok=True)
     for ficheiro in ("model.pth", "config.json", "vocab.json", "dvae.pth", "mel_stats.pth"):
         if not (pasta / ficheiro).is_file():
             print(f"   ⬇️  {ficheiro}")
             hf_hub_download(repo_id=repo, filename=ficheiro, local_dir=str(pasta))
 
-    config = XttsConfig()
-    config.load_json(str(pasta / "config.json"))
-    modelo = Xtts.init_from_config(config)
-    modelo.load_checkpoint(config, checkpoint_dir=str(pasta), use_deepspeed=False)
-    modelo.to(dev)
+    with cronometrar("carregar"):
+        config = XttsConfig()
+        config.load_json(str(pasta / "config.json"))
+        modelo = Xtts.init_from_config(config)
+        modelo.load_checkpoint(config, checkpoint_dir=str(pasta), use_deepspeed=False)
+        modelo.to(dev)
 
-    saida = modelo.synthesize(
-        text=texto, config=config, speaker_wav=str(referencia),
-        language="pt", gpt_cond_len=6, temperature=0.7,
-    )
+    with cronometrar("sintetizar"):
+        saida = modelo.synthesize(
+            text=texto, config=config, speaker_wav=str(referencia),
+            language="pt", gpt_cond_len=6, temperature=0.7,
+        )
     wavfile.write(str(destino), 24000, saida["wav"])
     return destino
 
@@ -243,7 +277,8 @@ def motor_mlx(nome: str, modelo: str, texto: str, lang_code: str | None) -> Path
     DESTINO.mkdir(parents=True, exist_ok=True)
     os.chdir(DESTINO)
     try:
-        generate_audio(**argumentos)
+        with cronometrar("sintetizar"):
+            generate_audio(**argumentos)
     finally:
         os.chdir(anterior)
 
@@ -257,30 +292,134 @@ def motor_mlx(nome: str, modelo: str, texto: str, lang_code: str | None) -> Path
     return destino
 
 
+def motor_chatterbox_ptpt(texto: str, dev: str) -> Path | None:
+    """O ÚNICO outro modelo grande treinado só em português europeu.
+
+    A Resemble separou o europeu do brasileiro de propósito — dizem-no no
+    anúncio: "European Portuguese and Brazilian Portuguese (…) have
+    substantially different phonologies, and Portuguese-speaking listeners can
+    distinguish them effortlessly". O pacote pt-PT nunca viu português do
+    Brasil. Pesos MIT. CER publicado de 0,38%.
+
+    ⚠️ Montagem à mão, e por três razões que são todas culpa do upstream:
+       · o `pip install chatterbox-tts` dá a 0.1.7, de março, ANTERIOR ao V3 de
+         junho — tem o nome do ficheiro V2 escrito no código. É preciso o git.
+       · o exemplo do cartão do modelo não corre (o `ChatterboxTTS.generate()`
+         não tem `language_id`).
+       · o repositório pt-PT não traz o `ve.pt` nem o `conds.pt`, e chama
+         `s3gen_v3.pt` ao que o carregador procura como `s3gen.pt`.
+
+    Nada disto foi verificado a correr — foi lido no código do carregador. Se
+    falhar, o traço diz onde.
+    """
+    referencia = ler_referencia()
+    if referencia is None:
+        return None
+
+    import shutil as _shutil
+
+    import torchaudio
+    from chatterbox.mtl_tts import ChatterboxMultilingualTTS
+    from huggingface_hub import hf_hub_download
+
+    pasta = Path.home() / ".cache" / "zeca-chatterbox-ptpt"
+    pasta.mkdir(parents=True, exist_ok=True)
+
+    with cronometrar("carregar"):
+        # Do pacote pt-PT: só o T3 (é aí que mora o sotaque) e o vocabulário.
+        for ficheiro in ("t3_pt_pt.safetensors", "grapheme_mtl_merged_expanded_v1.json"):
+            if not (pasta / ficheiro).is_file():
+                print(f"   ⬇️  {ficheiro}")
+                _shutil.copy(
+                    hf_hub_download("ResembleAI/Chatterbox-Multilingual-pt-pt", ficheiro),
+                    pasta / ficheiro,
+                )
+
+        # Do repositório BASE: o codificador de voz e o descodificador.
+        #
+        # O `s3gen_v3.pt` que vem no pacote pt-PT não serve: foi guardado por uma
+        # versão do código que regista o `tokenizer._mel_filters` e o
+        # `tokenizer.window` como buffers não-persistentes, e o carregador daqui
+        # exige-os. O próprio upstream emparelha o T3 v3 com o s3gen BASE — os
+        # tokens de fala são os mesmos (25 por segundo), o descodificador não
+        # precisa de ser da mesma versão. O sotaque está no T3, não aqui.
+        marca = pasta / ".s3gen-base"
+        for ficheiro in ("ve.pt", "s3gen.pt"):
+            em_falta = not (pasta / ficheiro).is_file()
+            desatualizado = ficheiro == "s3gen.pt" and not marca.is_file()
+            if em_falta or desatualizado:
+                print(f"   ⬇️  {ficheiro} (do repositório base)")
+                _shutil.copy(hf_hub_download("ResembleAI/chatterbox", ficheiro), pasta / ficheiro)
+        marca.touch()
+
+        try:
+            modelo = ChatterboxMultilingualTTS.from_local(
+                ckpt_dir=str(pasta), device=dev, t3_model="t3_pt_pt.safetensors",
+            )
+        except RuntimeError as falha:
+            if "Missing key" not in str(falha):
+                raise
+            # Rede de segurança: se ainda faltarem chaves, são buffers
+            # calculados e o módulo cria-os sozinho no __init__. Carregar com
+            # strict=False é seguro para constantes; NÃO seria para pesos.
+            print(f"   ⚠️  ainda faltam buffers ({falha.args[0].splitlines()[-1].strip()})")
+            print("      a carregar com strict=False — são constantes, não pesos")
+            import torch.nn as nn
+
+            original = nn.Module.load_state_dict
+
+            def permissivo(self, state_dict, strict=True, **resto):
+                return original(self, state_dict, strict=False, **resto)
+
+            nn.Module.load_state_dict = permissivo
+            try:
+                modelo = ChatterboxMultilingualTTS.from_local(
+                    ckpt_dir=str(pasta), device=dev, t3_model="t3_pt_pt.safetensors",
+                )
+            finally:
+                nn.Module.load_state_dict = original
+
+    with cronometrar("sintetizar"):
+        audio = modelo.generate(
+            texto, language_id="pt", audio_prompt_path=str(referencia),
+            exaggeration=0.5, cfg_weight=0.5,
+        )
+    destino = DESTINO / "chatterbox-ptpt.wav"
+    torchaudio.save(str(destino), audio, modelo.sr)
+    return destino
+
+
 MOTORES = {
     "xtts-ptpt": (
         "XTTS-v2 afinado para português europeu · clona a tua voz",
         lambda t, d: motor_xtts("xtts-ptpt", "Martim-Ramos-Neural/xtts-v2-antonio-oliveira-pt-pt", t, d),
-        "pip install torch torchaudio coqui-tts huggingface_hub",
-        "lylla-xtts",
+        'pip install torch torchaudio "coqui-tts[codec]" "transformers<5" huggingface_hub',
+        "zeca-xtts",
     ),
     "xtts-base": (
         "XTTS-v2 base · o controlo — deve soar BRASILEIRO",
         lambda t, d: motor_xtts("xtts-base", None, t, d),
-        "pip install torch torchaudio coqui-tts",
-        "lylla-xtts",
+        'pip install torch torchaudio "coqui-tts[codec]" "transformers<5"',
+        "zeca-xtts",
     ),
     "qwen3": (
         "Qwen3-TTS 1.7B · Apache-2.0, o mais recente",
         lambda t, d: motor_mlx("qwen3", "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-8bit", t, None),
         "pip install -U mlx-audio",
-        "lylla-mlx",
+        "zeca-mlx",
     ),
     "chatterbox": (
         "Chatterbox multilingue v3 · MIT, mas lento",
         lambda t, d: motor_mlx("chatterbox", "mlx-community/chatterbox-multilingual-v3", t, "pt"),
         "pip install -U mlx-audio",
-        "lylla-mlx",
+        "zeca-mlx",
+    ),
+    "chatterbox-ptpt": (
+        "Chatterbox pacote pt-PT · treinado SÓ em português europeu, MIT",
+        lambda t, d: motor_chatterbox_ptpt(t, d),
+        'pip install "git+https://github.com/resemble-ai/chatterbox.git@master"'
+        "   (o do PyPI é anterior ao V3 e não serve)",
+        "zeca-chatterbox",
     ),
 }
 
@@ -292,7 +431,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Ensaia as vozes neuronais grandes, clonadas da tua voz.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="motores:\n" + "\n".join(f"  {k:<12} {v[0]}" for k, v in MOTORES.items()),
+        epilog="motores:\n" + "\n".join(f"  {k:<16} {v[0]}" for k, v in MOTORES.items()),
     )
     parser.add_argument("--motor", choices=sorted(MOTORES))
     parser.add_argument("--gravar", action="store_true", help="gravar a voz de referência")
@@ -318,13 +457,23 @@ def main() -> int:
 
     DESTINO.mkdir(parents=True, exist_ok=True)
     print(f"\n🧠 {args.motor} — {descricao}")
-    print(f"   {dev} · a primeira vez descarrega ~2 GB\n")
+    print(f"   {dev} · a primeira vez descarrega ~2 GB")
+    if dev == "cpu" and args.motor.startswith(("xtts", "chatterbox")):
+        print("   ⚠️  Em CPU isto demora MINUTOS por frase. Com --mps são segundos.")
+    print()
 
     inicio = time.monotonic()
     try:
         caminho = funcao(texto, dev)
     except ImportError as falha:
         erro(args.motor, falha, instalacao)
+        if not isinstance(falha, ModuleNotFoundError):
+            # Não é um módulo em falta: é uma versão errada de alguma coisa.
+            # O traço diz QUEM tentou importar QUÊ, que é o que interessa.
+            print()
+            import traceback
+
+            traceback.print_exc()
         diagnostico_do_python(venv)
         return 1
     except Exception as falha:  # noqa: BLE001
@@ -339,10 +488,21 @@ def main() -> int:
         return 1
 
     decorrido = time.monotonic() - inicio
-    print(f"\n   ✅ {caminho.name}   ({decorrido:.1f} s)")
-    if decorrido > 3:
-        print(f"      ⚠️  {decorrido:.0f} s por frase é muito para uma conversa.")
-        print("         Ou pré-geras as frases fixas, ou este motor não serve.")
+    sintese = TEMPOS.get("sintetizar", decorrido)
+    carga = TEMPOS.get("carregar")
+
+    print(f"\n   ✅ {caminho.name}")
+    if carga is not None:
+        print(f"      carregar o modelo: {carga:6.1f} s   (só na 1ª vez é que inclui o download)")
+    print(f"      sintetizar a frase: {sintese:6.1f} s   ← é ESTE que conta")
+
+    if sintese > 3:
+        print(f"\n      ⚠️  {sintese:.0f} s por frase é muito para uma conversa.")
+        if dev == "cpu":
+            print("         Estás em CPU. Repete com --mps antes de deitares o motor fora:")
+            print(f"           {Path(sys.argv[0]).as_posix()} --motor {args.motor} --mps")
+        else:
+            print("         Já é com Metal. Ou pré-geras as frases fixas, ou não serve.")
     print(f"\n   Ouve:  afplay {caminho}")
     print("   E depois compara tudo às cegas:")
     print("     python scripts/testar_vozes.py --so-ouvir --cego\n")

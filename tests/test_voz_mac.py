@@ -204,3 +204,65 @@ def test_o_mac_tambem_guarda_em_cache(mac):
             assert r.read().startswith(b"RIFF")
 
     assert len(list(servidor_voz.CACHE.glob("*.wav"))) == 1
+
+
+# ---------------------------------------------------------------------------
+# 5 · O interruptor de motor e o modo inglês
+# ---------------------------------------------------------------------------
+
+
+class _VozFalsa:
+    """Um Piper de mentira que escreve um WAV válido."""
+
+    def synthesize_wav(self, texto, ficheiro, cfg=None):
+        ficheiro.setnchannels(1)
+        ficheiro.setsampwidth(2)
+        ficheiro.setframerate(22050)
+        ficheiro.writeframes(b"\x00\x00" * 2205)
+
+
+def test_motor_piper_nao_chega_a_pedir_ao_mac(pi, monkeypatch):
+    """Com a voz da GLaDOS no Pi, o robô não precisa da rede — nem lhe toca."""
+    definicoes, _ = pi
+    definicoes["voz.motor"] = "piper"
+    definicoes["voz.servidor"] = "http://127.0.0.1:9/falar"
+
+    pedidos = []
+    monkeypatch.setattr(speak.config, "a_simular", lambda: False)
+    monkeypatch.setattr(speak, "_pedir_ao_mac", lambda t: pedidos.append(t))
+    monkeypatch.setattr(speak, "_iniciar", lambda: _VozFalsa())
+    monkeypatch.setattr(speak, "_reproduzir_wav", lambda c: None)
+
+    speak._falar_agora("Hello Lara.")
+
+    assert pedidos == [], "com motor=piper o Mac nem devia ser contactado"
+
+
+def test_por_omissao_o_mac_vem_primeiro(mac, pi, monkeypatch):
+    definicoes, _ = pi
+    definicoes["voz.servidor"] = f"{mac}/falar"
+    usou_piper = []
+    monkeypatch.setattr(speak.config, "a_simular", lambda: False)
+    monkeypatch.setattr(speak, "_iniciar", lambda: usou_piper.append(1))
+    monkeypatch.setattr(speak, "_reproduzir_wav", lambda c: None)
+
+    speak._falar_agora("Bom dia.")
+
+    assert usou_piper == [], "com motor=mac o Piper só entra se o Mac falhar"
+
+
+def test_modo_ingles_muda_o_system_prompt(monkeypatch):
+    """A voz inglesa obriga o LLM a pensar em inglês, não só a soar a inglês."""
+    from robot.brain import personalidade
+
+    definicoes = {"lingua": "pt"}
+    monkeypatch.setattr(personalidade.config, "obter",
+                        lambda caminho, omissao=None: definicoes.get(caminho, omissao))
+
+    em_portugues = personalidade.carregar()
+    assert "ENGLISH MODE" not in em_portugues
+
+    definicoes["lingua"] = "en"
+    em_ingles = personalidade.carregar()
+    assert "ENGLISH MODE" in em_ingles
+    assert em_ingles.startswith(em_portugues), "a personalidade da Lara não se perde"

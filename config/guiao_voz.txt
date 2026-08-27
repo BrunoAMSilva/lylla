@@ -1,0 +1,299 @@
+# GUIÃO DE GRAVAÇÃO — a voz do robô
+#
+# Uma frase por linha. As linhas com # são ignoradas.
+#
+# Como isto foi escolhido: um modelo Piper aprende a dizer SONS, não palavras.
+# Por isso o guião tem de cobrir o inventário fonético do português europeu,
+# não ser um texto bonito. Estão aqui de propósito:
+#
+#   · vogais átonas reduzidas (o "e" quase mudo de "telemóvel", o /ɨ/)
+#   · o /s/ final chiado ("as casas" → "aʃ cazaʃ")
+#   · ditongos nasais: ão, ãe, õe
+#   · lh, nh, rr, ç, x com os seus quatro sons
+#   · números, horas e datas — é onde as vozes mal treinadas se desmancham
+#   · perguntas, para a entoação subir
+#   · exclamações, para haver energia e não só leitura morna
+#
+# As primeiras frases são as que o robô vai mesmo dizer. Ficam gravadas com a
+# entoação certa à partida, e é a parte que mais se nota no dia a dia.
+#
+# Para gravar mais: acrescenta linhas ao fim. O gravador continua de onde parou.
+
+# ---------------------------------------------------------------- o robô a falar
+Olá! Eu sou o teu robô.
+Bom dia! Dormiste bem?
+Boa noite. Até amanhã.
+Estou aqui. Diz-me o que precisas.
+Não percebi. Podes repetir mais devagar?
+Já vou! Espera só um segundo.
+Isso é uma boa pergunta.
+Deixa-me pensar um bocadinho.
+Acho que me enganei. Desculpa.
+A minha bateria está fraca. Preciso de carregar.
+Estou quase sem energia. Levas-me ao carregador?
+Tenho de parar. A bateria está no fim.
+Não consigo passar por aqui. Está alguma coisa no caminho.
+Cuidado! Há um degrau à minha frente.
+Vou andar para a frente.
+Vou virar à esquerda.
+Vou virar à direita.
+Parei.
+Já te reconheço! Olá outra vez.
+Ainda não te conheço. Como te chamas?
+Estou contente por te ver.
+Isso fez-me cócegas nos sensores.
+Estou a pensar. Dá-me um momento.
+Não sei responder a isso, mas posso tentar descobrir.
+Queres brincar comigo?
+Queres dar uma volta pela sala?
+Vamos jogar a um jogo?
+Ganhaste! Muito bem.
+Perdi. Jogas outra vez comigo?
+Obrigado. És muito simpático.
+De nada. Foi um prazer ajudar.
+Adeus! Volta depois.
+
+# ---------------------------------------------------------------- números e tempo
+Zero, um, dois, três, quatro, cinco.
+Seis, sete, oito, nove, dez.
+Onze, doze, treze, catorze, quinze.
+Dezasseis, dezassete, dezoito, dezanove, vinte.
+Trinta, quarenta, cinquenta, sessenta.
+Setenta, oitenta, noventa, cem.
+Duzentos e cinquenta e três.
+Mil novecentos e noventa e nove.
+Dois mil e vinte e seis.
+São três e meia da tarde.
+Faltam vinte minutos para as nove.
+São exatamente sete horas e quarenta e dois minutos.
+Hoje é segunda-feira, dia catorze de março.
+O teu aniversário é a dezoito de agosto.
+Já passaram cento e vinte e sete dias.
+Custa quarenta e nove euros e noventa cêntimos.
+A temperatura é de vinte e dois graus.
+Tenho oitenta e sete por cento de bateria.
+Estou a andar a meio metro por segundo.
+Contei até trinta e dois e depois perdi-me.
+
+# ---------------------------------------------------------------- ão, ãe, õe
+Os irmãos foram à estação de comboios.
+A mãe e o pai trouxeram pão quente.
+As canções da minha avó eram em português.
+Não há razão nenhuma para teres medo.
+A televisão está ligada na sala.
+Puseram as mãos no coração.
+As decisões difíceis são para amanhã.
+Aquele cão ladra a toda a gente.
+Os aviões passam por cima da nossa casa.
+As lições de piano são às terças.
+
+# ---------------------------------------------------------------- lh, nh, rr, ç
+A minha filha ganhou o campeonato.
+O coelho fugiu para o milho.
+Trabalho todos os dias com o meu irmão.
+Amanhã de manhã vamos à montanha.
+O carro está estacionado na garagem.
+O cachorro corre atrás do carrinho.
+A torre da igreja é muito alta.
+O açúcar acabou e a criança fez uma birra.
+O almoço de terça-feira foi um assado.
+A cabeça dele dói por causa do barulho.
+
+# ------------------------------------------------- vogais átonas e /s/ chiado
+O telemóvel está em cima da mesa.
+As casas desta rua são todas iguais.
+Os pastéis de Belém estão excelentes.
+Estes dois rapazes estudam medicina.
+Depois das seis, as lojas fecham todas.
+Trouxe os livros que me pediste.
+As chaves estão dentro do bolso do casaco.
+Ontem estive todo o dia a estudar.
+Espero que estejas bem disposto.
+Os meus pais preferem café sem açúcar.
+Devolveste o dinheiro que te emprestaram?
+Precisamos de comprar mais duas garrafas.
+
+# ---------------------------------------------------------------- o x e os seus sons
+O táxi passou pelo exame sem problemas.
+Trouxe uma caixa com dez exemplares.
+O exército desfilou na praça.
+Explica-me outra vez, se fizeres favor.
+O peixe estava fresco e o arroz estava excelente.
+Existe uma exceção para cada regra.
+
+# ---------------------------------------------------------------- perguntas
+Como te chamas?
+Onde é que puseste a minha chave de fendas?
+Queres que te conte uma história?
+Já fizeste os trabalhos de casa?
+Achas que vai chover amanhã?
+Porque é que o céu é azul?
+Quantos anos tens?
+Quem é que está aí?
+Isto está bem assim?
+Podes dar-me uma ajuda?
+Que horas são?
+De que cor queres os meus olhos hoje?
+
+# ---------------------------------------------------------------- exclamações
+Que giro!
+Olha para isto!
+Não acredito!
+Está quente, cuidado!
+Boa! Conseguiste!
+Ai! Isso doeu.
+Espera! Não faças isso.
+Que grande confusão!
+
+# ---------------------------------------------------------------- frases compridas
+Quando eu era pequeno, passava as tardes de verão a construir coisas com peças de madeira que o meu avô guardava numa caixa velha.
+A coisa mais difícil de ensinar a um robô não é andar nem falar, é perceber quando deve estar calado.
+Se olhares com atenção para o céu numa noite sem nuvens, longe das luzes da cidade, consegues ver a faixa esbranquiçada da Via Láctea.
+Os motores fazem barulho porque as engrenagens lá dentro rodam muito depressa, e cada dente que encaixa dá um pequeno toque.
+Vamos precisar de uma chave de fendas, de fita isoladora e de bastante paciência para montar isto tudo até ao fim da tarde.
+Antigamente as pessoas escreviam cartas à mão e esperavam duas semanas por uma resposta que hoje chega em dois segundos.
+A minha câmara vê trinta imagens por segundo, mas o que eu faço com elas é que decide se te reconheço ou não.
+Explicar uma piada é a maneira mais certa de a estragar, e mesmo assim toda a gente insiste em fazê-lo.
+Há dias em que tudo corre bem à primeira, e há outros em que passamos três horas a descobrir que faltava ligar um fio.
+O mais importante de construir alguma coisa com as próprias mãos é que, quando se estraga, também se sabe arranjar.
+
+# ============================================================================
+# SEGUNDA PARTE — frases compridas, do dia a dia
+#
+# As 120 acima davam 1,5 minutos nas primeiras 40, porque as falas do robô são
+# curtas. Estas têm 8 a 16 palavras e rendem 5 a 6 segundos cada. São elas que
+# ensinam ao modelo o RITMO da frase portuguesa: onde se respira, onde a voz
+# sobe antes de uma vírgula, como se acaba uma afirmação em vez de uma pergunta.
+# ============================================================================
+
+# ---------------------------------------------------------------- casa e rotina
+Ainda agora acordei e já estou a pensar no que vou fazer ao almoço.
+Deixei a chave em cima do móvel da entrada, ao lado das cartas por abrir.
+Amanhã tenho de me levantar mais cedo para apanhar o comboio das sete e meia.
+A máquina de lavar está a fazer um barulho estranho desde a semana passada.
+Vou ao supermercado comprar pão, leite e qualquer coisa para o jantar.
+Esqueci-me completamente de que hoje era o dia de pôr o lixo na rua.
+O aquecedor da sala aquece bem, mas gasta uma fortuna em eletricidade.
+Já arrumei a roupa toda e ainda sobrou espaço no armário do corredor.
+Passámos a tarde inteira a arrumar a garagem e nem chegámos a meio.
+Ponho sempre o despertador para as sete, mas acordo cinco minutos antes.
+Não te esqueças de fechar a janela da cozinha antes de saíres.
+Aquele candeeiro do quarto está fundido há três semanas e ninguém o troca.
+
+# ---------------------------------------------------------------- escola e trabalho
+A professora disse que o teste de matemática fica para a semana a seguir.
+Passei a manhã toda numa reunião que podia ter sido um email de três linhas.
+Ele estuda melhor de manhã cedo, quando ainda ninguém acordou lá em casa.
+Tenho de entregar este trabalho até sexta-feira e ainda nem comecei.
+Explicaram a matéria três vezes e só à terceira é que fez sentido.
+No intervalo grande jogam todos à bola no campo das traseiras.
+Aprendi mais nesse projeto de três meses do que em dois anos de aulas.
+Escreve o teu nome no canto superior direito da folha, se fizeres favor.
+O autocarro da escola chega sempre uns minutos atrasado quando chove.
+
+# ---------------------------------------------------------------- comida
+O cheiro do café acabado de fazer é a melhor parte da manhã.
+Levou duas horas no forno e valeu cada minuto de espera.
+Prefiro a sopa bem quente, mesmo quando está trinta graus lá fora.
+Trouxeram uma travessa de peixe grelhado com batatas e salada.
+Nunca consigo fazer arroz doce como a minha avó fazia.
+Deixa levantar fervura, baixa o lume e mexe de vez em quando.
+Ficámos à conversa à mesa até muito depois de a sobremesa acabar.
+O pão daquela padaria da esquina é o melhor da cidade toda.
+
+# ---------------------------------------------------------------- natureza e ciência
+A Terra demora trezentos e sessenta e cinco dias a dar uma volta ao Sol.
+As baleias comunicam a dezenas de quilómetros de distância, debaixo de água.
+A luz do Sol demora oito minutos e vinte segundos a chegar até nós.
+As formigas conseguem carregar muitas vezes o seu próprio peso sem se queixarem.
+Quando a água ferve, as bolhas que sobem são vapor e não ar.
+Uma árvore grande pode beber centenas de litros de água num único dia de verão.
+Os ossos das aves são ocos por dentro, e é por isso que conseguem voar.
+O trovão é o som do ar a aquecer de repente à volta do relâmpago.
+Se puseres uma colher de metal na sopa, ela aquece antes de tu dares por isso.
+As estrelas que vemos hoje podem já nem existir, de tão longe que estão.
+
+# ---------------------------------------------------------------- tecnologia
+O computador demorou uma eternidade a arrancar depois da última atualização.
+Guardei tudo numa pasta e depois não me lembrava do nome que lhe tinha dado.
+A bateria do telemóvel já não aguenta um dia inteiro como aguentava dantes.
+Bastou trocar um cabo para o problema todo desaparecer.
+Passei três horas à procura de um erro que era uma vírgula a mais.
+Os motores elétricos têm muito menos peças a mexer do que os outros.
+Carrega no botão vermelho e espera que a luz fique verde antes de largares.
+A internet foi abaixo a meio da chamada e ninguém percebeu o que eu disse.
+
+# ---------------------------------------------------------------- cidade e viagens
+O elétrico sobe a rua devagar, cheio de gente encostada às janelas.
+Chegámos à estação com dez minutos de sobra e ainda assim viemos a correr.
+Aquela ponte tem quilómetros e de cima vê-se o rio todo.
+Perdemo-nos duas vezes no centro antes de encontrarmos o restaurante.
+Vale sempre a pena ir a pé quando a distância é menos de vinte minutos.
+No verão a vila enche-se de gente e no inverno não há vivalma.
+O avião aterrou com meia hora de atraso, mas as malas chegaram todas.
+Costumávamos ir àquela praia todos os agostos, quando eu era pequeno.
+
+# ---------------------------------------------------------------- animais
+O gato dorme dezasseis horas por dia e ainda parece cansado.
+O cão do vizinho ladra sempre que ouve o portão a abrir.
+Os pardais vêm ao parapeito comer as migalhas que sobram do pequeno-almoço.
+As andorinhas voltam sempre ao mesmo ninho, ano após ano.
+Aquele cavalo é enorme mas é o animal mais calmo que já vi.
+
+# ---------------------------------------------------------------- opinião e conversa
+Acho que estás a ter razão, mas não me convences assim tão depressa.
+Se calhar o melhor é esperarmos até amanhã e decidirmos com a cabeça fria.
+Não faço a mínima ideia, e quem disser que faz está a inventar.
+Confesso que ao princípio não gostei nada, mas mudei de opinião.
+Isso é capaz de resultar, desde que ninguém se lembre de mexer no resto.
+Vale mais fazer bem uma coisa do que fazer três a correr.
+Ninguém nasce ensinado, e quem se engana é porque está a tentar.
+Concordo contigo em quase tudo, menos exatamente naquela última parte.
+Prefiro que me digas já, mesmo que seja uma resposta que eu não queira ouvir.
+Havemos de rir disto daqui a uns anos, mas hoje não tem piada nenhuma.
+
+# ---------------------------------------------------------------- memórias e histórias
+Quando eu era miúdo passava as férias em casa dos meus avós, no campo.
+Havia um carvalho enorme ao fundo do quintal onde nos escondíamos todos.
+O meu avô tinha uma caixa de ferramentas que era um tesouro para mim.
+Lembro-me do cheiro da oficina dele, uma mistura de óleo e serradura.
+Construímos um carrinho de rolamentos que descia a rua a uma velocidade assustadora.
+Ela contava a mesma história todos os natais e nós ouvíamos sempre como se fosse a primeira vez.
+Nunca mais me esqueci do dia em que aquilo finalmente funcionou à primeira.
+Foram precisas quatro tentativas, mas à quarta ficou melhor do que eu esperava.
+
+# ---------------------------------------------------------------- tempo e clima
+Estava um dia cinzento, daqueles em que não se sabe se vai chover ou não.
+O vento soprou a noite toda e de manhã estava tudo espalhado pelo quintal.
+Depois de uma semana de chuva, o sol apareceu e ninguém queria estar dentro de casa.
+Faz um frio de rachar lá fora, veste alguma coisa antes de saíres.
+O nevoeiro estava tão cerrado que não se via o outro lado da rua.
+Em agosto o calor aperta a partir do meio da manhã.
+
+# ---------------------------------------------------------------- construir e reparar
+Precisamos de medir duas vezes antes de cortar, porque cortar é definitivo.
+Aperta esse parafuso devagar, senão espanas a rosca e ficamos pior do que estávamos.
+Faltava uma anilha e foi por isso que a peça andou a abanar este tempo todo.
+Se não encaixa à primeira, é porque está ao contrário.
+Deixa a cola secar durante a noite e amanhã já se pode mexer.
+Puseram tudo no sítio errado e depois quiseram que eu adivinhasse porquê.
+A parte difícil nunca é montar, é desmontar sem partir nada.
+
+# ---------------------------------------------------------------- números no meio de frases
+O bilhete custou quatro euros e cinquenta, ida e volta.
+Marcámos para as oito e um quarto, à porta do cinema.
+Deu um total de cento e quarenta e sete euros com o desconto já feito.
+Chegou a casa às onze e vinte da noite, cansado que nem um cão.
+Pesou três quilos e novecentos gramas quando nasceu.
+Faltam vinte e sete dias para as férias e já estou a contá-los.
+O caminho tem cerca de dois quilómetros e meio, quase todo a subir.
+Naquele verão de mil novecentos e noventa e oito não choveu uma única vez.
+
+# ---------------------------------------------------------------- perguntas compridas
+Achas que vale a pena esperarmos mais um bocado ou vamos já andando?
+Consegues explicar-me outra vez, mas devagar e sem usar palavras difíceis?
+Sabes se aquela loja da esquina abre aos domingos de manhã?
+Porque é que as coisas só se estragam quando estamos com pressa?
+Se te desse a escolher entre as duas, qual é que levavas para casa?
+Já pensaste no que ias fazer se isto não resultasse de todo?
+Queres que te ajude a arrumar ou preferes fazer sozinho e à tua maneira?

@@ -1,0 +1,105 @@
+# ============================================================================
+# O CÉREBRO — o que corre no mac mini
+#
+# Este ficheiro vive no MINI, não no robô. O robô só sabe um endereço
+# (`cerebro.url` no robot.yaml); tudo o resto decide-se aqui.
+#
+# Trocar de modelo é mudar uma linha e reiniciar o serviço:
+#     python -m cerebro.medir            ← mede os candidatos primeiro
+#     nano config/cerebro.yaml
+#     ./scripts/deploy_mini.sh --so-reiniciar
+#
+# Para experiências que não vão para o Git: config/cerebro.local.yaml
+# (as chaves que lá estiverem ganham a estas).
+# ============================================================================
+
+nome: "Cérebro da Lylla"
+host: "0.0.0.0"        # visível na rede de casa. 127.0.0.1 = só neste Mac.
+porta: 8420
+
+# ----------------------------------------------------------------------------
+# OUVIR — o Parakeet
+#
+# O `parakeet-tdt-0.6b-v3` da NVIDIA é o ÚNICO modelo aberto cujo cartão diz,
+# com todas as letras, que foi treinado com PORTUGUÊS EUROPEU. Todos os
+# outros dizem só "pt" — e já sabemos, das vozes, que o prior brasileiro é
+# real. Deteta a língua sozinho, o que é o que o modo inglês precisa.
+#
+# E o descodificador é TDT/RNN-T: transcreve À MEDIDA que o áudio chega, sem
+# reprocessar. É isso que faz o /v1/escutar valer a pena.
+#
+#   motor: "parakeet" → parakeet-mlx, Metal. É o do mini.
+#          "mlx"      → mlx-whisper, para comparar no medir.py.
+#          "faster"   → faster-whisper em CPU, corre em qualquer máquina.
+#          "teste"    → não ouve nada; devolve texto fixo (para testar a API).
+#
+# ⚠️ Números por medir. `python -m cerebro.medir --so-ouvir` no mini, com
+#    uma frase gravada a sério (--audio), e escrever aqui o que sair.
+# ----------------------------------------------------------------------------
+ouvir:
+  motor: "parakeet"
+  modelo_parakeet: "mlx-community/parakeet-tdt-0.6b-v3"   # ~2,5 GB em F32
+  # Se a RAM apertar depois de o LLM entrar, há uma versão de 8 bits com
+  # 908 MB: "animaslabs/parakeet-tdt-0.6b-v3-mlx-8bit" (pouco validada — medir).
+
+  # O compromisso do streaming: mais contexto à direita = melhor transcrição
+  # e mais atraso. (256, 256) é o valor da biblioteca. Para frases curtas de
+  # criança talvez dê para apertar — medir antes de mexer.
+  contexto_streaming: [256, 256]
+  profundidade_streaming: 1
+
+  # Alternativas, quando motor: "mlx" ou "faster"
+  modelo: "mlx-community/whisper-large-v3-turbo"
+  modelo_faster: "small"
+
+  lingua: "auto"     # o Parakeet ignora isto (deteta sozinho); o Whisper não
+
+# ----------------------------------------------------------------------------
+# PENSAR — o LLM
+#
+# ⚠️ Também por medir. `python -m cerebro.medir --so-pensar` compara os
+#    candidatos com o prompt REAL do robô e conta quantas vezes cada um
+#    devolve uma resposta bem formada.
+#
+#   motor: "ollama"  → o Ollama local (é o que temos).
+#          "openai"  → qualquer servidor compatível (mlx_lm.server,
+#                      llama-server) — serve para comparar MLX vs Ollama.
+#          "teste"   → respostas fixas, sem modelo nenhum.
+#
+#   16 GB de RAM partilhada com tudo o resto: um modelo de 12B em 4 bits
+#   ocupa ~7-8 GB e deixa pouco para o Whisper e o sistema. Os candidatos:
+#     gemma4:12b     tool calling fiável (~90% nas medições de 2026)
+#     gemma4:4b      metade da latência; chega para um brinquedo?
+#     qwen3:8b       bom em JSON estruturado
+#   O rigor não é a prioridade (é um brinquedo) — a latência é.
+# ----------------------------------------------------------------------------
+pensar:
+  motor: "ollama"
+  url: "http://127.0.0.1:11434"
+  modelo: "gemma4:12b"
+  temperatura: 0.7
+  max_tokens: 300
+  max_frases: 3          # o robô FALA — ninguém quer ouvir um parágrafo
+  max_historico: 12      # quantas mensagens ele se lembra
+  timeout_s: 60
+  keep_alive: -1         # ⚠️ -1 = o modelo fica SEMPRE em RAM.
+                         # Sem isto, a primeira frase depois de uns minutos
+                         # de silêncio custa os segundos todos do carregamento.
+  extra: {}              # o que aqui estiver vai direito ao corpo do pedido
+
+# ----------------------------------------------------------------------------
+# FALAR — a voz
+#
+#   motor: "piper" → um .onnx em models/ (a GLaDOS). Rápido, e é o que está
+#                    a correr — ver docs e a saga da voz.
+#          "say"   → as vozes do macOS (Joana, Catarina, Joaquim).
+#          "teste" → um apito.
+#
+# A voz pede-se pelo nome; com prefixo escolhe-se o motor à frente:
+#   "glados" · "piper:pt_PT-tugão-medium" · "say:Joana"
+# ----------------------------------------------------------------------------
+falar:
+  motor: "piper"
+  voz: "glados"
+  velocidade: 1.0
+  cache: "~/.cache/lylla-voz"

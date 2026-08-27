@@ -29,13 +29,20 @@ opencv-python>=4.10,<5
 # picamera2
 
 # --- Voz: falar -------------------------------------------------------------
-# A voz vem do Mac (scripts/servidor_voz.py). O Piper é só o recurso opcional
-# para frases novas com o Mac desligado (voz.modelo_tts no robot.yaml).
+# A voz vem do mini (cerebro/falar.py). O Piper é o recurso opcional para
+# frases novas com o mini desligado (voz.modelo_tts no robot.yaml).
 piper-tts>=1.6.0
 
 # --- Voz: ouvir -------------------------------------------------------------
-faster-whisper>=1.2.0
+# ⚠️ NÃO há Whisper no Pi. Quem transcreve é o mac mini — no Pi 5 o modelo que
+#    percebe bem português fica mais lento que o tempo real, e são 500 MB no
+#    cartão SD para um caso que a rede Tailscale torna raro. Sem mini, o robô
+#    não percebe o que lhe dizem: diz isso, e continua a andar e a ver.
 sounddevice>=0.4.7
+
+# O áudio vai para o mini em contínuo, pelo WebSocket, enquanto a Lara fala.
+# O `websocket-client` é síncrono, que é como o resto do robô está escrito.
+websocket-client>=1.7
 
 # ⚠️ openwakeword NÃO está nesta lista, de propósito.
 # A versão 0.6.0 declara "tflite-runtime" como dependência obrigatória no

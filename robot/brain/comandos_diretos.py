@@ -23,8 +23,22 @@ from __future__ import annotations
 
 import unicodedata
 
-from robot.brain import companion
+from robot.brain import companion, follow
 from robot.hardware import arms, motors
+
+
+# ⚠️ O PRÉ-ROLO PÔS A PALAVRA-CHAVE À FRENTE DE TUDO.
+#
+# Desde que o áudio vai para o mini em contínuo, o que chega aqui já não é
+# «pára» — é «olá robô pára», porque o pré-rolo (ver wakeword.py) contém
+# sempre a palavra mágica que acabou de ser dita. Com a comparação exata, o
+# travão de emergência e o interruptor da câmara deixaram de funcionar: as
+# duas coisas que este ficheiro existe para garantir.
+#
+# Por isso, antes de comparar, tira-se o que vier ANTES da palavra-chave.
+# É de propósito mais estrito do que "acaba em pára": uma frase que por acaso
+# termine numa destas palavras não pode parar o robô a meio de uma brincadeira.
+PALAVRAS_CHAVE = ("ola robo", "ola lylla", "lylla", "ola roboo")
 
 
 def _simplificar(texto: str) -> str:
@@ -37,6 +51,7 @@ def _simplificar(texto: str) -> str:
 
 
 def _parar_tudo() -> str:
+    follow.parar()      # primeiro o modo, senão a volta seguinte punha-o a andar outra vez
     motors.parar()
     arms.relaxar()
     return "Parei."
@@ -66,6 +81,26 @@ COMANDOS: tuple[tuple[tuple[str, ...], object], ...] = (
 )
 
 
+def sem_palavra_chave(texto: str) -> str:
+    """O que vem DEPOIS da palavra mágica, já simplificado.
+
+    >>> sem_palavra_chave("Olá robô, pára!")
+    'para'
+    >>> sem_palavra_chave("conta-me uma história")
+    'conta me uma historia'
+
+    Usa a ÚLTIMA ocorrência: o pré-rolo pode trazer ruído ou meia palavra
+    antes, e o que interessa é o que ela disse a seguir a chamá-lo.
+    """
+    limpo = _simplificar(texto)
+    corte = 0
+    for chave in PALAVRAS_CHAVE:
+        posicao = limpo.rfind(chave)
+        if posicao >= 0:
+            corte = max(corte, posicao + len(chave))
+    return limpo[corte:].strip()
+
+
 def tentar(texto: str) -> str | None:
     """Se a frase for um comando direto, executa-o e devolve a resposta.
 
@@ -74,8 +109,9 @@ def tentar(texto: str) -> str | None:
     if not texto:
         return None
     limpo = _simplificar(texto)
+    sem_chave = sem_palavra_chave(texto)
     for frases, funcao in COMANDOS:
-        if limpo in frases:
+        if limpo in frases or sem_chave in frases:
             return funcao()
     return None
 

@@ -30,6 +30,7 @@ import json
 import requests
 
 from robot import config
+from robot.brain import personalidade
 
 _historico: list[dict] = []
 _disponivel: bool | None = None
@@ -47,16 +48,15 @@ def _url(caminho: str) -> str:
     return f"http://{host}:{porta}{caminho}"
 
 
+# A personalidade (e o modo inglês) vivem em robot/brain/personalidade.py,
+# porque o cérebro no mac mini também precisa deles. Ficam aqui os nomes
+# antigos para quem os importava daqui.
+from robot.brain.personalidade import INSTRUCAO_INGLES  # noqa: E402,F401
+
+
 def carregar_personalidade() -> str:
     """Lê o config/personalidade.txt — o system prompt que a Lara escreve."""
-    ficheiro = config.CONFIG_DIR / "personalidade.txt"
-    if ficheiro.exists():
-        linhas = [
-            linha for linha in ficheiro.read_text(encoding="utf-8").splitlines()
-            if not linha.strip().startswith("#")
-        ]
-        return "\n".join(linhas).strip()
-    return f"Chamas-te {config.nome_do_robo()} e és um robô simpático. Falas português de Portugal."
+    return personalidade.carregar()
 
 
 def esta_ligado(timeout: float = 2.0) -> bool:

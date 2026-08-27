@@ -115,50 +115,93 @@ faces:
                             # dizer "não te conheço" à Lara.
   fotos_por_pessoa: 8       # quantas fotos tirar ao registar alguém
   resolucao: [640, 480]     # maior = mais lento, não necessariamente melhor
-  rodar_180: false          # true se a câmara ficar montada ao contrário (cabo
-                            # a sair por cima). Confirmar com ver_camera.py:
-                            # se a imagem vier invertida, é isto — não é o
-                            # detetor que está avariado.
 
 # ----------------------------------------------------------------------------
 # VOZ
 # ----------------------------------------------------------------------------
+# ----------------------------------------------------------------------------
+# A LÍNGUA DO ROBÔ
+# ----------------------------------------------------------------------------
+# "pt" fala português de Portugal · "en" fala inglês e mais nada.
+#
+# O modo inglês não é só a voz: muda também o system prompt do LLM, porque uma
+# voz inglesa a ler texto português sai estropiada (o fonemizador é en-us). Em
+# inglês vale a pena pôr voz.idioma em "auto" — assim a Lara pode falar-lhe em
+# português e ela responde à mesma em inglês.
+#
+# Para o modo inglês com a voz da GLaDOS:
+#   lingua: "en"  ·  voz.motor: "piper"  ·  voz.modelo_tts: "glados"
+#   voz.idioma: "auto"
+lingua: "en"          # a Lara está a aprender inglês e gosta da GLaDOS
+
 voz:
-  # A VOZ VEM DO MAC. A Lara ouviu às cegas as vozes todas de português europeu
-  # e escolheu a Joana, que só existe no macOS. O Mac corre o
-  # scripts/servidor_voz.py; o Pi pede o WAV e guarda-o em data/voz/ para poder
-  # repetir a frase sem rede nenhuma.
-  #
-  # E SAI PELO reSPEAKER: a coluna liga-se à ficha JST da placa do XVF3800, não
-  # ao Pi. É a única forma de o cancelamento de eco funcionar (D6 do plano).
-  # Não há nada a configurar aqui — o reSpeaker é a placa de som por omissão
-  # graças ao /etc/asound.conf (Apêndice B). Se não houver som, começa por aí.
-  servidor: "http://mac.local:8420/falar"
+  # Que motor manda: "mac" (a Joana, pela rede) ou "piper" (no próprio Pi).
+  motor: "piper"
+
+  # A VOZ VEM DO MINI. Vazio = usa o `cerebro.url` acima (+ /v1/falar), que é
+  # o que se quer. Só se preenche isto para apontar a voz a OUTRA máquina que
+  # não a do cérebro. O Pi guarda cada WAV em data/voz/ e volta a usá-lo sem
+  # rede nenhuma — é isso que o faz falar com o mini desligado.
+  servidor: ""
   voz_mac: "Joana"                   # Joana | Catarina | Joaquim
   tempo_limite_s: 5                  # a partir daqui desiste e usa o recurso
   velocidade_fala: 1.0               # 0.8 fala mais devagar; 1.2 mais depressa
 
   # Recurso para frases NOVAS com o Mac desligado. Vazio = não usar o Piper.
   # A `tugão` percebe-se mal (foi afinada de uma voz inglesa, 1,5 h de áudio).
-  modelo_tts: ""                     # "pt_PT-tugão-medium" para a ressuscitar
+  modelo_tts: "glados"               # "" para desligar · "pt_PT-tugão-medium" para a antiga
   modelo_stt: "base"                 # tiny | base | small
                                      # tiny = rápido mas erra · small = lento demais
-  idioma: "pt"
+  idioma: "auto"                     # "auto" = o Whisper deteta a língua
   palavra_chave: "ola_robo"
   limiar_palavra_chave: 0.6          # subir se ele acordar sozinho
   silencio_para_parar_s: 1.0         # quanto silêncio marca o fim da frase
 
 # ----------------------------------------------------------------------------
-# CÉREBRO GRANDE (o LLM que corre no Mac)
+# O CÉREBRO — o mac mini que ouve, pensa e fala
+#
+# É UM endereço só. O que corre lá dentro (que Whisper, que LLM, que voz)
+# decide-se no config/cerebro.yaml, no próprio mini — o robô não precisa de
+# saber. Trocar de modelo não obriga a mexer em nada aqui.
+#
+# O mini e a Lylla estão os dois na mesma rede TAILSCALE, e é por aí que
+# falam. Isso dá duas coisas que o mDNS de casa não dava:
+#
+#   · o nome `mini` funciona SEMPRE — em casa, em casa da avó, ou com o robô
+#     ligado ao telemóvel. Não depende do router nem do `.local`.
+#   · o tráfego vai cifrado ponta a ponta, o que interessa quando o que passa
+#     no fio é a voz de uma criança.
+#
+# ⚠️ Continua a ser rede local quando estão na mesma casa: o Tailscale liga os
+#    dois diretamente, não passa por servidor nenhum. A latência é a do WiFi.
 # ----------------------------------------------------------------------------
-llm:
-  host: "mac.local"         # nome do Mac na rede. Ver com: hostname
-  porta: 11434
-  modelo: "gemma4:12b"      # escolhido pelo tool calling fiável (~90%)
-  timeout_s: 20
-  max_historico: 12         # quantas mensagens ele se lembra
-  temperatura: 0.7          # 0 = sério e previsível · 1 = criativo e maluco
-  max_frases: 3             # respostas curtas — ele FALA, não escreve
+cerebro:
+  url: "http://mini:8420"
+
+  # Escutar em contínuo: o áudio vai para o mini ENQUANTO a Lara fala, e ele
+  # vai transcrevendo. Poupa o tempo todo de transcrever, que antes só
+  # começava depois de ela se calar. Ver docs/AI-config.md.
+  # A false, volta ao /v1/turno (grava tudo, envia no fim).
+  escutar_em_directo: true
+
+  # Os tempos de espera. Passado isto, o robô desiste e diz alguma coisa em
+  # vez de ficar parado — nunca há um silêncio sem explicação.
+  timeout_saude_s: 2        # a pergunta "estás aí?"
+  timeout_ligar_s: 3        # para ABRIR a ligação (não para a resposta toda)
+  timeout_turno_s: 60       # um turno completo, com o modelo a escrever
+  timeout_ouvir_s: 20       # só a transcrição
+  timeout_falar_s: 10       # só uma frase sintetizada
+
+# O QUE O ROBÔ *NÃO* TEM
+#
+# Não há aqui nem Whisper nem Ollama. Quem ouve e quem pensa é o mini, e mais
+# ninguém. Com o mini desligado o robô não percebe o que lhe dizem — e diz
+# isso, com a voz que tem em cache — mas continua a andar, a ver, a reconhecer
+# caras e a obedecer aos comandos diretos.
+#
+# É uma escolha, não um esquecimento: um Whisper que perceba português no Pi 5
+# fica mais lento que o tempo real, e são 500 MB no cartão SD para um caso que
+# o Tailscale torna raro.
 
 # ----------------------------------------------------------------------------
 # BRAÇOS — 5 servos no PCA9685 em 0x41, a 50 Hz

@@ -38,3 +38,7 @@ venv/
 .DS_Store
 *.log
 config/robot.local.yaml
+
+# O venv do cérebro, no mac mini
+.venv-cerebro/
+config/cerebro.local.yaml

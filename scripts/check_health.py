@@ -9,8 +9,6 @@ Responde à pergunta que interessa: é o hardware ou é o programa?
 
 from __future__ import annotations
 
-import importlib.util
-import re
 import subprocess
 import sys
 from pathlib import Path
@@ -39,17 +37,33 @@ def verificar(nome: str, funcao, dica: str = "") -> None:
         print(f"  {OK} {nome}: {resultado}")
 
 
+def _voz_local_pronta(nome: str) -> str | bool:
+    """O .onnx e o .onnx.json estão os dois lá? O Piper precisa dos dois."""
+    modelo = config.MODELS_DIR / f"{nome}.onnx"
+    configuracao = config.MODELS_DIR / f"{nome}.onnx.json"
+    if not modelo.is_file():
+        return False
+    if not configuracao.is_file():
+        return f"falta o {configuracao.name}"
+    return f"{modelo.stat().st_size / 1e6:.0f} MB"
+
+
 def _voz_do_mac_responde(url: str) -> str | bool:
-    """Pergunta ao servidor_voz.py do Mac se está de pé."""
+    """Pergunta ao serviço de voz (do cérebro, ou ao antigo servidor_voz.py)."""
     import json
     from urllib.request import urlopen
 
-    try:
-        with urlopen(url.rsplit("/", 1)[0] + "/saude", timeout=3) as resposta:  # noqa: S310
-            dados = json.load(resposta)
-        return f"{dados.get('voz')} · {dados.get('em_cache')} frases em cache no Mac"
-    except Exception:  # noqa: BLE001
-        return False
+    base = url.rsplit("/", 1)[0]
+    for caminho in ("/saude", "/v1/saude"):     # o novo e o antigo
+        try:
+            with urlopen(base.replace("/v1", "") + caminho, timeout=3) as resposta:  # noqa: S310
+                dados = json.load(resposta)
+        except Exception:  # noqa: BLE001
+            continue
+        voz = dados.get("falar", {}).get("voz") or dados.get("voz")
+        cache = dados.get("falar", {}).get("em_cache", dados.get("em_cache"))
+        return f"{voz} · {cache} frases em cache no Mac"
+    return False
 
 
 def _comando(*args) -> bool:
@@ -60,60 +74,10 @@ def _comando(*args) -> bool:
         return False
 
 
-def _placa_de_som(nome: str) -> str | bool:
-    """A placa `nome` aparece no `aplay -l`?  O reSpeaker chama-se "Array":
-        card 4: Array [reSpeaker XVF3800 4-Mic Array], device 0: USB Audio
-    Devolve a linha dela, para se ver o número do card."""
-    try:
-        r = subprocess.run(["aplay", "-l"], capture_output=True, text=True, timeout=10)
-    except Exception:  # noqa: BLE001
-        return False
-    for linha in r.stdout.splitlines():
-        if f": {nome} [" in linha:
-            return linha.strip()
-    return False
-
-
-def _resolve(host: str) -> str | bool:
-    """O nome existe na rede? Devolve o IP, ou False.
-
-    Tem um limite de tempo próprio porque o timeout do requests/urlopen NÃO
-    cobre a resolução de nomes — um nome .local que não existe pode demorar
-    vários segundos a falhar, e parece que o script encravou."""
-    import socket
-    import threading
-
-    resultado: list[str] = []
-
-    def _tentar() -> None:
-        try:
-            resultado.append(socket.gethostbyname(host))
-        except OSError:
-            pass
-
-    t = threading.Thread(target=_tentar, daemon=True)
-    t.start()
-    t.join(5)
-    return resultado[0] if resultado else False
-
-
-def _placa_por_omissao(nome: str) -> bool:
-    """O ALSA usa a placa `nome` por omissão? Sem isto o `aplay` do speak.py e o
-    `sounddevice` do listen.py vão para a primeira placa — o HDMI — em silêncio."""
-    for caminho in (Path("/etc/asound.conf"), Path.home() / ".asoundrc"):
-        try:
-            texto = caminho.read_text(encoding="utf-8")
-        except OSError:
-            continue
-        if re.search(rf"^\s*defaults\.pcm\.card\s+{re.escape(nome)}\s*$", texto, re.M):
-            return True
-    return False
-
-
 def main() -> int:
     nome = config.nome_do_robo()
     print(f"\n{'=' * 62}")
-    print(f"  DIAGNÓSTICO · {nome.upper()}")
+    print(f"  DIAGNÓSTICO DO {nome.upper()}")
     print(f"{'=' * 62}")
 
     if config.a_simular():
@@ -149,7 +113,7 @@ def main() -> int:
         print(f"  {AVISO}saltado (simulação)")
     else:
         def _i2c():
-            r = subprocess.run(["i2cdetect", "-y", "1"], capture_output=True, text=True, timeout=15)
+            r = subprocess.run(["i2cdetect", "-y", "1"], capture_output=True, text=True)
             return "40" in r.stdout
         verificar("PCA9685 dos motores (0x40)", _i2c,
                   "i2cdetect -y 1 não mostra 0x40. Verifica os cabos e a alimentação.")
@@ -168,7 +132,7 @@ def main() -> int:
         print(f"  {AVISO}servos saltados (simulação)")
     else:
         def _servos():
-            r = subprocess.run(["i2cdetect", "-y", "1"], capture_output=True, text=True, timeout=15)
+            r = subprocess.run(["i2cdetect", "-y", "1"], capture_output=True, text=True)
             return "41" in r.stdout
         verificar("PCA9685 dos servos (0x41)", _servos,
                   "Soldaste o jumper A0 do segundo PCA9685?")
@@ -200,12 +164,9 @@ def main() -> int:
     if config.a_simular():
         print(f"  {AVISO}saltado (simulação)")
     else:
-        verificar("rpicam vê a câmara",
-                  lambda: _comando("rpicam-hello", "--list-cameras", "-t", "1"),
-                  "⚠️  FALTA O CABO ADAPTADOR CSI 22→15 PINOS? (ou está ao contrário)")
-        verificar("picamera2 importa neste venv",
-                  lambda: importlib.util.find_spec("picamera2") is not None,
-                  "apt install python3-picamera2, e o venv tem de ser --system-site-packages (Apêndice B)")
+        verificar("libcamera vê a câmara",
+                  lambda: _comando("libcamera-hello", "--list-cameras", "-t", "1"),
+                  "⚠️  FALTA O CABO ADAPTADOR CSI 22→15 PINOS?")
 
     # ---------------------------------------------------- visão
     print("\n🧠 MODELOS DE VISÃO")
@@ -226,78 +187,59 @@ def main() -> int:
     print("\n🔊 SOM")
     from robot.voice import speak as _speak
 
-    servidor = config.obter("voz.servidor")
-    if servidor:
+    motor = config.obter("voz.motor", "mac")
+    modelo_voz = config.obter("voz.modelo_tts")
+    lingua = config.obter("lingua", "pt")
+    print(f"  ·  motor: {motor} · língua: {lingua}")
+
+    # A voz local (GLaDOS ou tugão) verifica-se sempre que estiver configurada,
+    # seja ela o motor principal ou o recurso.
+    if modelo_voz:
+        verificar(f"voz local '{modelo_voz}'",
+                  lambda: _voz_local_pronta(modelo_voz),
+                  "python scripts/download_models.py")
+
+    from robot.voice import speak as _speak_url
+
+    servidor = _speak_url._url_do_servidor()
+    if servidor and motor == "mac":
         verificar(f"serviço de voz no Mac ({config.obter('voz.voz_mac', 'Joana')})",
                   lambda: _voz_do_mac_responde(servidor),
-                  "No Mac:  python scripts/servidor_voz.py")
+                  "No mini:  python -m cerebro.servidor")
         # Isto é o que permite ao robô falar com o Mac desligado. Zero não é
         # avaria — é só um robô que ainda não abriu a boca.
         verificar("frases guardadas no Pi",
                   lambda: _speak.frases_em_cache() or "nenhuma ainda")
-    else:
-        modelo_voz = config.obter("voz.modelo_tts")
-        verificar(f"voz {modelo_voz or '(nenhuma configurada)'}",
-                  lambda: bool(modelo_voz) and (config.MODELS_DIR / f"{modelo_voz}.onnx").exists(),
-                  "define voz.servidor no config/robot.yaml (a Joana vem do Mac)")
-    verificar("faster-whisper (transcrever)",
-              lambda: importlib.util.find_spec("faster_whisper") is not None,
-              "pip install -r requirements.txt")
-    verificar("openwakeword (palavra-chave)",
-              lambda: importlib.util.find_spec("openwakeword") is not None,
-              "pip install --no-deps 'openwakeword>=0.6.0'  (porquê --no-deps: ver requirements.txt)")
+    elif not modelo_voz:
+        verificar("alguma voz configurada", lambda: False,
+                  "põe voz.modelo_tts (local) ou cerebro.url (no mini) no robot.yaml")
     if not config.a_simular():
-        # A coluna E os microfones são a mesma placa: o reSpeaker XVF3800, por
-        # USB. Aparece no ALSA como "Array". Se não aparecer, não há som nenhum.
-        verificar("reSpeaker no ALSA (coluna + microfones)",
-                  lambda: _placa_de_som("Array"),
-                  "aplay -l não mostra 'Array'. O reSpeaker está ligado por USB? lsusb → 2886:001a")
-        verificar("reSpeaker é a placa por omissão",
-                  lambda: _placa_por_omissao("Array"),
-                  "Falta em /etc/asound.conf:  defaults.pcm.card Array  /  defaults.ctl.card Array")
+        verificar("microfone", lambda: _comando("arecord", "-l"),
+                  "arecord -l não encontra nada. O microfone USB está ligado?")
+        verificar("coluna", lambda: _comando("aplay", "-l"),
+                  "Falta dtoverlay=hifiberry-dac no /boot/firmware/config.txt?")
 
     # ---------------------------------------------------- cérebro grande
-    print("\n🌐 CÉREBRO GRANDE (no Mac)")
-    from robot.brain import llm
-    host = config.obter("llm.host", "mac.local")
-    modelo = config.obter("llm.modelo", "gemma4:12b")
+    print("\n🌐 CÉREBRO (o mac mini)")
+    from robot.brain import cerebro as _cerebro
 
-    # Primeiro o nome, depois o serviço. Um nome que não existe na rede é a
-    # causa mais comum de "está encravado": cada tentativa espera pelo mDNS
-    # e pelo DNS antes de desistir, e este script tentaria três vezes.
-    ip = _resolve(host)
-    verificar(f"o nome {host} existe na rede", lambda: ip,
-              f"No Mac: scutil --get LocalHostName → põe '<esse-nome>.local' em "
-              f"config/robot.local.yaml (llm.host e voz.servidor)")
-
-    if not ip:
-        print("       (salto a verificação do Ollama — sem nome não há ligação)")
-        _problemas.append("LLM offline")
-    elif config.a_simular():
-        # Em simulação o esta_ligado() devolve sempre True, para o ciclo
-        # principal correr. Aqui fazemos a verificação a sério.
-        disponiveis = llm.modelos_disponiveis()
-        if disponiveis:
-            print(f"  {OK} Ollama em {host}: {', '.join(disponiveis[:5])}")
+    saude = _cerebro.saude()
+    if saude:
+        print(f"  {OK} {saude['nome']} em {_cerebro.base_url()} ({saude['maquina']})")
+        print(f"  {OK} ouvir: {saude['ouvir']['motor']} · {saude['ouvir']['modelo']}")
+        if saude["pensar"]["ligado"]:
+            print(f"  {OK} pensar: {saude['pensar']['motor']} · {saude['pensar']['modelo']}")
         else:
-            print(f"  {AVISO}não consigo falar com o Ollama em {host}")
-            print("       → normal se estiveres a programar fora de casa")
-    elif llm.esta_ligado():
-        print(f"  {OK} Ollama em {host}")
-        disponiveis = llm.modelos_disponiveis()
-        if any(m.startswith(modelo.split(":")[0]) for m in disponiveis):
-            print(f"  {OK} modelo {modelo}")
-        else:
-            print(f"  {MAU} modelo {modelo} não encontrado")
-            print(f"       → no Mac: ollama pull {modelo}")
-            print(f"       → disponíveis: {', '.join(disponiveis) or '(nenhum)'}")
-            _problemas.append("modelo LLM")
+            print(f"  {MAU} pensar: o {saude['pensar']['motor']} não responde no mini")
+            _problemas.append("modelo do cérebro")
+        print(f"  {OK} falar: {saude['falar']['motor']} · {saude['falar']['voz']}")
     else:
-        print(f"  {MAU} não consigo falar com o Ollama em {host}")
-        print("       → o Mac está ligado?")
-        print('       → launchctl setenv OLLAMA_HOST "0.0.0.0:11434"')
-        print("       → reiniciar a app Ollama a seguir")
-        _problemas.append("LLM offline")
+        print(f"  {AVISO}o cérebro não responde em {_cerebro.base_url()}")
+        print("       → no mini: python -m cerebro.servidor")
+        print("       → vou ver se pelo menos o Ollama está de pé")
+
+    if not saude:
+        _problemas.append("cérebro offline")
 
     # ---------------------------------------------------- temperatura
     if not config.a_simular():

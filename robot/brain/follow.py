@@ -44,6 +44,43 @@ def _cfg(chave: str, omissao):
     return config.obter(f"seguir.{chave}", omissao)
 
 
+# ---------------------------------------------------------------------------
+# O INTERRUPTOR — ligado pela ação `seguir` do cérebro, ou por um comando
+# direto. É só um estado: quem faz alguma coisa com ele é o ciclo principal,
+# que chama um_passo() a cada volta enquanto a_seguir() for verdadeiro.
+# ---------------------------------------------------------------------------
+
+_a_seguir = False
+
+
+def permitido() -> bool:
+    """O robot.yaml deixa? (`seguir.ativo`, que vem DESLIGADO — ver D17)."""
+    return bool(_cfg("ativo", False))
+
+
+def comecar() -> bool:
+    """Liga o modo seguir. Devolve False se a configuração não deixar."""
+    global _a_seguir
+    if not permitido():
+        _a_seguir = False
+        return False
+    _a_seguir = True
+    return True
+
+
+def parar() -> None:
+    """Desliga o modo seguir e para as rodas — sempre, mesmo que já estivesse
+    parado. Chamado também pelo "pára" dos comandos diretos."""
+    global _a_seguir
+    if _a_seguir:
+        motors.parar()
+    _a_seguir = False
+
+
+def a_seguir() -> bool:
+    return _a_seguir
+
+
 def calcular(
     x: float | None,
     area: float,

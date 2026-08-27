@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 """A VOZ DA LYLLA — o serviço que corre no MAC.
 
+⚠️ SUBSTITUÍDO pelo `cerebro/` (python -m cerebro.servidor), que faz isto e
+   mais: transcreve, pensa e devolve a resposta já em áudio, na mesma porta
+   8420 e com o mesmo /falar. Este ficheiro fica porque é pequeno, não tem
+   dependências nenhumas e serve de recurso se o cérebro não arrancar.
+   Ver docs/AI-config.md.
+
     python scripts/servidor_voz.py                 # Joana, porta 8420
     python scripts/servidor_voz.py --voz Catarina
     python scripts/servidor_voz.py --vozes         # que vozes pt-PT há neste Mac

@@ -34,6 +34,38 @@ python scripts/check_health.py
 > cancelamento de eco funcionar. Não há amplificador I2S nem `hifiberry` no
 > `config.txt`; há duas linhas em `/etc/asound.conf` (Apêndice B).
 
+## O cérebro, no mac mini
+
+Os modelos de IA — ouvir, pensar e falar — correm todos no mac mini, não no
+robô. O Pi manda o áudio **enquanto a Lara ainda está a falar**, e recebe de
+volta a resposta já em som, frase a frase.
+**A explicação toda está em [`docs/AI-config.md`](docs/AI-config.md).**
+
+```bash
+# no mini, uma vez
+./cerebro/instalar.sh --servico
+
+# testar sem microfone nenhum (dá para fazer hoje)
+python scripts/test_cerebro.py "segue-me!"
+
+# escolher os modelos com números em vez de opiniões
+python -m cerebro.medir
+```
+
+No robô, o `config/robot.yaml` só precisa de saber o endereço:
+
+```yaml
+cerebro:
+  url: "http://mini:8420"
+```
+
+(É o Tailscale que resolve o nome `mini`, portanto funciona em casa ou fora
+dela.)
+
+**Não há Whisper nem Ollama dentro do robô.** Com o mini desligado ele não
+percebe o que lhe dizem — e diz isso, com a voz que tem em cache — mas continua
+a andar, a ver, a reconhecer caras e a obedecer ao «pára».
+
 ## Está tudo bem?
 
 ```bash
@@ -58,6 +90,8 @@ python scripts/test_camera.py     # tira uma foto e desenha as caras
 /usr/bin/python3 scripts/ver_camera.py   # ver pela câmara no browser (telemóvel incluído) — só precisa do apt
 python scripts/test_sensores.py   # imprime as distâncias em tempo real
 python scripts/test_power.py      # tensão e percentagem da bateria
+python scripts/test_cerebro.py    # conversa com o mac mini, escrita
+python scripts/test_cerebro.py --escutar frase.wav   # o áudio em contínuo
 ```
 
 ⚠️ **Antes de mexer nos braços pela primeira vez**, corre
@@ -164,6 +198,13 @@ Depois `python scripts/test_eyes.py confuso` e vê o resultado.
 ## Estrutura
 
 ```
+cerebro/          O QUE CORRE NO MAC MINI (não no robô)
+├── servidor.py   a API :8420 (+ o WebSocket /v1/escutar)
+├── ouvir.py      Parakeet TDT      → texto, à medida que o áudio chega
+├── pensar.py     LLM               → cara + fala + ações
+├── falar.py      Piper             → áudio
+└── medir.py      qual dos modelos serve
+
 robot/
 ├── hardware/
 │   ├── pca9685.py    driver partilhado de PWM por I2C
@@ -174,7 +215,11 @@ robot/
 │   └── power.py      a bateria (ADS1115 @0x48)
 ├── perception/   câmara, reconhecer caras        → os sentidos
 ├── voice/        falar, ouvir, palavra-chave     → a boca e os ouvidos
-├── brain/        LLM, ferramentas, estados       → a cabeça
+├── brain/
+│   ├── acoes.py      O CONTRATO — lido também pelo mini
+│   ├── cerebro.py    o cliente do mini
+│   ├── contexto.py   o que o robô sabe agora
+│   └── …             ferramentas, estados, seguir
 ├── expressions.py                                → as caras (edita a Lara)
 ├── gestures.py                                   → os gestos (edita a Lara)
 └── main.py                                       → o ciclo principal
@@ -211,7 +256,9 @@ aplay -l                     # o reSpeaker aparece? (é a coluna E os microfones
 rpicam-hello --list-cameras  # a câmara aparece? (imx708)
 vcgencmd get_throttled       # 0x0 = alimentação está bem
 python scripts/test_power.py # quanta bateria resta
-curl http://mac.local:11434/api/tags   # o Mac está a servir o LLM?
+tailscale status | grep mini           # o mini está na rede?
+curl http://mini:8420/v1/saude         # o cérebro está de pé?
+curl http://mini:11434/api/tags        # e o Ollama por baixo dele?
 ```
 
 **E o botão vermelho.** Corta a corrente aos servos e aos motores sem desligar
