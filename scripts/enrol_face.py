@@ -5,6 +5,10 @@
     python scripts/enrol_face.py --listar      ver quem ele conhece
     python scripts/enrol_face.py --apagar Lara esquecer alguém
 
+💡 COM UMA CRIANÇA, USA ANTES O `scripts/ver_visao.py`: a pose aparece ao lado
+   do vídeo, ela vê a própria cara com a caixa à volta enquanto posa, e é ela
+   que carrega no botão. Este script serve para quando só há terminal.
+
 🔒 ANTES DE CORRER ISTO, LÊ EM VOZ ALTA À PESSOA:
 
    "Vou ensinar o robô a reconhecer-te. Ele NÃO guarda fotografias — guarda
@@ -65,9 +69,12 @@ def registar(nome: str) -> int:
     for i in range(n):
         pose = POSES[i % len(POSES)]
         print(f"  [{i + 1}/{n}] {pose}…")
-        for x in (3, 2, 1):
-            print(f"        {x}…", end="\r", flush=True)
-            time.sleep(0.7)
+        # ⚠️ Aqui havia uma contagem 3-2-1 de dois segundos. Não funcionava:
+        #    quem está a posar está virado para a CÂMARA, de costas para o
+        #    ecrã, e nunca chega a ler a pose. Metade das fotos saíam com a
+        #    pose errada ou sem cara nenhuma. Agora espera — quem posa é que
+        #    decide quando está pronto.
+        input("        (Enter quando estiveres em posição, Ctrl+C para sair) ")
 
         imagem = camera.tirar_foto()
         if imagem is None:

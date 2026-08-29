@@ -288,15 +288,27 @@ depois o limiar de confiança do detetor, que está a `0.85` no
 
 ## Passo 8 · Ensinar caras
 
-**Primeiro lê em voz alta o texto que está no topo do `enrol_face.py`** — é a
-primeira aula de privacidade da Lara e é concreta.
-
 ```bash
-python scripts/enrol_face.py Lara
-python scripts/enrol_face.py --listar
+python scripts/ver_visao.py          # depois abre http://<pi>.local:8001
 ```
 
+A página mostra o vídeo com as caixas, os nomes, a semelhança e os tempos — e
+é lá que se regista uma cara. **O texto da privacidade está na própria página
+para ser lido em voz alta**, e o botão só desbloqueia depois de alguém
+confirmar que a pessoa concordou.
+
+⚠️ **Porque é que isto não se faz pelo terminal.** Quem está a posar está
+virado para a **câmara**, de costas para o ecrã — nunca chega a ler «vira-te
+para a esquerda». A primeira versão tinha uma contagem 3-2-1 e metade das
+fotos saía com a pose errada. Na página, a instrução está ao lado do vídeo, a
+Lara vê a própria cara com a caixa à volta, e é ela que carrega em
+**Capturar** quando está pronta. Sem pressa, e sem ninguém a ler nada de
+costas.
+
 São 8 fotos com poses diferentes; precisa de pelo menos **3 boas**.
+
+O `scripts/enrol_face.py` continua a existir para quando só há terminal — e já
+não tem contagem: espera pelo Enter em cada pose.
 
 ⚠️ **Regista pelo menos duas pessoas** (tu e a Lara). Com uma cara só no
 ficheiro o teste não prova nada: o `identificar()` compara com quem conhece e

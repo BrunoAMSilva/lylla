@@ -93,6 +93,7 @@ python scripts/test_voz.py        # diz uma frase
 python scripts/test_camera.py     # tira uma foto e desenha as caras
 python scripts/medir_visao.py     # quanto custa ver, a cada resolução
 /usr/bin/python3 scripts/ver_camera.py   # ver pela câmara no browser (telemóvel incluído) — só precisa do apt
+python scripts/ver_visao.py       # o mesmo, mas com as caixas, os nomes e os tempos
 python scripts/test_sensores.py   # imprime as distâncias em tempo real
 python scripts/test_power.py      # tensão e percentagem da bateria
 python scripts/test_cerebro.py    # conversa com o mac mini, escrita
@@ -121,8 +122,17 @@ journalctl -u robo -f          # ver o que está a acontecer
 
 ## Ensinar uma cara nova
 
+A melhor maneira é pelo browser — a pose aparece ao lado do vídeo e a pessoa
+vê a própria cara com a caixa à volta enquanto posa:
+
 ```bash
-python scripts/enrol_face.py Lara        # tira 8 fotos e guarda a assinatura
+python scripts/ver_visao.py              # e abre http://<pi>.local:8001
+```
+
+Pelo terminal também dá, quando não há mais nada à mão:
+
+```bash
+python scripts/enrol_face.py Lara        # 8 fotos, uma por Enter
 python scripts/enrol_face.py --listar    # quem é que ele conhece?
 python scripts/enrol_face.py --apagar Lara
 ```

@@ -24,6 +24,7 @@
 
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 
 import numpy as np
@@ -38,6 +39,19 @@ _detetor = None
 _reconhecedor = None
 _conhecidos: dict[str, np.ndarray] = {}
 _carregado = False
+
+# ⚠️ O YuNet e o SFace são UM objeto cada, partilhado por quem os chamar, e
+#    guardam estado por dentro (o detetor tem um tamanho de entrada que se
+#    define antes de cada deteção). Dois fios a usá-los ao mesmo tempo não dão
+#    erro nenhum: devolvem menos caras, ou uma assinatura que não é de
+#    ninguém. É a mesma armadilha do transcribe_stream() no cérebro.
+#
+#    Apareceu a sério no ver_visao.py: o ciclo da câmara a reconhecer 10x por
+#    segundo enquanto o browser pedia uma captura para o registo — de quatro
+#    fotos pedidas, duas desapareciam em silêncio. Uma assinatura estragada é
+#    pior do que uma que falha: fica lá, e a Lara passa a ser mal reconhecida
+#    sem que nada tenha dado erro.
+_lock = threading.Lock()
 
 
 def _iniciar() -> bool:
@@ -124,8 +138,9 @@ def detetar(imagem) -> list:
     if not _iniciar():
         return []
     altura, largura = imagem.shape[:2]
-    _detetor.setInputSize((largura, altura))
-    _, caras = _detetor.detect(imagem)
+    with _lock:                      # ⚠️ ver a nota do _lock lá em cima
+        _detetor.setInputSize((largura, altura))
+        _, caras = _detetor.detect(imagem)
     return [] if caras is None else list(caras)
 
 
@@ -138,8 +153,9 @@ def assinatura(imagem, cara) -> np.ndarray | None:
     if not _iniciar():
         return None
     try:
-        alinhada = _reconhecedor.alignCrop(imagem, cara)
-        vetor = _reconhecedor.feature(alinhada)
+        with _lock:                  # ⚠️ ver a nota do _lock lá em cima
+            alinhada = _reconhecedor.alignCrop(imagem, cara)
+            vetor = _reconhecedor.feature(alinhada)
         return vetor / np.linalg.norm(vetor)  # normalizar
     except Exception:  # noqa: BLE001
         return None
@@ -190,12 +206,25 @@ def quem_esta_a_ver(imagem=None) -> str | None:
     return nome
 
 
+def _nome_seguro(nome: str) -> str:
+    """O nome vira `data/faces/<nome>.npz`, e pode vir de um POST (ver_visao.py).
+
+    Sem isto, um nome com "../" escrevia fora da pasta. A validação boa está no
+    servidor; esta é a rede por baixo, para o caso de aparecer outro caminho.
+    """
+    limpo = (nome or "").strip()
+    if not limpo or limpo in (".", "..") or set(limpo) & set("/\\\x00"):
+        raise ValueError(f"nome de pessoa inválido: {nome!r}")
+    return limpo
+
+
 def guardar_pessoa(nome: str, vetores: list[np.ndarray]) -> Path:
     """Guarda a média das assinaturas de uma pessoa.
 
     Fazer a média de 8 fotos (ângulos e luzes diferentes) dá um resultado
     muito mais estável do que usar uma só.
     """
+    nome = _nome_seguro(nome)
     PASTA_CARAS.mkdir(parents=True, exist_ok=True)
     media = np.mean(np.array([v.flatten() for v in vetores]), axis=0)
     media = media / np.linalg.norm(media)
@@ -207,7 +236,7 @@ def guardar_pessoa(nome: str, vetores: list[np.ndarray]) -> Path:
 
 def apagar_pessoa(nome: str) -> bool:
     """Direito a ser esquecido. Um comando, e desaparece."""
-    caminho = PASTA_CARAS / f"{nome}.npz"
+    caminho = PASTA_CARAS / f"{_nome_seguro(nome)}.npz"
     if caminho.exists():
         caminho.unlink()
         carregar_conhecidos()
