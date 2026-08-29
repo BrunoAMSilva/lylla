@@ -55,7 +55,29 @@ def _iniciar() -> bool:
         return False
     try:
         import cv2
+    except ImportError as erro:
+        print(
+            f"⚠️  Visão indisponível: falta o OpenCV ({erro}).\n"
+            "\n"
+            "    ⚠️  ISTO NÃO É A CÂMARA. Se viste 'imagem 640×480' acima, o\n"
+            "        cabo e o sensor estão bons — não voltes a mexer no CSI.\n"
+            "\n"
+            "    A causa nº1 é estar-se a correr o Python errado:\n"
+            "        which python        # tem de dar .venv/bin/python\n"
+            "        source .venv/bin/activate\n"
+            "\n"
+            "    Se já for o do venv e mesmo assim faltar:\n"
+            "        pip install -r requirements.txt\n"
+            "\n"
+            "    E se o erro passar a ser 'libGL.so.1' em vez deste, é o\n"
+            "    pacote errado — o Pi OS Lite não tem bibliotecas gráficas:\n"
+            "        pip uninstall -y opencv-python\n"
+            "        pip install 'opencv-python-headless>=4.10,<5'"
+        )
+        _detetor = None
+        return False
 
+    try:
         _detetor = cv2.FaceDetectorYN.create(
             str(MODELO_DETETOR), "", (320, 320), 0.85, 0.3, 5000
         )
@@ -66,6 +88,17 @@ def _iniciar() -> bool:
         print(f"⚠️  Visão indisponível ({erro}).")
         _detetor = None
         return False
+
+
+def disponivel() -> bool:
+    """A visão arranca mesmo? (OpenCV instalado E modelos a carregar)
+
+    ⚠️ Não é a mesma pergunta que "os ficheiros dos modelos existem". Sem o
+       cv2 instalado os .onnx estão lá na mesma e a visão está morta — foi
+       exatamente assim que o check_health.py já deu dois ✅ a uma visão que
+       não via nada.
+    """
+    return _iniciar()
 
 
 def carregar_conhecidos() -> None:

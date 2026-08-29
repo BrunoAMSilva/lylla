@@ -31,7 +31,16 @@ def uma_vez() -> int:
         return 1
 
     altura, largura = imagem.shape[:2]
-    print(f"   ✅ imagem {largura}×{altura}")
+    print(f"   ✅ imagem {largura}×{altura}  ← o hardware está bom")
+
+    # ⚠️ Parar AQUI se a visão não arrancou. Antes seguia em frente e imprimia
+    #    "0 cara(s) encontrada(s) em 0 ms", que se lê como "não está lá
+    #    ninguém" — e manda a pessoa mexer outra vez no cabo CSI por causa de
+    #    um pacote de Python que falta. Os 0 ms eram a única pista.
+    if not faces.disponivel():
+        print("\n   ❌ A câmara funciona, mas a VISÃO não arrancou.")
+        print("      O erro está no aviso acima. Não é o cabo.\n")
+        return 1
 
     inicio = time.monotonic()
     caras = faces.detetar(imagem)

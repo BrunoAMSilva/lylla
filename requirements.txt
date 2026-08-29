@@ -18,10 +18,18 @@ numpy>=1.26,<3
 requests>=2.32
 
 # --- Visão ------------------------------------------------------------------
-# YuNet (deteção) + SFace (reconhecimento) vêm DENTRO do opencv-python.
+# YuNet (deteção) + SFace (reconhecimento) vêm DENTRO do OpenCV.
 # Não é preciso instalar face_recognition nem compilar dlib.
 # <5 de propósito: o OpenCV 5 saiu em 2026 e o código foi escrito para o 4.x.
-opencv-python>=4.10,<5
+#
+# ⚠️ HEADLESS, e não o opencv-python normal. O pacote normal traz a parte
+#    gráfica (janelas), que precisa do libGL.so.1 e do libglib — e o Raspberry
+#    Pi OS **Lite** não tem nenhum dos dois. Instala bem e rebenta no import.
+#    Este robô nunca abre uma janela: procurámos, e não há um único imshow,
+#    namedWindow nem waitKey no projeto. O ver_camera.py mostra a imagem por
+#    HTTP, não por janela. Portanto a versão gráfica seria só peso e uma
+#    armadilha à espera.
+opencv-python-headless>=4.10,<5
 
 # --- Câmara (só no Raspberry Pi) --------------------------------------------
 # picamera2 instala-se SÓ pelo apt (python3-picamera2). Um venv normal não o

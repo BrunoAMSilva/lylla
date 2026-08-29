@@ -6,6 +6,10 @@ fala, e pensa com um LLM que corre no Mac lá de casa.
 > **O plano completo está em [`PLANO.md`](PLANO.md).** Este ficheiro é só para
 > pôr as coisas a andar.
 >
+> **A ligar a câmara pela primeira vez?**
+> [`docs/FASE9-visao.md`](docs/FASE9-visao.md) — do cabo CSI até «Olá, Lara!»,
+> passo a passo, com as duas armadilhas que fazem culpar o hardware sem razão.
+>
 > **Ainda à espera das peças?** [`ENQUANTO-ESPERAS.md`](ENQUANTO-ESPERAS.md) —
 > cinco das sete coisas que dá para fazer hoje não precisam do Raspberry Pi.
 > Começa pela voz: são 30 minutos e ela ouve o robô falar antes de ele existir.
@@ -87,6 +91,7 @@ python scripts/test_motors.py     # roda cada motor isoladamente
 python scripts/test_arms.py       # passa por todas as poses e gestos
 python scripts/test_voz.py        # diz uma frase
 python scripts/test_camera.py     # tira uma foto e desenha as caras
+python scripts/medir_visao.py     # quanto custa ver, a cada resolução
 /usr/bin/python3 scripts/ver_camera.py   # ver pela câmara no browser (telemóvel incluído) — só precisa do apt
 python scripts/test_sensores.py   # imprime as distâncias em tempo real
 python scripts/test_power.py      # tensão e percentagem da bateria

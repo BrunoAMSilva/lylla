@@ -66,6 +66,15 @@ def _voz_do_mac_responde(url: str) -> str | bool:
     return False
 
 
+def _cv2() -> str | bool:
+    """O OpenCV importa? Devolve a versão, que também interessa (queremos 4.x)."""
+    try:
+        import cv2
+        return f"v{cv2.__version__}"
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def _comando(*args) -> bool:
     try:
         r = subprocess.run(args, capture_output=True, timeout=10)
@@ -174,12 +183,20 @@ def main() -> int:
                   "⚠️  FALTA O CABO ADAPTADOR CSI 22→15 PINOS?")
 
     # ---------------------------------------------------- visão
-    print("\n🧠 MODELOS DE VISÃO")
+    print("\n🧠 VISÃO")
     from robot.perception import faces
+    # ⚠️ A ORDEM IMPORTA, e a primeira linha é nova por uma razão: durante a
+    #    fase 9 este bloco deu ✅ ao YuNet e ✅ ao SFace com a visão
+    #    completamente morta. Os ficheiros .onnx existiam; o que faltava era o
+    #    OpenCV. Um diagnóstico que só olha para o disco mente.
+    verificar("OpenCV (cv2)", _cv2,
+              "pip install -r requirements.txt  (com o venv ATIVO)")
     verificar("YuNet (detetar caras)", lambda: faces.MODELO_DETETOR.exists(),
               "python scripts/download_models.py")
     verificar("SFace (reconhecer)", lambda: faces.MODELO_RECONHECEDOR.exists(),
               "python scripts/download_models.py")
+    verificar("a visão arranca mesmo", faces.disponivel,
+              "os ficheiros estão lá mas não carregam — lê o aviso acima")
 
     def _conhecidos():
         pessoas = faces.pessoas_conhecidas()

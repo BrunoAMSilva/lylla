@@ -1,6 +1,6 @@
 # FASE 9 · O robô vê — arranque da câmara
 
-Guião de arranque da visão, do cabo até «Olá, Lara!».
+Guia de arranque da visão, do cabo até «Olá, Lara!».
 Pressupõe o Pi 5 já instalado, com o projeto e o venv, e acesso por **SSH sem monitor**.
 
 O código todo já está escrito — `robot/perception/camera.py`, `faces.py`,
@@ -93,10 +93,104 @@ fita 180° **numa** das pontas) → conector errado. Não é preciso mexer no
 
 ---
 
-## Passo 3 · Os modelos estão no Pi?
+## Passo 3 · O venv — onde vive o software do robô
+
+⚠️ **O passo 2 ter corrido bem não quer dizer que haja venv nenhum.** O
+`picamera2` vem do `apt` e o Python do sistema vê-o sozinho — a câmara
+funciona na mesma com o projeto por instalar. Confirma:
+
+```bash
+ls -d ~/my-robot/.venv 2>/dev/null || echo "❌ não existe"
+```
+
+### Criar
+
+⚠️ **O `--system-site-packages` não é opcional, e é a decisão toda deste
+passo.** O `picamera2` só existe pelo `apt`, e um venv normal não o vê. Sem a
+flag, a câmara desaparece exatamente no momento em que começas a usar o
+projeto — e o erro aponta para o Python, não para o venv.
+
+```bash
+# o que TEM de vir do apt, nunca do pip
+sudo apt install -y python3-venv python3-lgpio python3-gpiozero
+sudo apt install -y --no-install-recommends python3-picamera2
+
+cd ~/my-robot
+python3 -m venv --system-site-packages .venv
+source .venv/bin/activate
+which python                # tem de dar ~/my-robot/.venv/bin/python
+```
+
+**Confirma a flag ANTES de instalar seja o que for.** São cinco segundos, e
+poupam fazer os dez minutos seguintes para deitar fora:
+
+```bash
+python -c "from picamera2 import Picamera2; print('✅ o venv vê a câmara')"
+```
+
+Falhou? O venv foi criado sem a flag. `deactivate; rm -rf .venv` e repete.
+**Não** tentes `pip install picamera2`: o pacote do PyPI tem o mesmo nome, é
+outra coisa, e não fala com o `libcamera` do sistema.
+
+### Instalar
+
+```bash
+pip install -r requirements.txt               # ~10 min no Pi
+pip install --no-deps "openwakeword>=0.6.0"   # ⚠️ o --no-deps não é opcional
+```
+
+O `--no-deps` está explicado no topo do `requirements.txt`: o `openwakeword`
+0.6.0 declara o `tflite-runtime` como obrigatório, esse pacote morreu no
+Python 3.11, e sem a flag o `pip` desiste da **lista inteira** por causa dele.
+
+💡 **Só queres ver caras hoje?** Para os passos 5 a 9 chegam três pacotes, e
+instalam-se em segundos. O resto (voz, áudio, GPIO) fica para quando for
+preciso:
+
+```bash
+pip install PyYAML "opencv-python-headless>=4.10,<5"
+```
+
+⚠️ Repara que o **numpy não está nesta lista, de propósito**. Ele já lá está,
+vindo do `apt` com o `python3-picamera2`, e o venv vê-o por causa do
+`--system-site-packages`. Pedi-lo ao `pip` obrigava-o a instalar outro por
+cima — que é precisamente o choque descrito a seguir. Deixa o `pip` decidir:
+o que já estiver satisfeito, ele salta.
+
+### Confirmar que a instalação não partiu a câmara
+
+⚠️ **Isto não é paranoia — é a armadilha clássica do Pi.** O `picamera2` vem
+do `apt`, compilado contra o numpy **do sistema**. O `pip install` põe outro
+numpy dentro do venv, que passa à frente dele. Se os dois não forem
+compatíveis, o `picamera2` deixa de importar: a instalação corre bem, diz
+tudo verde, e a câmara morre.
+
+```bash
+python -c "import picamera2, cv2, numpy; print('✅ tudo:', cv2.__version__, numpy.__version__)"
+```
+
+Se o `picamera2` rebentar **agora** e funcionasse no passo 2, é exatamente
+isto. Compara os dois numpy:
+
+```bash
+/usr/bin/python3 -c "import numpy; print('sistema:', numpy.__version__)"
+python              -c "import numpy; print('venv   :', numpy.__version__)"
+```
+
+Versões principais diferentes (1.x contra 2.x) confirmam o diagnóstico. A
+solução é o venv ceder — o numpy do sistema é o que o `picamera2` conhece, e
+este projeto só usa numpy antigo e aborrecido (`dot`, `mean`, `savez`):
+
+```bash
+pip uninstall -y numpy      # o venv volta a ver o do sistema
+```
+
+---
+
+## Passo 4 · Os modelos estão no Pi?
 
 ⚠️ A pasta `models/` está no `.gitignore`. **O `git clone` não os traz** — no
-Mac estão lá, no Pi provavelmente não.
+Mac estão lá, no Pi não.
 
 ```bash
 cd ~/my-robot && source .venv/bin/activate
@@ -106,26 +200,8 @@ ls -la models/*.onnx
 
 Esperado: `face_detection_yunet_2023mar.onnx` (~230 KB) e
 `face_recognition_sface_2021dec.onnx` (~39 MB). O script verifica o sha256 —
-um download truncado só daria erro muito mais à frente, ao carregar o ONNX.
-
----
-
-## Passo 4 · O `picamera2` vê-se de dentro do venv?
-
-```bash
-python -c "from picamera2 import Picamera2; print('✅ picamera2 ok')"
-```
-
-**`ModuleNotFoundError`?** O venv não foi criado com `--system-site-packages`.
-**Não se resolve com `pip install picamera2`** — essa versão do PyPI não é a
-mesma e não fala com o `libcamera` do sistema. Recriar é a única saída:
-
-```bash
-sudo apt install -y --no-install-recommends python3-picamera2
-deactivate; rm -rf .venv
-python3 -m venv --system-site-packages .venv
-source .venv/bin/activate && pip install -r requirements.txt
-```
+um download truncado só daria erro muito mais à frente, ao carregar o ONNX,
+com uma mensagem que ninguém liga a isto.
 
 ---
 
@@ -175,6 +251,17 @@ luz e o limiar.
 ---
 
 ## Passo 7 · Detetar
+
+> ⚠️ **VOLTA AO VENV AQUI.** O passo 5 usava o `/usr/bin/python3` de propósito
+> (só precisava do `picamera2` do apt). Deste passo em diante é preciso o
+> OpenCV, que está no venv e **não** no Python do sistema. Correr o do sistema
+> dá `No module named 'cv2'` **com a câmara perfeitamente boa** — e a
+> tentação é ir mexer no cabo.
+>
+> ```bash
+> cd ~/my-robot && source .venv/bin/activate
+> which python          # tem de dar ~/my-robot/.venv/bin/python
+> ```
 
 ```bash
 python scripts/test_camera.py
@@ -261,7 +348,10 @@ correr sempre que alguma coisa parecer estranha, **antes** de mexer em código.
 |---|---|
 | `No cameras available` | Cabo ao contrário ou mal enfiado. Contactos para o lado contrário da patilha |
 | `câmara → foto simulada` | `ROBO_SIMULAR=1` no ambiente |
-| `No module named picamera2` | Venv sem `--system-site-packages` |
+| `No module named picamera2` | Venv sem `--system-site-packages` — ou não há venv nenhum (passo 3) |
+| `No module named 'cv2'` **depois** de `✅ imagem 640×480` | Python errado. **Não é o cabo** — a câmara acabou de dar uma imagem. `source .venv/bin/activate`, e se faltar mesmo, `pip install -r requirements.txt` |
+| `picamera2` deixou de importar **depois** do `pip install` | Choque de numpy: o do venv passou à frente do do sistema. `pip uninstall -y numpy` |
+| `ImportError: libGL.so.1` ao importar o cv2 | Pacote errado: o Pi OS Lite não tem bibliotecas gráficas. `pip uninstall -y opencv-python && pip install 'opencv-python-headless>=4.10,<5'` |
 | `Faltam os modelos de visão` | `python scripts/download_models.py` (a `models/` está no gitignore) |
 | Vê a imagem mas 0 caras | Imagem invertida (`rodar_180`), ou contraluz |
 | Reconhece toda a gente como a mesma pessoa | Só há uma pessoa registada — regista uma segunda |
@@ -271,11 +361,38 @@ correr sempre que alguma coisa parecer estranha, **antes** de mexer em código.
 
 ## A experiência da Lara (FASE 9, sessão A)
 
-Correr o detetor a **160×120, 320×240 e 640×480**, 100 imagens de cada,
-cronometrar, e fazer o gráfico em papel. Ela vai ver sozinha que o tempo cresce
-com o número de píxeis — e perceber porque é que **escolher bem** vale mais do
-que comprar uma placa de €130 (secção D8b do plano).
+```bash
+python scripts/medir_visao.py
+```
 
-É exatamente esta a razão de existirem duas resoluções na configuração:
+Corre o detetor a **160×120, 320×240 e 640×480**, 100 medições em cada, e
+imprime no fim uma tabela de duas colunas — píxeis e milissegundos — pronta a
+passar para papel quadriculado.
+
+**Faz este passo com uma pessoa à frente da câmara**, não com a sala vazia. A
+coluna que interessa não é a do tempo, é a das **caras**: a 160×120 ele é três
+vezes mais rápido e muitas vezes deixa de ver a pessoa. Depressa não serve de
+nada se deixar de ver — e é essa a lição, não o gráfico.
+
+Três coisas que a tabela mostra e vale a pena perguntar-lhe **antes** de ela ver
+os números:
+
+1. *«Se o dobro dos píxeis demorasse o dobro do tempo, os pontos ficavam numa
+   linha reta ou numa curva?»* — depois marquem os pontos e vejam.
+2. *«Porque é que reconhecer custa o mesmo em todas as resoluções?»* — porque o
+   SFace recorta e endireita a cara para 112×112 antes de olhar para ela.
+   **Detetar paga-se aos píxeis; reconhecer paga-se à cara.**
+3. *«Se isto tudo dá menos de 5% de um núcleo, valia a pena uma placa de
+   €130?»* — é a secção D8b do plano, respondida por ela com o cronómetro dela.
+
+E é também a razão de existirem duas resoluções na configuração:
 `secretaria.resolucao_deteccao` (320×240, para saber **onde** está uma cara) e
 `faces.resolucao` (640×480, para saber **quem é**).
+
+Sem câmara à mão (no Mac, por exemplo) mede-se na mesma com uma fotografia:
+
+```bash
+python scripts/medir_visao.py --imagem foto.jpg
+python scripts/medir_visao.py --medicoes 30        # mais depressa
+python scripts/medir_visao.py --csv medidas.csv    # se preferirem o Excel
+```
