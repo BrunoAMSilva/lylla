@@ -150,9 +150,18 @@ def desenhar(cv2, imagem, caras, etiquetas, medidas):
     return imagem
 
 
-def ciclo(parar: threading.Event, trocar_cores: bool) -> None:
+def ciclo(parar: threading.Event, trocar_cores: bool, fps_max: float) -> None:
+    """Tirar, detetar, reconhecer, desenhar — a um ritmo LIMITADO.
+
+    ⚠️ O limite não é um detalhe. Sem ele este ciclo corre tão depressa quanto
+       conseguir (medi 76 fps), e mantém um núcleo a 100% para sempre — quando
+       o robô a sério trabalha a `secretaria.fps_deteccao`, que são 10. Uma
+       ferramenta de diagnóstico que carrega dez vezes mais que o programa
+       real mede a coisa errada e aquece o Pi por nada.
+    """
     import cv2
 
+    intervalo = 1.0 / max(fps_max, 0.5)
     anterior = time.perf_counter()
     fps = 0.0
     while not parar.is_set():
@@ -207,6 +216,11 @@ def ciclo(parar: threading.Event, trocar_cores: bool) -> None:
         with ESTADO.novo:
             ESTADO.jpeg = bytes(buffer)
             ESTADO.novo.notify_all()
+
+        # o que sobra do orçamento desta imagem — se já estourou, não dorme
+        folga = intervalo - (time.perf_counter() - inicio)
+        if folga > 0:
+            parar.wait(folga)
 
 
 # ---------------------------------------------------------------------------
@@ -590,6 +604,9 @@ def main() -> int:
     p.add_argument("--porta", type=int, default=8001)
     p.add_argument("--trocar-cores", action="store_true",
                    help="se as cores saírem trocadas (azul por vermelho)")
+    p.add_argument("--fps", type=float,
+                   default=float(config.obter("secretaria.fps_deteccao", 10)),
+                   help="imagens por segundo (por omissão: o mesmo do robô)")
     args = p.parse_args()
 
     if config.a_simular():
@@ -604,12 +621,14 @@ def main() -> int:
         return 1
 
     parar = threading.Event()
-    threading.Thread(target=ciclo, args=(parar, args.trocar_cores), daemon=True).start()
+    threading.Thread(target=ciclo, args=(parar, args.trocar_cores, args.fps),
+                     daemon=True).start()
 
     import socket
     nome = socket.gethostname()
     print(f"\n👁️  Abre no browser (Mac ou telemóvel):")
     print(f"    http://{nome}.local:{args.porta}\n")
+    print(f"    A {args.fps:.0f} imagens por segundo — o mesmo ritmo do robô.")
     print("    Ciano = conhece · âmbar = não conhece.")
     print("    O registo faz-se na própria página — sem contagens decrescentes.")
     print("    Ctrl+C para parar.\n")

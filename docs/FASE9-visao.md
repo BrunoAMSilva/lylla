@@ -367,6 +367,7 @@ correr sempre que alguma coisa parecer estranha, **antes** de mexer em código.
 | `Faltam os modelos de visão` | `python scripts/download_models.py` (a `models/` está no gitignore) |
 | Vê a imagem mas 0 caras | Imagem invertida (`rodar_180`), ou contraluz |
 | Reconhece toda a gente como a mesma pessoa | Só há uma pessoa registada — regista uma segunda |
+| **O Pi desliga-se (LED vermelho fixo) ao detetar alguém** | Alimentação. Medir com `python scripts/vigiar_energia.py --forcar 90`. O que é novo no momento da deteção não é a câmara — essa já estava a filmar — é o SFace a pôr o CPU em carga. Provar sem a visão pelo meio: `stress-ng --cpu 4 --timeout 60s`. Se também se desligar, é a fonte, não o código |
 | Lento (>50 ms a detetar) | Estás a detetar a 640×480. Detetar a 320×240 e recortar da imagem grande |
 
 ---

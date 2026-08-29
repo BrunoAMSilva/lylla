@@ -96,6 +96,7 @@ python scripts/medir_visao.py     # quanto custa ver, a cada resolução
 python scripts/ver_visao.py       # o mesmo, mas com as caixas, os nomes e os tempos
 python scripts/test_sensores.py   # imprime as distâncias em tempo real
 python scripts/test_power.py      # tensão e percentagem da bateria
+python scripts/vigiar_energia.py --forcar 90   # a fonte aguenta o CPU em carga?
 python scripts/test_cerebro.py    # conversa com o mac mini, escrita
 python scripts/test_cerebro.py --escutar frase.wav   # o áudio em contínuo
 ```
