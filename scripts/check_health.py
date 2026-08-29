@@ -164,8 +164,13 @@ def main() -> int:
     if config.a_simular():
         print(f"  {AVISO}saltado (simulação)")
     else:
-        verificar("libcamera vê a câmara",
-                  lambda: _comando("libcamera-hello", "--list-cameras", "-t", "1"),
+        # ⚠️ Desde o Bookworm as ferramentas chamam-se rpicam-*. Os atalhos
+        #    libcamera-* foram-se: procurar só por eles dava um ❌ com a câmara
+        #    boa — e o texto do erro mandava desmontar o cabo CSI. Tentar as
+        #    duas, pela ordem certa.
+        verificar("o sistema vê a câmara",
+                  lambda: (_comando("rpicam-hello", "--list-cameras", "-t", "1")
+                           or _comando("libcamera-hello", "--list-cameras", "-t", "1")),
                   "⚠️  FALTA O CABO ADAPTADOR CSI 22→15 PINOS?")
 
     # ---------------------------------------------------- visão
