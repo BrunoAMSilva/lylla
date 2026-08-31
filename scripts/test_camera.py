@@ -17,8 +17,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from robot import config  # noqa: E402
-from robot.perception import camera, faces  # noqa: E402
+from robot import config
+from robot.perception import camera, faces
 
 
 def uma_vez() -> int:

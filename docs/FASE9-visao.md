@@ -359,6 +359,7 @@ correr sempre que alguma coisa parecer estranha, **antes** de mexer em código.
 | Sintoma | Causa mais provável |
 |---|---|
 | `No cameras available` | Cabo ao contrário ou mal enfiado. Contactos para o lado contrário da patilha |
+| `Could not open any dmaHeap device` — e **com `sudo` funciona** | Não é o cabo. Falta o grupo `video` ao teu utilizador. Ver o quadro dos grupos, a seguir |
 | `câmara → foto simulada` | `ROBO_SIMULAR=1` no ambiente |
 | `No module named picamera2` | Venv sem `--system-site-packages` — ou não há venv nenhum (passo 3) |
 | `No module named 'cv2'` **depois** de `✅ imagem 640×480` | Python errado. **Não é o cabo** — a câmara acabou de dar uma imagem. `source .venv/bin/activate`, e se faltar mesmo, `pip install -r requirements.txt` |
@@ -369,6 +370,40 @@ correr sempre que alguma coisa parecer estranha, **antes** de mexer em código.
 | Reconhece toda a gente como a mesma pessoa | Só há uma pessoa registada — regista uma segunda |
 | **O Pi desliga-se (LED vermelho fixo) ao detetar alguém** | Alimentação. Medir com `python scripts/vigiar_energia.py --forcar 90`. O que é novo no momento da deteção não é a câmara — essa já estava a filmar — é o SFace a pôr o CPU em carga. Provar sem a visão pelo meio: `stress-ng --cpu 4 --timeout 60s`. Se também se desligar, é a fonte, não o código |
 | Lento (>50 ms a detetar) | Estás a detetar a 640×480. Detetar a 320×240 e recortar da imagem grande |
+
+---
+
+## Se funciona com `sudo` e sem `sudo` não
+
+**Isto não é a câmara, é o teu utilizador.** O `/dev/dma_heap/*` pertence a
+`root:video`, e uma conta criada à mão com `sudo useradd -m nome` **não leva
+grupo suplementar nenhum** — o utilizador que o Raspberry Pi Imager cria leva
+quinze. Sintoma: `Could not open any dmaHeap device`, e tudo a funcionar com
+`sudo`.
+
+**A regra vale para o projeto todo:** comando que falha por permissões e passa
+com `sudo` é grupo em falta. Nunca se resolve a correr o robô com `sudo`.
+
+```bash
+for g in adm dialout cdrom sudo audio video plugdev games users \
+         input render netdev gpio i2c spi lpadmin; do
+  getent group "$g" >/dev/null && sudo usermod -aG "$g" "$USER"
+done
+```
+
+Depois **sai da sessão e volta a entrar** — alterações de grupo não se aplicam a
+uma sessão que já estava aberta. Confirma com `groups`.
+
+Vale a pena fazer isto todo de uma vez, e não só o `video`, porque cada um dos
+outros ia falhar mais à frente **disfarçado de avaria de hardware**:
+
+| Grupo | O que desbloqueia | Onde ia falhar |
+|---|---|---|
+| `video`, `render` | `/dev/dma_heap`, GPU, câmara | aqui, fase 9 |
+| `dialout` | `/dev/ttyUSB0` — o ESP32 da cara | fase 3 |
+| `i2c` | os dois PCA9685, o VL53L1X, o ADS1115 | fases 5 a 8 |
+| `gpio` | pino OE, precipício, ultrassons | fases 6 e 7 |
+| `audio` | o reSpeaker (microfones e coluna) | fase 10 |
 
 ---
 
