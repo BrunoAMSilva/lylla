@@ -510,6 +510,9 @@ def medir_latencias(cyber, n: int) -> dict[str, float]:
 
     seccao("cadência — de quanto em quanto tempo o valor subscrito se renova")
     print("  → abana a mão à frente dos ultrassons durante 5 segundos")
+    print("  ⚠️ isto mede as MUDANÇAS de valor. Se der um número baixo pode ser")
+    print("     o empurrão a ser lento OU o próprio sensor a medir devagar — a")
+    print("     prova está mais abaixo, no encoder a rodar sem parar.")
     try:
         cadencia = medir_cadencia(lambda: cyber.ultrasonic2.get(), 5.0)
         if cadencia:
@@ -560,6 +563,15 @@ def medir_latencias(cyber, n: int) -> dict[str, float]:
                 cronometrar(n, lambda: pack.subscribe_value, "cache"),
                 n,
             )
+            # ⚠️ A PROVA. Um encoder a rodar muda de valor a toda a hora, por
+            # isso cada empurrão traz um número diferente: aqui a cadência
+            # medida é mesmo a do CyberPi a empurrar, e não a do sensor a medir.
+            print("\n  Agora a cadência a sério, com o encoder:")
+            input("  Põe a mão na roda e carrega Enter ")
+            print("  → RODA A RODA DEVAGAR E SEM PARAR (6 segundos)")
+            cad = medir_cadencia(lambda: pack.subscribe_value, 6.0)
+            if cad:
+                resultados["cadencia_encoder"] = cad
         else:
             aviso("não mudou — ou não rodaste a roda, ou a subscrição não pegou")
     except Exception as erro:  # noqa: BLE001
@@ -681,37 +693,165 @@ def medir_encoders_a_mao(cyber, diametro_cm: float = 8.0,
         ok(f"as duas rodas concordam a {desvio * 100:.1f}% — a régua é de confiança")
 
 
-def mexer_motores(cyber) -> None:
+def mexer_motores(cyber, diametro_cm: float = 8.0) -> None:
+    """As rodas a rodar, com o robô seguro na mão.
+
+    Não é só ver se andam: é confirmar que a malha fechada do shield existe
+    mesmo. Pede-se uma velocidade em RPM e lê-se a que ele diz estar a fazer —
+    se baterem certo sem afinação nenhuma, o `compensacao_esq/dir` do
+    robot.yaml deixa de ter razão de ser.
+    """
     titulo("MOTORES — ⚠️ AS RODAS VÃO RODAR")
-    print("  PÕE O ROBÔ EM CIMA DE UM LIVRO, com as rodas no ar.")
-    input("  (Enter quando estiver, Ctrl+C para saltar) ")
+    print("  SEGURA O ROBÔ NAS MÃOS, com as rodas no ar (ou põe-no em cima de")
+    print("  um livro). Nada aqui passa dos 120 RPM.")
+    perimetro = 3.14159 * diametro_cm
+    print(f"  Com rodas de {diametro_cm:.0f} cm: 1 RPM = {perimetro / 60:.2f} cm/s"
+          f"  ·  os 18 cm/s do robot.yaml são {18 * 60 / perimetro:.0f} RPM.")
+    input("  (Enter quando estiveres a segurá-lo, Ctrl+C para saltar) ")
+
+    def cms(rpm: float) -> float:
+        return rpm * perimetro / 60.0
+
+    def velocidade_medida(porta: str, amostras: int = 3) -> float:
+        lidas = []
+        for _ in range(amostras):
+            valor = cyber.mbot2.EM_get_speed(porta)
+            if isinstance(valor, (int, float)):
+                lidas.append(valor)
+        return statistics.median(lidas) if lidas else 0.0
 
     try:
-        cyber.mbot2.EM_reset_angle("EM1")
-        seccao("EM1 a 50 RPM durante 2 s, em malha fechada no shield")
-        cyber.mbot2.EM_set_speed(50, "EM1")
-        amostras = []
-        fim = time.time() + 2.0
-        while time.time() < fim:
-            amostras.append(cyber.mbot2.EM_get_speed("EM1"))
-            time.sleep(0.1)
+        # 1 · cada roda sozinha — é aqui que se descobre a inversão
+        for porta, lado in (("EM1", "ESQUERDA"), ("EM2", "DIREITA")):
+            seccao(f"{porta} sozinho, 40 RPM para a frente")
+            cyber.mbot2.EM_set_speed(40, porta)
+            time.sleep(1.5)
+            cyber.mbot2.EM_stop(porta)
+            print(f"     a roda {lado} andou para a FRENTE? Se não, é um sinal")
+            print("     negativo no código — não é um cabo trocado.")
+            time.sleep(0.4)
+
+        # 2 · os dois ao mesmo tempo, num só comando
+        seccao("os dois juntos — drive_speed(40, 40), um comando só")
+        cyber.mbot2.drive_speed(40, 40)
+        time.sleep(1.5)
+        seccao("rodar no sítio — drive_speed(40, -40)")
+        cyber.mbot2.drive_speed(40, -40)
+        time.sleep(1.5)
         cyber.mbot2.EM_stop("all")
-        time.sleep(0.3)
-        angulo = cyber.mbot2.EM_get_angle("EM1")
-        limpas = [a for a in amostras if isinstance(a, (int, float))]
-        if limpas:
-            print(f"    velocidade lida: mín {min(limpas)}  mediana "
-                  f"{statistics.median(limpas)}  máx {max(limpas)} (pedimos 50)")
-        print(f"    andou {angulo} graus em ~2 s")
-        ok("se a velocidade lida ficou perto de 50 sem afinares nada,")
-        ok("a malha fechada é do shield — e o compensacao_esq/dir deixa de fazer falta.")
+        time.sleep(0.5)
+
+        # 3 · a prova da malha fechada
+        seccao("pedido contra medido — a malha fechada do shield")
+        print("   pedido      medido      erro      velocidade no chão")
+        for rpm in (20, 40, 80, 120):
+            cyber.mbot2.EM_set_speed(rpm, "EM1")
+            time.sleep(0.8)
+            medido = velocidade_medida("EM1")
+            erro = (medido - rpm) / rpm * 100 if rpm else 0
+            print(f"   {rpm:4.0f} RPM   {medido:5.0f} RPM   {erro:+5.1f} %"
+                  f"      {cms(rpm):5.1f} cm/s")
+        cyber.mbot2.EM_stop("all")
+
+        # 4 · quanto tempo até obedecer
+        seccao("tempo até atingir a velocidade pedida (100 RPM)")
+        print("  ⚠️ a resolução disto é uma leitura (~100 ms) — serve para saber")
+        print("     se é imediato ou se demora meio segundo, não mais que isso.")
+        t0 = time.perf_counter()
+        cyber.mbot2.EM_set_speed(100, "EM1")
+        atingiu = None
+        while time.perf_counter() - t0 < 3.0:
+            if velocidade_medida("EM1", 1) >= 90:
+                atingiu = (time.perf_counter() - t0) * 1000
+                break
+        cyber.mbot2.EM_stop("all")
+        if atingiu:
+            print(f"     chegou a 90 RPM em ~{atingiu:.0f} ms (inclui a ida-e-volta)")
+        else:
+            aviso("não chegou aos 90 RPM em 3 s — está preso ou sem bateria?")
+
+        # 5 · travar no sítio
+        seccao("EM_lock — travar o motor na posição")
+        cyber.mbot2.EM_lock(True, "EM1")
+        input("     tenta rodar a roda esquerda à mão, e carrega Enter ")
+        cyber.mbot2.EM_lock(False, "EM1")
+        ok("destravado. Isto é útil para o robô não deslizar numa rampa.")
+
     except Exception as erro:  # noqa: BLE001
         falhou(f"motores: {erro}")
     finally:
         try:
             cyber.mbot2.EM_stop("all")
+            cyber.mbot2.EM_lock(False, "all")
         except Exception:  # noqa: BLE001
             pass
+
+
+def testar_luzes(cyber) -> None:
+    """As três luzes que o mBot2 já tem, e que não custam nada aproveitar.
+
+    ⚠️ Cada comando destes é uma ida-e-volta de ~60 ms. Dá para acender e
+    mudar de cor à vontade; NÃO dá para animar a partir do Pi — uma animação
+    fluida tem de correr no aparelho. É o mesmo argumento que pôs a cara no
+    ESP32, e vale aqui na mesma.
+    """
+    titulo("LUZES — ⚠️ vai piscar")
+    input("  (Enter para começar) ")
+
+    seccao("os 5 LEDs do CyberPi")
+    try:
+        for cor, (r, g, b) in (("azul", (0, 0, 255)), ("ciano", (54, 224, 255)),
+                               ("branco", (255, 255, 255))):
+            cyber.led.on(r, g, b, "all")
+            print(f"     {cor}")
+            time.sleep(0.8)
+        print("     animação 'rainbow' (corre NO CyberPi, não daqui)")
+        cyber.led.play("rainbow")
+        time.sleep(2.0)
+        cyber.led.off("all")
+        ok("apagados")
+    except Exception as erro:  # noqa: BLE001
+        falhou(f"LEDs do CyberPi: {erro}")
+
+    seccao("os 8 LEDs dos ultrassons — os olhos do mBot2")
+    try:
+        cyber.ultrasonic2.set_bri(100, "all")
+        time.sleep(0.6)
+        print("     um a um (id 1 a 8)")
+        for id_led in range(1, 9):
+            cyber.ultrasonic2.set_bri(0, "all")
+            cyber.ultrasonic2.set_bri(100, id_led)
+            time.sleep(0.15)
+        for emocao in ("happy", "wink", "thinking", "dizzy", "sleepy"):
+            print(f"     emoção '{emocao}'")
+            cyber.ultrasonic2.play(emocao)
+            time.sleep(1.5)
+        cyber.ultrasonic2.set_bri(0, "all")
+        ok("cinco emoções: happy · wink · thinking · dizzy · sleepy")
+        ok("são 8 LEDs azuis, brilho 0-100 cada. Não é a cara — mas para a Lara")
+        ok("ver o robô a piscar hoje, sem esperar pelo ESP32, chega e sobra.")
+    except Exception as erro:  # noqa: BLE001
+        falhou(f"LEDs dos ultrassons: {erro}")
+
+    seccao("a luz de apoio do sensor RGB quádruplo")
+    try:
+        for cor in ("red", "green", "blue", "white"):
+            cyber.quad_rgb_sensor.set_led(cor)
+            print(f"     {cor}")
+            time.sleep(0.6)
+        cyber.quad_rgb_sensor.off_led()
+        ok("apagada (serve para iluminar o chão, não é decoração)")
+    except Exception as erro:  # noqa: BLE001
+        falhou(f"LED do sensor RGB: {erro}")
+
+    seccao("fita LED nas portas multifunção do shield (se houver alguma ligada)")
+    try:
+        cyber.mbot2.led_on(0, 0, 255, "all", "S1")
+        time.sleep(1.0)
+        cyber.mbot2.led_off("all", "S1")
+        ok("se não acendeu nada, é porque não há fita ligada à S1 — normal.")
+    except Exception as erro:  # noqa: BLE001
+        print(f"  (sem fita na S1: {erro})")
 
 
 def ver_sensores(cyber) -> None:
@@ -793,11 +933,20 @@ def veredicto(r: dict[str, float]) -> None:
         print("    shield, portanto a velocidade mantém-se sem ser reenviada. O")
         print("    ciclo não precisa de um comando por passo — só de correções.")
 
-    if "cadencia" in r:
-        cad = r["cadencia"]
-        print(f"\n  Mas um valor subscrito só se renova de {cad:.0f} em {cad:.0f} ms")
-        print(f"  (~{1000 / cad:.0f} Hz): ler mais depressa do que isso é ler duas")
-        print("  vezes o mesmo. É este o teto verdadeiro da odometria.")
+    cad = r.get("cadencia_encoder") or r.get("cadencia")
+    if cad:
+        fonte = "encoder" if "cadencia_encoder" in r else "ultrassons"
+        print(f"\n  Um valor subscrito renova-se de {cad:.0f} em {cad:.0f} ms "
+              f"(~{1000 / cad:.0f} Hz, medido no {fonte}).")
+        print("  Ler mais depressa do que isso é ler duas vezes o mesmo.")
+        print("\n  ⚠️ Mas atenção ao que isso NÃO estraga: o encoder é um CONTADOR")
+        print("  acumulado, não uma amostra. Ler de 200 em 200 ms não perde")
+        print("  distância nenhuma — a que ele andou pelo meio está lá dentro.")
+        print("  O que a cadência limita é a rapidez a CORRIGIR o rumo, não a")
+        print("  exatidão da odometria. Para um robô a 18 cm/s são ~4 cm por")
+        print("  atualização; a segurança não depende disto (é dos sensores do Pi).")
+        print("  E quando fizer falta um valor fresco num instante exato, um")
+        print(f"  pedido direto dá-o em {ler:.0f} ms.")
 
     print("\n  Régua para decidir:")
     print("    ≥ 20 Hz  → dá para a navegação toda; o mBot2 fica inteiro.")
@@ -817,7 +966,11 @@ def main() -> int:
     parser.add_argument("--amostras", type=int, default=30, help="chamadas por medição")
     parser.add_argument("--com-motores", action="store_true", help="⚠️ roda as rodas")
     parser.add_argument("--servo", help="porta de servo a testar (S1…S4)")
+    parser.add_argument("--luzes", action="store_true",
+                        help="⚠️ acende as luzes do CyberPi, ultrassons e sensor RGB")
     parser.add_argument("--sem-cpu", action="store_true", help="salta a medição de CPU")
+    parser.add_argument("--sem-medir", action="store_true",
+                        help="salta as medições e vai direto aos testes (--com-motores, --luzes)")
     parser.add_argument("--diametro-roda", type=float, default=8.0,
                         help="diâmetro da roda em cm (mBot2: 8)")
     parser.add_argument("--empurrar-cm", type=float, default=100.0,
@@ -850,16 +1003,21 @@ def main() -> int:
     try:
         if not identificar(cyber):
             return 1
-        resultados = medir_latencias(cyber, args.amostras)
-        if not args.sem_cpu:
-            medir_cpu(cyber)
-        ver_sensores(cyber)
-        medir_encoders_a_mao(cyber, args.diametro_roda, args.empurrar_cm)
+        resultados: dict[str, float] = {}
+        if not args.sem_medir:
+            resultados = medir_latencias(cyber, args.amostras)
+            if not args.sem_cpu:
+                medir_cpu(cyber)
+            ver_sensores(cyber)
+            medir_encoders_a_mao(cyber, args.diametro_roda, args.empurrar_cm)
         if args.com_motores:
-            mexer_motores(cyber)
+            mexer_motores(cyber, args.diametro_roda)
+        if args.luzes:
+            testar_luzes(cyber)
         if args.servo:
             testar_servo(cyber, args.servo)
-        veredicto(resultados)
+        if resultados:
+            veredicto(resultados)
     except KeyboardInterrupt:
         pass
     finally:
