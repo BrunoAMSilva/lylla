@@ -39,6 +39,7 @@ volta pela rede.
 
 from __future__ import annotations
 
+import json
 import math
 from typing import Any
 
@@ -52,6 +53,37 @@ from robot.gestures import GESTOS
 # percebem). `enum` e `minimum`/`maximum` são as únicas restrições que usamos —
 # são as que o Pi sabe validar em validar(), lá em baixo.
 # ---------------------------------------------------------------------------
+
+def divisoes_da_casa() -> list[str]:
+    """Os sítios com nome da planta (data/casa.json), se ela existir.
+
+    ⚠️ Isto lê um ficheiro, ao contrário de todo o resto deste módulo — mas
+    continua a não importar hardware nenhum, que é a regra que interessa: no
+    mac mini corre na mesma. Se o ficheiro não estiver lá (por exemplo num
+    mini onde só se copiou o código), a ação fica com um texto livre em vez
+    de uma lista fechada, e quem valida o nome é o Pi, que tem a planta.
+    """
+    try:
+        from pathlib import Path
+
+        raiz = Path(__file__).resolve().parents[2]
+        caminho = raiz / "data" / "casa.json"
+        if not caminho.exists():
+            return []
+        dados = json.loads(caminho.read_text(encoding="utf-8"))
+        return [d["nome"] for d in dados.get("divisoes", [])]
+    except Exception:  # noqa: BLE001
+        return []
+
+
+def _parametro_sitio() -> dict:
+    nomes = divisoes_da_casa()
+    if nomes:
+        return {"type": "string", "enum": nomes,
+                "description": "A divisão da casa para onde ir."}
+    return {"type": "string",
+            "description": "A divisão da casa para onde ir (ex.: sala, cozinha)."}
+
 
 ACOES: dict[str, dict[str, Any]] = {
     "mover": {
@@ -100,6 +132,26 @@ ACOES: dict[str, dict[str, Any]] = {
         "descricao": "Faz uma pequena dança alegre.",
         "parametros": {},
         "obrigatorios": [],
+    },
+    "ir_para": {
+        "descricao": (
+            "Vai sozinha até uma divisão da casa, a contornar o que estiver pelo "
+            "caminho ('vai à cozinha', 'anda até à sala'). Serve também para lhe "
+            "DIZEREM onde está, com estou_aqui=true. Para seguir uma PESSOA usa "
+            "'seguir', não isto."
+        ),
+        "parametros": {
+            "sitio": _parametro_sitio(),
+            "estou_aqui": {
+                "type": "boolean",
+                "description": (
+                    "Põe a true quando te DIZEM onde estás ('estás na cozinha', "
+                    "'isto é a sala') em vez de te mandarem ir. Ela não tem GPS: "
+                    "de vez em quando precisa que lhe digam onde está."
+                ),
+            },
+        },
+        "obrigatorios": ["sitio"],
     },
     "seguir": {
         "descricao": (

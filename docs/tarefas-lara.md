@@ -52,16 +52,18 @@ Lylla
 
 ## Source control
 
-- [ ] Criar uma conta no GitHub
-- [ ] Criar um repositório no GitHub
-- [ ] Abrir o repositório no IDE
+- [ ] Criar um repositório git
+- [ ] Abrir o repositório no editor
+- [ ] Adicionar os documentos que estivemos a escrever
+- [ ] Submeter as alterações
 
 ### Câmara
 
 - [ ] Configurar os requisitos de python para o projeto
-- [ ] 
-- [ ] 
-
+- [ ] Tirar uma foto
+- [ ] Adicionar faces
+- [ ] Remover faces
+- [ ] Submeter as alterações
 
 ### Audio
 

@@ -34,6 +34,8 @@ from robot import config
 from robot.brain import cerebro, comandos_diretos, companion, contexto, follow, tools
 from robot.brain.state import Estado, Maquina
 from robot.hardware import arms, eyes, glow, motors, power, sensors
+from robot.navigation import ir_para as navegar
+from robot.navigation import procurar
 from robot.perception import faces
 from robot.voice import listen, speak, wakeword
 
@@ -50,6 +52,8 @@ def _parar_tudo(*_args) -> None:
     global _a_correr
     _a_correr = False
     follow.parar()
+    procurar.parar()
+    navegar.parar()
     motors.parar()
     arms.relaxar()
     glow.apagar()
@@ -367,6 +371,26 @@ def principal() -> None:
                     follow.parar()
                     speak.falar("Perdi-te de vista!", esperar=False)
 
+            # Atravessar a casa sozinha, ligado pela ação `ir_para` do cérebro,
+            # e o jogo das escondidas, que é o mesmo em ciclo. Ou anda um ou
+            # anda o outro — nunca os dois a mandar nos mesmos motores.
+            #
+            # Os dois FALAM SEMPRE no fim: chegar em silêncio e desistir em
+            # silêncio parecem a mesma coisa a quem está a ver.
+            if procurar.a_procurar():
+                jogada = procurar.um_passo(obs)
+                if jogada.terminou:
+                    speak.falar(_fim_do_jogo(jogada), esperar=False)
+                    eyes.expressao("contente" if jogada.encontrou else "triste")
+                    # ⚠️ «perdi-me» NÃO acaba o jogo: ele fica à espera que lhe
+                    #    digam onde está (ação ir_para com estou_aqui=true).
+                    if jogada.razao != "onde estou":
+                        procurar.parar()
+            elif navegar.a_navegar():
+                passo = navegar.um_passo()
+                if passo.terminou:
+                    speak.falar(_fim_da_viagem(passo.razao), esperar=False)
+
             # ⚠️ Timeout curto de propósito: o motors.verificar_timeout() só
             #    corre entre chamadas desta função. Com timeout=30 a rede de
             #    segurança de 3 s dos motores seria, na prática, de 30 s.
@@ -384,11 +408,36 @@ def principal() -> None:
             # REGRA DE OURO: nada rebenta à frente de uma criança.
             print(f"⚠️  Erro no ciclo principal: {erro}")
             follow.parar()
+            procurar.parar()
+            navegar.parar()
             motors.parar()
             arms.relaxar()
             eyes.expressao("surpreso")
             time.sleep(2)
             maquina.mudar(Estado.ATENTO)
+
+
+def _fim_do_jogo(jogada) -> str:
+    if jogada.encontrou:
+        onde = f" {navegar.com_artigo(jogada.onde, 'em')}" if jogada.onde else ""
+        return f"Encontrei-te{onde}!"
+    return {
+        "não te encontrei": "Desisto! Onde é que tu estás?",
+        "onde estou": "Espera... perdi-me. Em que divisão é que eu estou?",
+        "desisti": "Não consigo lá chegar. Ganhaste.",
+        "precipício": "Parei o jogo — há aqui um degrau!",
+    }.get(jogada.razao, "Acabou o jogo.")
+
+
+def _fim_da_viagem(razao: str) -> str:
+    """Uma frase para cada maneira de uma viagem acabar. Nunca «erro»."""
+    return {
+        "cheguei": "Cheguei!",
+        "precipício": "Parei — há aqui um degrau!",
+        "encravada": "Estou entalada, não consigo passar.",
+        "perdi-me": "Já não sei bem onde estou. Diz-me em que divisão é que eu estou?",
+        "demorou de mais": "Desisti, estava a demorar demasiado.",
+    }.get(razao, "Parei.")
 
 
 if __name__ == "__main__":

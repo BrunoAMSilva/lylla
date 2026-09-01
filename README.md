@@ -70,6 +70,24 @@ dela.)
 percebe o que lhe dizem — e diz isso, com a voz que tem em cache — mas continua
 a andar, a ver, a reconhecer caras e a obedecer ao «pára».
 
+## Andar pela casa — «Lylla, vai à cozinha»
+
+Desenha-se a planta da casa numa página, treina-se um cérebro a conduzir lá
+dentro **por evolução** (centenas de robôs por geração, os melhores têm
+filhos), e o ficheiro que sai daí é o que o Pi lê.
+
+```bash
+open docs/escola-de-conducao.html          # planta + treino + campeã, sem instalar nada
+ROBO_SIMULAR=1 python scripts/escondidas.py --onde "quarto da Lara"
+```
+
+O mapa dá a rota; as redes tratam do saco que hoje está no corredor, do gato e
+de quem passa. **A explicação toda — incluindo as três coisas que isto NÃO
+resolve — está em [`docs/navegacao.md`](docs/navegacao.md).**
+
+> ⚠️ Vem desligado no robô a sério (`navegacao.ativo: false`). Em
+> `ROBO_SIMULAR=1` anda sempre.
+
 ## Está tudo bem?
 
 ```bash
@@ -236,6 +254,12 @@ robot/
 │   ├── cerebro.py    o cliente do mini
 │   ├── contexto.py   o que o robô sabe agora
 │   └── …             ferramentas, estados, seguir
+├── navigation/   ATRAVESSAR A CASA               → ver docs/navegacao.md
+│   ├── casa.py       a planta e o campo de distância (igual ao do browser)
+│   ├── piloto.py     as três redes treinadas, em numpy
+│   ├── pose.py       onde ela julga estar — e o quanto pode estar enganada
+│   ├── ir_para.py    conduzir, com os sensores por cima da rede
+│   └── procurar.py   às escondidas
 ├── expressions.py                                → as caras (edita a Lara)
 ├── gestures.py                                   → os gestos (edita a Lara)
 └── main.py                                       → o ciclo principal

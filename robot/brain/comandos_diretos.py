@@ -25,6 +25,7 @@ import unicodedata
 
 from robot.brain import companion, follow
 from robot.hardware import arms, motors
+from robot.navigation import ir_para, procurar
 
 
 # ⚠️ O PRÉ-ROLO PÔS A PALAVRA-CHAVE À FRENTE DE TUDO.
@@ -51,7 +52,14 @@ def _simplificar(texto: str) -> str:
 
 
 def _parar_tudo() -> str:
-    follow.parar()      # primeiro o modo, senão a volta seguinte punha-o a andar outra vez
+    # ⚠️ PRIMEIRO OS MODOS, SÓ DEPOIS OS MOTORES.
+    # Todos estes têm um um_passo() que o ciclo principal chama outra vez daqui
+    # a um décimo de segundo. Parar os motores sem desligar o modo dá um robô
+    # que pára meio segundo e volta a andar — que é exatamente o contrário do
+    # que a Lara pediu, e a razão de este ficheiro existir.
+    follow.parar()
+    procurar.parar()    # também desliga o ir_para, que é quem ele usa
+    ir_para.parar()
     motors.parar()
     arms.relaxar()
     return "Parei."

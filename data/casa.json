@@ -1,0 +1,117 @@
+{
+ "formato": "lylla-casa-1",
+ "nome": "Casa da Lara",
+ "colunas": 55,
+ "linhas": 32,
+ "cm_por_celula": 20,
+ "partida": {
+  "coluna": 4,
+  "linha": 19
+ },
+ "divisoes": [
+  {
+   "nome": "sala",
+   "cor": "#36E0FF"
+  },
+  {
+   "nome": "corredor",
+   "cor": "#FFA23D"
+  },
+  {
+   "nome": "wc1",
+   "cor": "#4ADE80"
+  },
+  {
+   "nome": "cozinha",
+   "cor": "#C88CFF"
+  },
+  {
+   "nome": "quarto Lara",
+   "cor": "#FF7BA8"
+  },
+  {
+   "nome": "escritório",
+   "cor": "#7FE3C6"
+  },
+  {
+   "nome": "quarto dos pais",
+   "cor": "#FFD866"
+  },
+  {
+   "nome": "wc2",
+   "cor": "#7FA9FF"
+  },
+  {
+   "nome": "dispensa",
+   "cor": "#36E0FF"
+  }
+ ],
+ "paredes": [
+  "#######################################################",
+  "#######################################################",
+  "#######################################################",
+  "#######################################################",
+  "#.............###...........#.................#########",
+  "#.............###...........#.................#########",
+  "#.............###...........#.................#########",
+  "#.............###...........#.................#########",
+  "#.............###...........#.................#########",
+  "#.............###...........#.....########...##########",
+  "#.............####...########.....#.....#.....#########",
+  "#...............#.......................#.....#########",
+  "#.......................................#.............#",
+  "#.......................................#.............#",
+  "#.................................#...###.............#",
+  "#################.................#...###.............#",
+  "#...............#....###...###...########.............#",
+  "#....................#......#...........#.............#",
+  "#....................#......#...........#.............#",
+  "#....................#......#...........#.............#",
+  "#...............#...#########...........#.............#",
+  "#...............#...........#...........#.............#",
+  "#...............#...........#...........#.............#",
+  "#...............#...........#...........#.............#",
+  "#...............#...........#...........#.............#",
+  "#...............#...........#...........#.............#",
+  "#################...........#........####.............#",
+  "#################...........#........####.............#",
+  "#################...........#...........#.............#",
+  "#################...........#...........#.............#",
+  "#################...........#...........#.............#",
+  "#######################################################"
+ ],
+ "zonas": [
+  ".......................................................",
+  ".......................................................",
+  ".......................................................",
+  ".......................................................",
+  ".ggggggggggggg...hhhhhhhhhhh.bbbbbbbbbbbbbbbbb.........",
+  ".ggggggggggggg...hhhhhhhhhhh.bbbbbbbbbbbbbbbbb.........",
+  ".ggggggggggggg...hhhhhhhhhhh.bbbbbbbbbbbbbbbbb.........",
+  ".ggggggggggggg...hhhhhhhhhhh.bbbbbbbbbbbbbbbbb.........",
+  ".ggggggggggggg...hhhhhhhhhhh.bbbbbbbbbbbbbbbbb.........",
+  ".ggggggggggggg...hhhhhhhhhhh.bbbbb.....................",
+  ".ggggggggggggg...............bbbbb.ccccc.aaaaa.........",
+  ".ggggggggggggggg.bbbbbbbbbbbbbbbbb.ccccc.aaaaa.........",
+  ".ggggggggggggggg.bbbbbbbbbbbbbbbbb.ccccc.aaaaaaaaaaaaa.",
+  ".ggggggggggggggg.bbbbbbbbbbbbbbbbb.ccccc.aaaaaaaaaaaaa.",
+  ".ggggggggggggggg.bbbbbbbbbbbbbbbbb.ccc...aaaaaaaaaaaaa.",
+  ".................bbbbbbbbbbbbbbbbb.ccc...aaaaaaaaaaaaa.",
+  ".eeeeeeeeeeeeeee.bbbb....................aaaaaaaaaaaaa.",
+  ".eeeeeeeeeeeeeee.bbbb.iiiiii.ddddddddddd.aaaaaaaaaaaaa.",
+  ".eeeeeeeeeeeeeee.bbbb.iiiiii.ddddddddddd.aaaaaaaaaaaaa.",
+  ".eeeeeeeeeeeeeee.bbbb.iiiiii.ddddddddddd.aaaaaaaaaaaaa.",
+  ".eeeeeeeeeeeeeee.............ddddddddddd.aaaaaaaaaaaaa.",
+  ".eeeeeeeeeeeeeee.fffffffffff.ddddddddddd.aaaaaaaaaaaaa.",
+  ".eeeeeeeeeeeeeee.fffffffffff.ddddddddddd.aaaaaaaaaaaaa.",
+  ".eeeeeeeeeeeeeee.fffffffffff.ddddddddddd.aaaaaaaaaaaaa.",
+  ".eeeeeeeeeeeeeee.fffffffffff.ddddddddddd.aaaaaaaaaaaaa.",
+  ".eeeeeeeeeeeeeee.fffffffffff.ddddddddddd.aaaaaaaaaaaaa.",
+  ".................fffffffffff.dddddddd....aaaaaaaaaaaaa.",
+  ".................fffffffffff.dddddddd....aaaaaaaaaaaaa.",
+  ".................fffffffffff.ddddddddddd.aaaaaaaaaaaaa.",
+  ".................fffffffffff.ddddddddddd.aaaaaaaaaaaaa.",
+  ".................fffffffffff.ddddddddddd.aaaaaaaaaaaaa.",
+  "......................................................."
+ ]
+}

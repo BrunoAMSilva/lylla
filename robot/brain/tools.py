@@ -32,6 +32,8 @@ from robot.brain import acoes, follow
 from robot.expressions import EXPRESSOES
 from robot.gestures import GESTOS
 from robot.hardware import arms, eyes, glow, motors, power, sensors
+from robot.navigation import ir_para as navegar
+from robot.navigation import procurar
 
 # ---------------------------------------------------------------------------
 # O catálogo, no formato de tool calling do Ollama (para experiências; o
@@ -195,6 +197,37 @@ def _seguir(acao: str = "comecar", **_) -> str:
     return "Vou atrás de ti!"
 
 
+def _ir_para(sitio: str = "", estou_aqui: bool = False, **_) -> str:
+    """Manda-a atravessar a casa até uma divisão.
+
+    Aqui não há conta nenhuma: quem decide é o robot/navigation/ir_para.py,
+    que tem a planta, o piloto treinado e — sobretudo — os sensores por cima
+    de tudo. Esta função só traduz o resultado para uma frase.
+    """
+    if not isinstance(sitio, str) or not sitio.strip():
+        return Recusa("Não me disseste para onde.")
+
+    # «Estás na cozinha» — não é uma viagem, é uma correção. E se estivermos a
+    # meio de um jogo às escondidas, é a resposta que ele estava à espera.
+    if estou_aqui in (True, "true", "True", 1):
+        if procurar.a_perguntar():
+            estado, mensagem = procurar.responder(sitio)
+            return mensagem if estado != "recusa" else Recusa(mensagem)
+        erro = navegar.assumir(sitio)
+        return Recusa(erro) if erro else f"Está bem, estou {navegar.com_artigo(sitio, 'em')}."
+
+    if sensors.ha_precipicio():
+        return Recusa("Não posso — estou à beira de uma queda!")
+    estado, mensagem = navegar.comecar(sitio)
+    if estado == "recusa":
+        return Recusa(mensagem)
+    if estado == "ja_estou":
+        eyes.expressao("contente")
+        return mensagem
+    eyes.expressao("atento")
+    return mensagem
+
+
 IMPLEMENTACOES = {
     "mover": _mover,
     "virar": _virar,
@@ -207,6 +240,7 @@ IMPLEMENTACOES = {
     "quanta_bateria": _bateria,
     "dancar": _dancar,
     "seguir": _seguir,
+    "ir_para": _ir_para,
 }
 
 

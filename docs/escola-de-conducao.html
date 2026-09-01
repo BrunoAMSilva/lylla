@@ -1,0 +1,3468 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Escola de Condução da Lylla</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Syne:wght@600;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* ==========================================================================
+   ESCOLA DE CONDUÇÃO DA LYLLA
+   Um só ficheiro: editor de planta + simulador + treino por evolução.
+   Cores tiradas do próprio robô (design-astrosonda.html): o ciano é o dos
+   olhos, o azul é o do corpo, o #161B22 é o acrílico da cara.
+   ========================================================================== */
+:root {
+  --fundo:       #0D1117;
+  --painel:      #161B22;
+  --painel-alto: #1D242E;
+  --linha:       #2A3440;
+  --tinta:       #F4F6F8;
+  --tinta-fraca: #8FA0B2;
+  --ciano:       #36E0FF;
+  --azul:        #1E7FD4;
+  --laranja:     #FFA23D;
+  --vermelho:    #FF3B5C;
+  --verde:       #4ADE80;
+  --raio: 10px;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--fundo);
+  color: var(--tinta);
+  font-family: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3 { font-family: Syne, "IBM Plex Sans", system-ui, sans-serif; margin: 0; text-wrap: balance; }
+button, input, select { font-family: inherit; font-size: inherit; color: inherit; }
+.mono { font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace; font-variant-numeric: tabular-nums; }
+
+/* ---- Cabeçalho e os três passos ---------------------------------------- */
+header {
+  display: flex; align-items: center; gap: 24px; flex-wrap: wrap;
+  padding: 14px 20px; background: var(--painel);
+  border-bottom: 1px solid var(--linha);
+}
+header h1 { font-size: 19px; font-weight: 800; letter-spacing: -0.01em; }
+header h1 span { color: var(--ciano); }
+.passos { display: flex; gap: 4px; margin-left: auto; }
+.passo {
+  display: flex; align-items: baseline; gap: 8px;
+  padding: 7px 14px; border: 1px solid transparent; border-radius: var(--raio);
+  background: none; cursor: pointer; color: var(--tinta-fraca);
+}
+.passo:hover:not(:disabled) { background: var(--painel-alto); color: var(--tinta); }
+.passo[aria-selected="true"] { background: var(--painel-alto); border-color: var(--ciano); color: var(--tinta); }
+.passo:disabled { opacity: .35; cursor: not-allowed; }
+.passo b { font-family: "IBM Plex Mono", monospace; font-size: 11px; color: var(--ciano); font-weight: 600; }
+.passo[aria-selected="true"] b { color: var(--ciano); }
+.passo:disabled b { color: var(--tinta-fraca); }
+
+/* ---- Estrutura de três colunas ------------------------------------------ */
+main { display: grid; grid-template-columns: 268px minmax(0,1fr) 292px; gap: 1px; background: var(--linha); min-height: calc(100vh - 57px); }
+.coluna { background: var(--fundo); padding: 16px; overflow-y: auto; max-height: calc(100vh - 57px); }
+.palco { background: var(--fundo); display: flex; flex-direction: column; padding: 16px; gap: 12px; min-width: 0; }
+@media (max-width: 1180px) {
+  main { grid-template-columns: 1fr; }
+  .coluna, .palco { max-height: none; }
+}
+
+/* ---- Blocos de controlo ------------------------------------------------- */
+.bloco { border: 1px solid var(--linha); border-radius: var(--raio); padding: 13px; margin-bottom: 12px; background: var(--painel); }
+.bloco > h3 {
+  font-family: "IBM Plex Sans", sans-serif; font-size: 10.5px; font-weight: 600;
+  letter-spacing: .12em; text-transform: uppercase; color: var(--tinta-fraca);
+  margin-bottom: 11px;
+}
+.campo { display: flex; flex-direction: column; gap: 5px; margin-bottom: 11px; }
+.campo:last-child { margin-bottom: 0; }
+.campo > label { font-size: 12px; color: var(--tinta-fraca); display: flex; justify-content: space-between; gap: 8px; }
+.campo > label output { color: var(--ciano); font-family: "IBM Plex Mono", monospace; font-variant-numeric: tabular-nums; }
+input[type="number"], input[type="text"], select {
+  background: var(--fundo); border: 1px solid var(--linha); border-radius: 7px;
+  padding: 7px 9px; width: 100%;
+}
+input[type="range"] { width: 100%; accent-color: var(--ciano); }
+input:focus-visible, select:focus-visible, button:focus-visible, .passo:focus-visible {
+  outline: 2px solid var(--ciano); outline-offset: 2px;
+}
+.linha-campos { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+button.acao {
+  width: 100%; padding: 9px 12px; border-radius: 8px; cursor: pointer;
+  background: var(--painel-alto); border: 1px solid var(--linha); color: var(--tinta);
+  font-weight: 500; text-align: left;
+}
+button.acao:hover { border-color: var(--tinta-fraca); }
+button.acao.principal { background: var(--ciano); color: #06212B; border-color: var(--ciano); font-weight: 600; text-align: center; }
+button.acao.principal:hover { filter: brightness(1.12); }
+button.acao.perigo:hover { border-color: var(--vermelho); color: var(--vermelho); }
+button.acao:disabled { opacity: .4; cursor: not-allowed; }
+.botoes { display: flex; flex-direction: column; gap: 7px; }
+.botoes.par { display: grid; grid-template-columns: 1fr 1fr; }
+
+/* ---- Ferramentas do editor --------------------------------------------- */
+.ferramentas { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.ferramenta {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  padding: 9px 10px; border-radius: 8px; cursor: pointer;
+  background: var(--fundo); border: 1px solid var(--linha); color: var(--tinta);
+}
+.ferramenta small { color: var(--tinta-fraca); font-size: 10.5px; }
+.ferramenta[aria-pressed="true"] { border-color: var(--ciano); background: var(--painel-alto); }
+.ferramenta[aria-pressed="true"] small { color: var(--ciano); }
+
+.divisoes { display: flex; flex-direction: column; gap: 6px; }
+.divisao { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 7px; border: 1px solid var(--linha); background: var(--fundo); cursor: pointer; }
+.divisao[aria-pressed="true"] { border-color: var(--ciano); }
+.divisao .bolha { width: 12px; height: 12px; border-radius: 3px; flex: none; }
+.divisao input { border: none; background: none; padding: 0; font-size: 13px; }
+.divisao button { background: none; border: none; color: var(--tinta-fraca); cursor: pointer; padding: 0 2px; }
+.divisao button:hover { color: var(--vermelho); }
+
+/* ---- Palco -------------------------------------------------------------- */
+.moldura { position: relative; flex: 1; min-height: 380px; border: 1px solid var(--linha); border-radius: var(--raio); background: var(--painel); overflow: hidden; }
+.moldura canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+.barra-palco { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; font-size: 12.5px; color: var(--tinta-fraca); }
+.barra-palco strong { color: var(--tinta); font-weight: 500; }
+.pilula { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--linha); background: var(--painel); font-size: 11.5px; }
+.pilula i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+
+/* ---- Telemetria --------------------------------------------------------- */
+.metricas { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.metrica { background: var(--fundo); border: 1px solid var(--linha); border-radius: 8px; padding: 9px 10px; }
+.metrica dt { font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: var(--tinta-fraca); }
+.metrica dd { margin: 3px 0 0; font-family: "IBM Plex Mono", monospace; font-size: 19px; font-variant-numeric: tabular-nums; }
+.metrica.destaque dd { color: var(--ciano); }
+#grafico { width: 100%; height: 96px; display: block; }
+
+.rede { margin-bottom: 12px; }
+.rede-topo { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+.rede-topo span:last-child { font-family: "IBM Plex Mono", monospace; color: var(--tinta-fraca); }
+.barra { height: 7px; border-radius: 4px; background: var(--painel-alto); overflow: hidden; }
+.barra > i { display: block; height: 100%; width: 0%; background: var(--ciano); transition: width .1s linear; }
+.rede p { margin: 4px 0 0; font-size: 11px; color: var(--tinta-fraca); line-height: 1.35; }
+
+.nota { font-size: 12px; color: var(--tinta-fraca); line-height: 1.45; }
+.nota strong { color: var(--tinta); font-weight: 500; }
+.nota + .nota { margin-top: 9px; }
+.aviso { border-left: 2px solid var(--laranja); padding-left: 10px; }
+
+.legenda { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 11.5px; color: var(--tinta-fraca); }
+.legenda span { display: inline-flex; align-items: center; gap: 5px; }
+.legenda i { width: 9px; height: 9px; border-radius: 2px; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Escola de Condução da <span>Lylla</span></h1>
+  <div class="passos" role="tablist">
+    <button class="passo" role="tab" id="aba-planta" aria-selected="true" data-aba="planta"><b>01</b> Planta</button>
+    <button class="passo" role="tab" id="aba-treino" aria-selected="false" data-aba="treino"><b>02</b> Treino</button>
+    <button class="passo" role="tab" id="aba-campeao" aria-selected="false" data-aba="campeao" disabled><b>03</b> Campeã</button>
+  </div>
+</header>
+
+<main>
+  <!-- ==================== COLUNA DA ESQUERDA ==================== -->
+  <div class="coluna" id="rail">
+
+    <!-- PLANTA -->
+    <div data-so="planta">
+      <div class="bloco">
+        <h3>Ferramenta</h3>
+        <div class="ferramentas">
+          <button class="ferramenta" data-ferr="parede" aria-pressed="true">Parede<small>arrasta para pintar</small></button>
+          <button class="ferramenta" data-ferr="apagar" aria-pressed="false">Apagar<small>ou botão direito</small></button>
+          <button class="ferramenta" data-ferr="divisao" aria-pressed="false">Divisão<small>pinta o chão</small></button>
+          <button class="ferramenta" data-ferr="partida" aria-pressed="false">Partida<small>onde ela dorme</small></button>
+        </div>
+        <div class="campo" style="margin-top:11px">
+          <label for="pincel">Pincel <output id="pincel-v">1</output></label>
+          <input type="range" id="pincel" min="1" max="4" step="1" value="1">
+        </div>
+      </div>
+
+      <div class="bloco">
+        <h3>Divisões</h3>
+        <div class="divisoes" id="lista-divisoes"></div>
+        <button class="acao" id="nova-divisao" style="margin-top:8px">+ Nova divisão</button>
+      </div>
+
+      <div class="bloco">
+        <h3>Tamanho e escala</h3>
+        <div class="linha-campos">
+          <div class="campo"><label for="cols">Colunas</label><input type="number" id="cols" min="10" max="120" value="48"></div>
+          <div class="campo"><label for="rows">Linhas</label><input type="number" id="rows" min="10" max="120" value="32"></div>
+        </div>
+        <div class="campo">
+          <label for="escala">Centímetros por quadrado <output id="escala-v">20</output></label>
+          <input type="range" id="escala" min="5" max="50" step="5" value="20">
+        </div>
+        <p class="nota">A Lylla tem 24 cm de largura. Com quadrados de 20 cm, uma porta normal (80 cm) são <strong>quatro quadrados</strong> — mede uma parede da casa aos passos e conta.</p>
+      </div>
+
+      <div class="bloco">
+        <h3>Ficheiro</h3>
+        <div class="botoes">
+          <button class="acao" id="exemplo">Carregar a casa de exemplo</button>
+          <button class="acao" id="contorno">Fechar as paredes de fora</button>
+          <button class="acao" id="importar-casa">Abrir uma casa.json</button>
+          <button class="acao principal" id="guardar-casa">Guardar casa.json</button>
+          <button class="acao perigo" id="limpar">Apagar tudo</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- TREINO -->
+    <div data-so="treino" hidden>
+      <div class="bloco">
+        <h3>Como ela aprende</h3>
+        <div class="campo">
+          <label for="modo">Modo</label>
+          <select id="modo">
+            <option value="puro">Pura — sem mapa nenhum</option>
+            <option value="descoberta">Descoberta — o mapa é desenhado por elas</option>
+            <option value="hibrido" selected>Híbrida — planta + cérebro</option>
+          </select>
+        </div>
+        <p class="nota" id="explica-modo"></p>
+      </div>
+
+      <div class="bloco">
+        <h3>A missão</h3>
+        <div class="campo"><label for="origem">Sai de</label><select id="origem"></select></div>
+        <div class="campo"><label for="destino">Vai até</label><select id="destino"></select></div>
+        <div class="campo">
+          <label for="cenarios">Missões por geração <output id="cenarios-v">3</output></label>
+          <input type="range" id="cenarios" min="1" max="6" step="1" value="3">
+        </div>
+        <p class="nota">Mais missões por geração = treino mais lento, mas cérebros que não decoram <em>uma</em> viagem.</p>
+        <p class="nota aviso"><strong>A percentagem não sobe sempre — e está bem assim.</strong> À medida que aprendem, as missões ficam mais compridas (a linha laranja). Ficar nos 50% com missões de nove metros é muito melhor do que 50% com missões de dois.</p>
+        <p class="nota">Com as missões fixas, a campeã costuma acabar a resolver quase todas. A que sobra é quase sempre uma em que o gato ou a pessoa lhe aparecem à frente num momento em que já não dá para desviar — e essa não se ganha com mais gerações. Vale a pena ir ao passo <strong>03 Campeã</strong> ver qual é.</p>
+      </div>
+
+      <div class="bloco">
+        <h3>O que aparece no caminho</h3>
+        <div class="linha-campos">
+          <div class="campo"><label for="sacos">Sacos</label><input type="number" id="sacos" min="0" max="8" value="2"></div>
+          <div class="campo"><label for="gatos">Gatos</label><input type="number" id="gatos" min="0" max="4" value="1"></div>
+          <div class="campo"><label for="pessoas">Pessoas</label><input type="number" id="pessoas" min="0" max="4" value="1"></div>
+        </div>
+        <p class="nota">O saco está parado. O gato dá arrancadas. A pessoa atravessa devagar e não olha por onde anda.</p>
+      </div>
+
+      <div class="bloco">
+        <h3>Sensores e memória</h3>
+        <div class="campo">
+          <label for="raios">Feixes à frente <output id="raios-v">5</output></label>
+          <input type="range" id="raios" min="1" max="9" step="2" value="5">
+        </div>
+        <p class="nota" id="nota-sensores"></p>
+        <div class="campo">
+          <label for="memoria">Memória <output id="memoria-v">4</output> números</label>
+          <input type="range" id="memoria" min="0" max="8" step="1" value="4">
+        </div>
+        <p class="nota">Números que a rede da evasão escreve num passo e volta a ler no seguinte. Ninguém lhes diz o que querem dizer — a evolução decide, e o que costuma sair é um «vou por este lado» que se mantém aceso durante a manobra. Com zero, contornar uma parede é impossível por mais gerações que passem: duas posições que deem a mesma leitura têm obrigatoriamente a mesma resposta.</p>
+      </div>
+
+      <div class="bloco">
+        <h3>O mapa que elas desenham</h3>
+        <dl class="metricas" id="metricas-mapa"></dl>
+        <button class="acao" id="esquecer-mapa" style="margin-top:9px">Esquecer o mapa</button>
+        <p class="nota" style="margin-top:9px">A primeira geração não sabe nada da mobília. Elas vão medindo com o ultrassom e o mapa vai-se fazendo: o saco que está sempre no mesmo canto acaba lá marcado e a rota passa a dar-lhe a volta. O gato apaga-se sozinho, porque nunca está no mesmo sítio.</p>
+      </div>
+
+      <div class="bloco">
+        <h3>Como se escolhem os pais</h3>
+        <div class="campo">
+          <label for="elite">Só os melhores <output id="elite-v">30%</output> têm filhos</label>
+          <input type="range" id="elite" min="5" max="80" step="5" value="30">
+        </div>
+        <div class="campo">
+          <label for="curiosidade">Curiosidade <output id="curiosidade-v">0%</output></label>
+          <input type="range" id="curiosidade" min="0" max="80" step="5" value="0">
+        </div>
+        <p class="nota" id="explica-curiosidade">Com curiosidade a zero, só a pontuação escolhe quem tem filhos. Acima de zero, uma parte da escolha vai para quem acabou num sítio onde mais ninguém acabou — mesmo que tenha pontuado mal. Serve para sair de sítios onde ir na direção certa afasta da solução; sem mapa, é quase obrigatório.</p>
+        <div class="campo">
+          <label for="deriva">Rodas tortas <output id="deriva-v">0%</output></label>
+          <input type="range" id="deriva" min="0" max="100" step="5" value="0">
+        </div>
+        <label class="nota" style="display:flex;gap:8px;align-items:flex-start;cursor:pointer">
+          <input type="checkbox" id="baralhar" style="margin-top:3px;width:auto;accent-color:var(--ciano)">
+          <span><strong>Baralhar as missões a cada geração.</strong> Desligado, a prova é sempre a mesma e a curva sobe e fica em cima. Ligado, mede se o que aprendeu passa noutro percurso — mas aí a percentagem salta muito de geração para geração, porque muda o exame e não só o aluno.</span>
+        </label>
+      </div>
+
+      <div class="bloco">
+        <h3>Evolução</h3>
+        <div class="campo">
+          <label for="populacao">Robôs por geração <output id="populacao-v">180</output></label>
+          <input type="range" id="populacao" min="40" max="400" step="20" value="180">
+        </div>
+        <div class="campo">
+          <label for="mutacao">Mutação <output id="mutacao-v">8%</output></label>
+          <input type="range" id="mutacao" min="1" max="30" step="1" value="8">
+        </div>
+        <div class="campo">
+          <label for="forca">Força da mutação <output id="forca-v">0.15</output></label>
+          <input type="range" id="forca" min="2" max="60" step="1" value="15">
+        </div>
+      </div>
+
+      <div class="bloco">
+        <h3>Cérebro</h3>
+        <div class="botoes">
+          <button class="acao" id="importar-piloto">Continuar de um piloto.json</button>
+          <button class="acao principal" id="guardar-piloto" disabled>Guardar piloto.json</button>
+        </div>
+        <p class="nota" style="margin-top:9px">O <strong>piloto.json</strong> é o cérebro treinado. É este ficheiro que a Lylla lê no Raspberry Pi.</p>
+      </div>
+    </div>
+
+    <!-- CAMPEÃ -->
+    <div data-so="campeao" hidden>
+      <div class="bloco">
+        <h3>A viagem</h3>
+        <div class="campo"><label for="c-origem">Sai de</label><select id="c-origem"></select></div>
+        <div class="campo"><label for="c-destino">Vai até</label><select id="c-destino"></select></div>
+        <div class="linha-campos">
+          <div class="campo"><label for="c-sacos">Sacos</label><input type="number" id="c-sacos" min="0" max="8" value="3"></div>
+          <div class="campo"><label for="c-gatos">Gatos</label><input type="number" id="c-gatos" min="0" max="4" value="1"></div>
+        </div>
+        <div class="campo"><label for="c-pessoas">Pessoas</label><input type="number" id="c-pessoas" min="0" max="4" value="1"></div>
+        <div class="botoes">
+          <button class="acao principal" id="c-correr">Vai lá!</button>
+          <button class="acao" id="c-obstaculos">Baralhar os obstáculos</button>
+        </div>
+      </div>
+      <div class="bloco">
+        <h3>O que estás a ver</h3>
+        <div class="legenda">
+          <span><i style="background:#36E0FF"></i> a Lylla</span>
+          <span><i style="background:#1E7FD4"></i> a rota do mapa</span>
+          <span><i style="background:#FFA23D"></i> obstáculo a mexer</span>
+          <span><i style="background:#4ADE80"></i> destino</span>
+          <span><i style="background:#8FA0B2"></i> onde ela julga estar</span>
+          <span><i style="background:#FF3B5C"></i> parede que o mapa não tem</span>
+        </div>
+        <p class="nota" style="margin-top:10px">Os riscos finos à frente dela são os sensores. Quando ficam vermelhos, é porque encontraram alguma coisa — e é só isso que o cérebro de evasão sabe do mundo.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== PALCO ==================== -->
+  <div class="palco">
+    <div class="barra-palco" id="barra-topo"></div>
+    <div class="moldura">
+      <canvas id="palco"></canvas>
+    </div>
+    <div class="barra-palco" id="barra-fundo"></div>
+  </div>
+
+  <!-- ==================== COLUNA DA DIREITA ==================== -->
+  <div class="coluna">
+    <div data-so="planta">
+      <div class="bloco">
+        <h3>Como se desenha a casa</h3>
+        <p class="nota"><strong>1.</strong> Escolhe <em>Parede</em> e arrasta o rato para desenhar as paredes de fora. O botão <em>Fechar as paredes de fora</em> faz a moldura por ti.</p>
+        <p class="nota"><strong>2.</strong> Desenha as paredes de dentro, mas <strong>deixa os buracos das portas</strong> — se fechares tudo, a Lylla nunca sai do quarto.</p>
+        <p class="nota"><strong>3.</strong> Faz uma divisão para cada sítio com nome (sala, cozinha, quarto da Lara) e pinta o chão dessa divisão. É esse nome que se lhe vai dizer em voz alta.</p>
+        <p class="nota"><strong>4.</strong> Põe a <em>Partida</em> onde ela costuma estar parada.</p>
+        <p class="nota aviso"><strong>Não precisas de ser exata.</strong> O que interessa são as paredes e as portas nos sítios certos. Um sofá não se desenha: ele entra depois como obstáculo, e é de propósito — assim ela aprende a contorná-lo esteja onde estiver.</p>
+      </div>
+      <div class="bloco">
+        <h3>Estado</h3>
+        <dl class="metricas" id="metricas-casa"></dl>
+      </div>
+    </div>
+
+    <div data-so="treino" hidden>
+      <div class="bloco">
+        <h3>Geração</h3>
+        <dl class="metricas" id="metricas-treino"></dl>
+      </div>
+      <div class="bloco">
+        <h3>Fitness ao longo das gerações</h3>
+        <canvas id="grafico"></canvas>
+        <div class="legenda" style="margin-top:6px">
+          <span><i style="background:#36E0FF"></i> melhor</span>
+          <span><i style="background:#8FA0B2"></i> média</span>
+          <span><i style="background:#4ADE80"></i> % que a campeã chega</span>
+          <span><i style="background:rgba(74,222,128,.9)"></i> % da turma toda</span>
+          <span><i style="background:#FFA23D"></i> distância das missões</span>
+        </div>
+      </div>
+      <div class="bloco">
+        <h3>O conselho das três redes</h3>
+        <div class="rede">
+          <div class="rede-topo"><span>Rumo</span><span id="v-rumo">—</span></div>
+          <div class="barra"><i id="b-rumo" style="background:var(--azul)"></i></div>
+          <p>Só pensa em para onde ir. Não sabe que existem obstáculos.</p>
+        </div>
+        <div class="rede">
+          <div class="rede-topo"><span>Evasão</span><span id="v-evasao">—</span></div>
+          <div class="barra"><i id="b-evasao" style="background:var(--laranja)"></i></div>
+          <p>Só vê os sensores — e a que velocidade cada coisa se aproxima. É esta que apanha o gato.</p>
+        </div>
+        <div class="rede">
+          <div class="rede-topo"><span>Árbitro</span><span id="v-arbitro">—</span></div>
+          <div class="barra"><i id="b-arbitro" style="background:var(--ciano)"></i></div>
+          <p>Decide de quem se ouve mais neste instante, e até que velocidade deixa ir. A barra é o teto de velocidade que ele deixou passar neste instante.</p>
+        </div>
+      </div>
+    </div>
+
+    <div data-so="campeao" hidden>
+      <div class="bloco">
+        <h3>Esta viagem</h3>
+        <dl class="metricas" id="metricas-campeao"></dl>
+      </div>
+      <div class="bloco">
+        <h3>O conselho, ao vivo</h3>
+        <div class="rede">
+          <div class="rede-topo"><span>Rumo</span><span id="cv-rumo">—</span></div>
+          <div class="barra"><i id="cb-rumo" style="background:var(--azul)"></i></div>
+        </div>
+        <div class="rede">
+          <div class="rede-topo"><span>Evasão</span><span id="cv-evasao">—</span></div>
+          <div class="barra"><i id="cb-evasao" style="background:var(--laranja)"></i></div>
+        </div>
+        <div class="rede">
+          <div class="rede-topo"><span>Árbitro</span><span id="cv-arbitro">—</span></div>
+          <div class="barra"><i id="cb-arbitro" style="background:var(--ciano)"></i></div>
+        </div>
+      </div>
+      <div class="bloco">
+        <h3>E a seguir?</h3>
+        <p class="nota">Este cérebro corre na Lylla a sério com <span class="mono">robot/navigation/</span>. Guarda o <strong>piloto.json</strong> e o <strong>casa.json</strong> na pasta <span class="mono">data/</span> do robô — as contas que fazem os números aqui são as mesmas que ele faz lá, e há um teste no repositório a garantir isso.</p>
+      </div>
+    </div>
+  </div>
+</main>
+
+<input type="file" id="ficheiro" accept="application/json" hidden>
+
+<script>
+"use strict";
+/* ==========================================================================
+   1. O MUNDO EM CENTÍMETROS
+   Toda a simulação trabalha em centímetros e segundos. A grelha é só a forma
+   de guardar as paredes; ninguém "anda de quadrado em quadrado".
+   ========================================================================== */
+
+const FISICA = {
+  raio_cm: 12,            // a Lylla vista de cima é um círculo de 24 cm
+  entre_eixos_cm: 15,     // distância entre as duas rodas
+  v_max_cm_s: 22,         // config/robot.yaml: 18 cm/s a 0.5, logo ~22 a 0.6
+  acel_cm_s2: 55,         // não salta de parada a máxima: leva ~0,4 s
+  dt: 0.1,                // 10 vezes por segundo — o mesmo ritmo do ciclo do Pi
+  alcance_cm: 200,        // até onde os sensores veem
+  abertura_graus: 120,    // leque total dos feixes, repartido à volta da frente
+  raio_chegada_cm: 35,    // a que distância do ponto de destino conta como chegar
+  lookahead_cm: 55,       // quão à frente na rota ela olha (perseguição pura)
+  // os dois números da segurança, iguais aos do config/robot.yaml do robô
+  parar_a_cm: 25,             // mais perto do que isto, a segurança manda
+  abrandar_a_cm: 40,
+  entre_varrimentos_cm: 200,  // de quanto em quanto caminho ela volta a saber
+                              // onde está (é o que o robô faz mesmo)
+};
+
+const CORES_DIVISAO = ["#36E0FF","#FFA23D","#4ADE80","#C88CFF","#FF7BA8","#7FE3C6","#FFD866","#7FA9FF"];
+
+/* --- Aleatoriedade com semente: a mesma semente dá sempre a mesma missão,
+       e é isso que torna duas gerações comparáveis. ------------------------ */
+function semente(s) {
+  let a = s >>> 0;
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const limitar = (v, a, b) => (v < a ? a : v > b ? b : v);
+const angNorm = (a) => { while (a > Math.PI) a -= 2*Math.PI; while (a < -Math.PI) a += 2*Math.PI; return a; };
+
+/* ==========================================================================
+   2. A CASA
+   ========================================================================== */
+
+const Casa = {
+  cols: 48, rows: 32, cm: 20,
+  parede: null, zona: null,
+  divisoes: [],
+  partida: { cx: 3, cy: 3 },
+
+  criar(cols, rows, cm) {
+    this.cols = cols; this.rows = rows; this.cm = cm;
+    this.parede = new Uint8Array(cols * rows);
+    this.zona = new Int8Array(cols * rows).fill(-1);
+    this.campos = new Map();
+    return this;
+  },
+  redimensionar(cols, rows) {
+    const p = new Uint8Array(cols*rows), z = new Int8Array(cols*rows).fill(-1);
+    for (let y = 0; y < Math.min(rows, this.rows); y++)
+      for (let x = 0; x < Math.min(cols, this.cols); x++) {
+        p[y*cols+x] = this.parede[y*this.cols+x];
+        z[y*cols+x] = this.zona[y*this.cols+x];
+      }
+    this.cols = cols; this.rows = rows; this.parede = p; this.zona = z;
+    this.invalidar();
+  },
+  i(x, y) { return y * this.cols + x; },
+  dentro(x, y) { return x >= 0 && y >= 0 && x < this.cols && y < this.rows; },
+  ehParede(x, y) { return !this.dentro(x, y) || this.parede[this.i(x, y)] === 1; },
+  invalidar() { this.campos = new Map(); this.folga = null; this._maior = 0; },
+
+  /* O centro de um quadrado, em centímetros. */
+  centro(x, y) { return { x: (x + 0.5) * this.cm, y: (y + 0.5) * this.cm }; },
+  larguraCm() { return this.cols * this.cm; },
+  alturaCm() { return this.rows * this.cm; },
+
+  /* Cabe aqui um círculo de raio r com o centro em (x,y)? A pergunta que
+     decide se houve choque. Testa a distância do centro ao retângulo de cada
+     quadrado por perto — não basta ver o quadrado onde ela está. */
+  livre(x, y, r) {
+    const cm = this.cm;
+    const x0 = Math.floor((x - r) / cm), x1 = Math.floor((x + r) / cm);
+    const y0 = Math.floor((y - r) / cm), y1 = Math.floor((y + r) / cm);
+    for (let cy = y0; cy <= y1; cy++) {
+      for (let cx = x0; cx <= x1; cx++) {
+        if (!this.ehParede(cx, cy)) continue;
+        const px = limitar(x, cx*cm, (cx+1)*cm), py = limitar(y, cy*cm, (cy+1)*cm);
+        const dx = x - px, dy = y - py;
+        if (dx*dx + dy*dy < r*r) return false;
+      }
+    }
+    return true;
+  },
+
+  /* Folga: a quantos quadrados de parede está cada quadrado. Serve para a
+     rota preferir o meio do corredor em vez de raspar no rodapé. */
+  calcularFolga() {
+    if (this.folga) return this.folga;
+    const n = this.cols*this.rows, d = new Int16Array(n).fill(9999), fila = [];
+    for (let i = 0; i < n; i++) if (this.parede[i]) { d[i] = 0; fila.push(i); }
+    for (let cab = 0; cab < fila.length; cab++) {
+      const i = fila[cab], x = i % this.cols, y = (i / this.cols) | 0;
+      for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+        const nx = x+dx, ny = y+dy;
+        if (!this.dentro(nx, ny)) continue;
+        const j = this.i(nx, ny);
+        if (d[j] > d[i] + 1) { d[j] = d[i] + 1; fila.push(j); }
+      }
+    }
+    this.folga = d;
+    return d;
+  },
+
+  /* ------------------------------------------------------------------------
+     O CAMPO DE DISTÂNCIA — o coração da navegação com mapa.
+
+     Dijkstra a partir do DESTINO, para trás, por toda a casa. Dá, para cada
+     quadrado, quantos centímetros faltam até lá chegar pelo melhor caminho.
+
+     Porquê isto e não um A* do robô até ao destino: o A* dá um caminho a
+     partir de UM ponto. Se a Lylla for empurrada, ou se der uma volta grande
+     a fugir do gato, o caminho deixa de servir e é preciso planear outra vez.
+     O campo serve de qualquer ponto da casa — calcula-se uma vez por destino
+     e nunca mais. E é também com ele que se mede o progresso no treino: o
+     mapa é o professor, não a cábula. O robô, esse, nunca o vê.
+     ------------------------------------------------------------------------ */
+  campoAte(idxDivisao) {
+    if (this.campos.has(idxDivisao)) return this.campos.get(idxDivisao);
+    const n = this.cols*this.rows, INF = Infinity;
+    const dist = new Float64Array(n).fill(INF);
+    const folga = this.calcularFolga();
+    const monte = new MonteMinimo();
+    for (let i = 0; i < n; i++) {
+      if (this.parede[i] || this.zona[i] !== idxDivisao) continue;
+      dist[i] = 0; monte.por(i, 0);
+    }
+    const viz = [[1,0,1],[-1,0,1],[0,1,1],[0,-1,1],[1,1,1.4142],[1,-1,1.4142],[-1,1,1.4142],[-1,-1,1.4142]];
+    while (monte.tamanho) {
+      const { valor: i, prio: d } = monte.tira();
+      if (d > dist[i]) continue;
+      const x = i % this.cols, y = (i / this.cols) | 0;
+      for (const [dx, dy, custo] of viz) {
+        const nx = x+dx, ny = y+dy;
+        if (!this.dentro(nx, ny) || this.ehParede(nx, ny)) continue;
+        // atalhos na diagonal não podem passar pelo canto de uma parede
+        if (dx && dy && (this.ehParede(x+dx, y) || this.ehParede(x, y+dy))) continue;
+        const j = this.i(nx, ny);
+        const f = folga[j];
+        const castigo = f <= 1 ? 2.6 : f === 2 ? 0.7 : 0;   // encostar às paredes custa
+        const nd = d + (custo + castigo) * this.cm;
+        if (nd < dist[j]) { dist[j] = nd; monte.por(j, nd); }
+      }
+    }
+    this.campos.set(idxDivisao, dist);
+    return dist;
+  },
+
+  distanciaEm(campo, x, y) {
+    const cx = Math.floor(x / this.cm), cy = Math.floor(y / this.cm);
+    if (!this.dentro(cx, cy)) return Infinity;
+    return campo[this.i(cx, cy)];
+  },
+
+  /* Que divisões é que estão ligadas entre si? Uma casa desenhada à pressa
+     tem sempre um quarto sem porta, e mais vale dizê-lo antes de treinar. */
+  componentes() {
+    const n = this.cols*this.rows, comp = new Int16Array(n).fill(-1);
+    let atual = 0;
+    for (let i0 = 0; i0 < n; i0++) {
+      if (this.parede[i0] || comp[i0] >= 0) continue;
+      const fila = [i0]; comp[i0] = atual;
+      for (let c = 0; c < fila.length; c++) {
+        const i = fila[c], x = i % this.cols, y = (i/this.cols)|0;
+        for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+          const nx = x+dx, ny = y+dy;
+          if (!this.dentro(nx, ny) || this.ehParede(nx, ny)) continue;
+          const j = this.i(nx, ny);
+          if (comp[j] < 0) { comp[j] = atual; fila.push(j); }
+        }
+      }
+      atual++;
+    }
+    return this.divisoes.map((_, d) => {
+      for (let i = 0; i < n; i++) if (this.zona[i] === d && !this.parede[i]) return comp[i];
+      return -1;
+    });
+  },
+
+  /* A viagem mais comprida que esta casa permite — o tecto do «nível» do
+     treino. Sem isto, o nível continuava a subir muito para lá do que a casa
+     tem para dar, e deixava de querer dizer nada. */
+  maiorViagem() {
+    if (this._maior) return this._maior;
+    let maior = 0;
+    for (let d = 0; d < this.divisoes.length; d++) {
+      if (!this.celulasDe(d).length) continue;
+      const campo = this.campoAte(d);
+      for (let i = 0; i < campo.length; i++)
+        if (isFinite(campo[i]) && campo[i] > maior && this.zona[i] >= 0) maior = campo[i];
+    }
+    this._maior = Math.max(200, maior);
+    return this._maior;
+  },
+
+  celulasDe(idxDivisao) {
+    const out = [];
+    for (let i = 0; i < this.zona.length; i++)
+      if (this.zona[i] === idxDivisao && !this.parede[i]) out.push(i);
+    return out;
+  },
+
+  /* Um ponto de partida onde a Lylla caiba mesmo, dentro de uma divisão. */
+  pontoEm(idxDivisao, rnd) {
+    const cs = this.celulasDe(idxDivisao);
+    for (let tent = 0; tent < 200 && cs.length; tent++) {
+      const i = cs[(rnd() * cs.length) | 0];
+      const p = this.centro(i % this.cols, (i / this.cols) | 0);
+      if (this.livre(p.x, p.y, FISICA.raio_cm + 2)) return p;
+    }
+    return null;
+  },
+
+  /* ------------------------------------------------------------------------
+     A ROTA: descer o campo de distância, sempre para o vizinho que está mais
+     perto do destino. Depois esticar com cordel — se há linha de vista de A
+     para C, o ponto B do meio não serve para nada e só faz a Lylla ziguezaguear.
+     ------------------------------------------------------------------------ */
+  rota(campo, x, y) {
+    let cx = Math.floor(x / this.cm), cy = Math.floor(y / this.cm);
+    if (!this.dentro(cx, cy) || !isFinite(campo[this.i(cx, cy)])) return null;
+    const pts = [{ x, y }];
+    const visto = new Set();
+    for (let passo = 0; passo < this.cols * this.rows; passo++) {
+      const aqui = this.i(cx, cy);
+      if (campo[aqui] === 0) break;
+      if (visto.has(aqui)) break;
+      visto.add(aqui);
+      let melhor = null, melhorD = campo[aqui];
+      for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]]) {
+        const nx = cx+dx, ny = cy+dy;
+        if (!this.dentro(nx, ny) || this.ehParede(nx, ny)) continue;
+        if (dx && dy && (this.ehParede(cx+dx, cy) || this.ehParede(cx, cy+dy))) continue;
+        const d = campo[this.i(nx, ny)];
+        if (d < melhorD) { melhorD = d; melhor = [nx, ny]; }
+      }
+      if (!melhor) break;
+      cx = melhor[0]; cy = melhor[1];
+      pts.push(this.centro(cx, cy));
+    }
+    return this.esticar(pts);
+  },
+
+  linhaDeVista(a, b, r) {
+    const d = Math.hypot(b.x-a.x, b.y-a.y);
+    const passos = Math.max(2, Math.ceil(d / (this.cm * 0.4)));
+    for (let k = 1; k < passos; k++) {
+      const t = k / passos;
+      if (!this.livre(a.x + (b.x-a.x)*t, a.y + (b.y-a.y)*t, r)) return false;
+    }
+    return true;
+  },
+  esticar(pts) {
+    if (pts.length < 3) return pts;
+    const r = FISICA.raio_cm + 3, out = [pts[0]];
+    let i = 0;
+    while (i < pts.length - 1) {
+      let j = pts.length - 1;
+      while (j > i + 1 && !this.linhaDeVista(pts[i], pts[j], r)) j--;
+      out.push(pts[j]); i = j;
+    }
+    return out;
+  },
+};
+
+/* ==========================================================================
+   2b. UM MAPA — que pode NÃO ser a casa
+
+   Até aqui havia só a planta, e a planta era a verdade. Deixa de ser: o que
+   a Lylla vai ter em casa é um mapa que ela própria desenhou com um sensor
+   que espelha nas paredes e uma posição que se engana. Tem buracos onde
+   devia ter parede, tem paredes onde não há nada, e às vezes tem-nas 20 cm
+   ao lado.
+
+   Por isso a partir daqui há DUAS coisas, e é importante não as trocar:
+
+     a CASA     é a verdade. É contra ela que se bate, é ela que os sensores
+                veem, e é ela que decide se o robô chegou.
+     o MAPA     é a crença. É por ele que se planeia a rota.
+
+   Treinar com o mapa igual à casa dá um piloto que confia no mapa — e esse
+   é exatamente o piloto que vai bater na primeira ombreira que o mapa tiver
+   20 cm ao lado. É a mesma armadilha dos sensores, outra vez.
+   ========================================================================== */
+
+function fazerMapa(paredes) {
+  return {
+    paredes,
+    campos: new Map(),
+    folga: null,
+
+    ehParede(x, y) {
+      return x < 0 || y < 0 || x >= Casa.cols || y >= Casa.rows || this.paredes[y*Casa.cols + x] === 1;
+    },
+    livre(x, y, r) {
+      const cm = Casa.cm;
+      const x0 = Math.floor((x - r)/cm), x1 = Math.floor((x + r)/cm);
+      const y0 = Math.floor((y - r)/cm), y1 = Math.floor((y + r)/cm);
+      for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) {
+        if (!this.ehParede(cx, cy)) continue;
+        const px = limitar(x, cx*cm, (cx+1)*cm), py = limitar(y, cy*cm, (cy+1)*cm);
+        if ((x-px)*(x-px) + (y-py)*(y-py) < r*r) return false;
+      }
+      return true;
+    },
+    linhaDeVista(a, b, r) {
+      const d = Math.hypot(b.x-a.x, b.y-a.y);
+      const passos = Math.max(2, Math.ceil(d / (Casa.cm * 0.4)));
+      for (let k = 1; k < passos; k++) {
+        const t = k/passos;
+        if (!this.livre(a.x + (b.x-a.x)*t, a.y + (b.y-a.y)*t, r)) return false;
+      }
+      return true;
+    },
+    calcularFolga() {
+      if (this.folga) return this.folga;
+      const n = Casa.cols*Casa.rows, d = new Int16Array(n).fill(9999), fila = [];
+      for (let i = 0; i < n; i++) if (this.paredes[i]) { d[i] = 0; fila.push(i); }
+      for (let cab = 0; cab < fila.length; cab++) {
+        const i = fila[cab], x = i % Casa.cols, y = (i / Casa.cols)|0;
+        for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+          const nx = x+dx, ny = y+dy;
+          if (nx < 0 || ny < 0 || nx >= Casa.cols || ny >= Casa.rows) continue;
+          const j = ny*Casa.cols + nx;
+          if (d[j] > d[i] + 1) { d[j] = d[i] + 1; fila.push(j); }
+        }
+      }
+      this.folga = d;
+      return d;
+    },
+    /* O campo de distância a partir de UM quadrado, não da divisão toda.
+       ⚠️ É esta a diferença entre «chegar à sala» e «chegar À PORTA da sala».
+       Com o campo a partir da divisão inteira, o quadrado logo a seguir à
+       ombreira já vale zero — e o robô parava ali, meio corpo no corredor,
+       a dizer que tinha chegado. Agora há um ponto, lá dentro, e é a esse
+       que ela vai. */
+    campoDeCelula(celula) {
+      const chave = "c" + celula;
+      if (this.campos.has(chave)) return this.campos.get(chave);
+      const n = Casa.cols*Casa.rows;
+      const dist = new Float64Array(n).fill(Infinity);
+      const folga = this.calcularFolga();
+      const monte = new MonteMinimo();
+      dist[celula] = 0; monte.por(celula, 0);
+      const viz = [[1,0,1],[-1,0,1],[0,1,1],[0,-1,1],[1,1,1.4142],[1,-1,1.4142],[-1,1,1.4142],[-1,-1,1.4142]];
+      while (monte.tamanho) {
+        const { valor: i, prio: d } = monte.tira();
+        if (d > dist[i]) continue;
+        const x = i % Casa.cols, y = (i / Casa.cols)|0;
+        for (const [dx, dy, custo] of viz) {
+          const nx = x+dx, ny = y+dy;
+          if (this.ehParede(nx, ny)) continue;
+          if (dx && dy && (this.ehParede(x+dx, y) || this.ehParede(x, y+dy))) continue;
+          const j = ny*Casa.cols + nx;
+          const f = folga[j];
+          const castigo = f <= 1 ? 2.6 : f === 2 ? 0.7 : 0;
+          const nd = d + (custo + castigo) * Casa.cm;
+          if (nd < dist[j]) { dist[j] = nd; monte.por(j, nd); }
+        }
+      }
+      this.campos.set(chave, dist);
+      return dist;
+    },
+    campoAte(idxDivisao) {
+      if (this.campos.has(idxDivisao)) return this.campos.get(idxDivisao);
+      const n = Casa.cols*Casa.rows;
+      const dist = new Float64Array(n).fill(Infinity);
+      const folga = this.calcularFolga();
+      const monte = new MonteMinimo();
+      for (let i = 0; i < n; i++) {
+        if (this.paredes[i] || Casa.zona[i] !== idxDivisao) continue;
+        dist[i] = 0; monte.por(i, 0);
+      }
+      const viz = [[1,0,1],[-1,0,1],[0,1,1],[0,-1,1],[1,1,1.4142],[1,-1,1.4142],[-1,1,1.4142],[-1,-1,1.4142]];
+      while (monte.tamanho) {
+        const { valor: i, prio: d } = monte.tira();
+        if (d > dist[i]) continue;
+        const x = i % Casa.cols, y = (i / Casa.cols)|0;
+        for (const [dx, dy, custo] of viz) {
+          const nx = x+dx, ny = y+dy;
+          if (this.ehParede(nx, ny)) continue;
+          if (dx && dy && (this.ehParede(x+dx, y) || this.ehParede(x, y+dy))) continue;
+          const j = ny*Casa.cols + nx;
+          const f = folga[j];
+          const castigo = f <= 1 ? 2.6 : f === 2 ? 0.7 : 0;
+          const nd = d + (custo + castigo) * Casa.cm;
+          if (nd < dist[j]) { dist[j] = nd; monte.por(j, nd); }
+        }
+      }
+      this.campos.set(idxDivisao, dist);
+      return dist;
+    },
+    /* A rota como ELA a vê — é esta que se desenha, e não a rota certa. */
+    rota(campo, x, y) {
+      let cx = Math.floor(x/Casa.cm), cy = Math.floor(y/Casa.cm);
+      if (this.ehParede(cx, cy) || !isFinite(campo[cy*Casa.cols + cx])) return null;
+      const pts = [{ x, y }], visto = new Set();
+      for (let passo = 0; passo < Casa.cols*Casa.rows; passo++) {
+        const aqui = cy*Casa.cols + cx;
+        if (campo[aqui] === 0 || visto.has(aqui)) break;
+        visto.add(aqui);
+        let melhor = null, melhorD = campo[aqui];
+        for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]]) {
+          const nx = cx+dx, ny = cy+dy;
+          if (this.ehParede(nx, ny)) continue;
+          if (dx && dy && (this.ehParede(cx+dx, cy) || this.ehParede(cx, cy+dy))) continue;
+          const d = campo[ny*Casa.cols + nx];
+          if (d < melhorD) { melhorD = d; melhor = [nx, ny]; }
+        }
+        if (!melhor) break;
+        cx = melhor[0]; cy = melhor[1];
+        pts.push(Casa.centro(cx, cy));
+      }
+      if (pts.length < 3) return pts;
+      const r = FISICA.raio_cm + 3, out = [pts[0]];
+      let i = 0;
+      while (i < pts.length - 1) {
+        let j = pts.length - 1;
+        while (j > i + 1 && !this.linhaDeVista(pts[i], pts[j], r)) j--;
+        out.push(pts[j]); i = j;
+      }
+      return out;
+    },
+    ligado(campo, x, y) {
+      const cx = Math.floor(x/Casa.cm), cy = Math.floor(y/Casa.cm);
+      return cx >= 0 && cy >= 0 && cx < Casa.cols && cy < Casa.rows
+             && isFinite(campo[cy*Casa.cols + cx]);
+    },
+  };
+}
+
+/* A casa como ela é — o mapa contra o qual se bate. Guardado uma vez porque
+   o Dijkstra dele é reaproveitado por todas as missões. */
+let MAPA_VERDADE = null;
+function mapaVerdade() {
+  if (!MAPA_VERDADE || MAPA_VERDADE.paredes !== Casa.parede) MAPA_VERDADE = fazerMapa(Casa.parede);
+  return MAPA_VERDADE;
+}
+
+/* ------------------------------------------------------------------------
+   O MAPA QUE ELAS DESENHAM SOZINHAS
+
+   Antes havia aqui um «mapa mau» inventado: pegava-se na planta e
+   estragava-se de propósito para o treino ser realista. Era duas vezes
+   errado — não é assim que o robô se engana, e nenhum robô aprendia nada
+   com um mapa que ninguém desenhou.
+
+   Agora a primeira geração começa com ZERO conhecimento da mobília e são as
+   próprias robôs que vão medindo com o ultrassom e somando ao mapa. Ao fim
+   de umas dezenas de gerações há um mapa factual da casa: o saco que está
+   sempre no mesmo canto está lá marcado, e a rota passa a dar-lhe a volta
+   sozinha. O gato apaga-se, porque não está sempre no mesmo sítio — é o
+   mesmo mapa de ocupação em log-odds do robot/navigation/memoria_espaco.py,
+   com as mesmas duas regras que o fazem funcionar: marcar TAMBÉM o vazio, e
+   ter um teto na evidência.
+
+   As paredes vêm da planta e não se tocam: essas a Lara desenhou-as.
+   ------------------------------------------------------------------------ */
+const MapaAprendido = {
+  valores: null,
+  leituras: 0,
+  _mapa: null,
+  TETO: 5, OCUPADO: 0.85, LIVRE: -0.4, LIVRE_SEM_ECO: -0.2, LIMIAR: 2.5,
+  /* De quantos em quantos passos é que quem toma notas as toma, e que fatia
+     da turma é que toma notas. Com a planta dada, mapear é um extra e chega
+     pouco. No modo descoberta o mapa é a ÚNICA coisa que ela vai ter, e o que
+     não for medido fica buraco — por isso mede-se muito mais. */
+  RITMO: 2, FATIA: 8,
+
+  garantir() {
+    if (!this.valores || this.valores.length !== Casa.cols*Casa.rows) this.esquecer();
+    return this.valores;
+  },
+  esquecer() {
+    this.valores = new Float32Array(Casa.cols*Casa.rows);
+    this.leituras = 0;
+    this._mapa = null;
+  },
+
+  /* Uma leitura do ultrassom, feita de (x,y) a olhar para `rumo`. */
+  aprender(x, y, rumo, distanciaCm, alcanceCm) {
+    const v = this.garantir();
+    this.leituras++;
+    const semEco = distanciaCm >= alcanceCm * 0.99;
+    const ateOnde = semEco ? alcanceCm * 0.7 : Math.max(0, distanciaCm - 12);
+    const pesoLivre = semEco ? this.LIVRE_SEM_ECO : this.LIVRE;
+    const passo = Casa.cm * 0.5, meio = 7.5 * Math.PI / 180;
+    for (let k = -1; k <= 1; k++) {
+      const ang = rumo + k*meio, ca = Math.cos(ang), sa = Math.sin(ang);
+      for (let d = passo; d < ateOnde; d += passo) {
+        const cx = Math.floor((x + ca*d)/Casa.cm), cy = Math.floor((y + sa*d)/Casa.cm);
+        if (!Casa.dentro(cx, cy)) break;
+        const i = Casa.i(cx, cy);
+        v[i] = limitar(v[i] + pesoLivre, -this.TETO, this.TETO);
+      }
+      if (semEco) continue;
+      for (let d = Math.max(0, distanciaCm-12); d <= distanciaCm+12; d += passo) {
+        const cx = Math.floor((x + ca*d)/Casa.cm), cy = Math.floor((y + sa*d)/Casa.cm);
+        if (!Casa.dentro(cx, cy)) continue;
+        const i = Casa.i(cx, cy);
+        v[i] = limitar(v[i] + this.OCUPADO/3, -this.TETO, this.TETO);
+      }
+    }
+  },
+
+  /* A planta MAIS a mobília de que já há prova. Reconstruído uma vez por
+     geração — refazer isto a cada leitura seria um Dijkstra por passo. */
+  /* ⚠️ SEM PLANTA (`semPlanta`), AS PAREDES TAMBÉM SÃO APRENDIDAS.
+     É o modo descoberta: a primeira geração não sabe absolutamente nada — nem
+     onde estão as paredes — e o mapa que sai é só o que o ultrassom já provou.
+     Enquanto não houver prova de nada, o mapa está vazio e a rota é a linha
+     reta: nessas gerações ela comporta-se como no modo puro, e é por isso que
+     as primeiras dezenas de gerações são feias. À medida que as paredes vão
+     aparecendo, a rota começa a dar-lhes a volta sozinha.
+     E NÃO SE CAI PARA A PLANTA quando o destino fica inalcançável no mapa
+     desenhado: isso seria espreitar a solução. Cai-se para a linha reta, que
+     é a única coisa que ela de facto sabe. */
+  mapa(origem, destino, celulaDestino, semPlanta) {
+    if (this._mapa && this._semPlanta === !!semPlanta) return this._mapa;
+    const v = this.garantir();
+    const p = semPlanta ? new Uint8Array(Casa.cols*Casa.rows) : new Uint8Array(Casa.parede);
+    let mobilia = 0;
+    for (let i = 0; i < v.length; i++) {
+      if (v[i] >= this.LIMIAR && !p[i]) { p[i] = 1; if (!Casa.parede[i]) mobilia++; }
+    }
+    this.mobilia = mobilia;
+    let m = fazerMapa(p);
+    // ⚠️ a mobília aprendida NUNCA pode fechar o caminho todo (a mesma regra
+    //    do ir_para.py: entre acreditar no mapa e conseguir sair, sai-se)
+    if (origem && celulaDestino !== undefined) {
+      const campo = m.campoDeCelula(celulaDestino);
+      if (!m.ligado(campo, origem.x, origem.y)) m = semPlanta ? fazerMapa(new Uint8Array(Casa.cols*Casa.rows)) : mapaVerdade();
+    }
+    this._mapa = m; this._semPlanta = !!semPlanta;
+    return m;
+  },
+  novaGeracao() { this._mapa = null; },
+  explorado() {
+    const v = this.garantir();
+    let n = 0;
+    for (let i = 0; i < v.length; i++) if (Math.abs(v[i]) > 1) n++;
+    return n / v.length;
+  },
+};
+
+/* Um monte binário mínimo — só o suficiente para o Dijkstra acima. */
+class MonteMinimo {
+  constructor() { this.v = []; this.p = []; this.tamanho = 0; }
+  por(valor, prio) {
+    let i = this.tamanho++;
+    this.v[i] = valor; this.p[i] = prio;
+    while (i > 0) {
+      const pai = (i - 1) >> 1;
+      if (this.p[pai] <= this.p[i]) break;
+      this.trocar(pai, i); i = pai;
+    }
+  }
+  tira() {
+    const valor = this.v[0], prio = this.p[0];
+    this.tamanho--;
+    if (this.tamanho > 0) {
+      this.v[0] = this.v[this.tamanho]; this.p[0] = this.p[this.tamanho];
+      let i = 0;
+      for (;;) {
+        const e = 2*i+1, d = 2*i+2; let m = i;
+        if (e < this.tamanho && this.p[e] < this.p[m]) m = e;
+        if (d < this.tamanho && this.p[d] < this.p[m]) m = d;
+        if (m === i) break;
+        this.trocar(m, i); i = m;
+      }
+    }
+    return { valor, prio };
+  }
+  trocar(a, b) {
+    const tv = this.v[a], tp = this.p[a];
+    this.v[a] = this.v[b]; this.p[a] = this.p[b];
+    this.v[b] = tv; this.p[b] = tp;
+  }
+}
+
+/* ==========================================================================
+   3. AS TRÊS REDES
+
+   Um cérebro não é uma rede — são três, cada uma com o seu trabalho, e todas
+   com os mesmos genes a evoluir ao mesmo tempo:
+
+     RUMO     sabe para onde quer ir. Não faz ideia de que existem obstáculos.
+     EVASÃO   só vê os sensores, e a que velocidade cada coisa se aproxima.
+              Não faz ideia de para onde vai.
+     ÁRBITRO  ouve as duas e decide, a cada décimo de segundo, a quem dá razão
+              e até que velocidade deixa ir.
+
+   Por que não uma rede grande a fazer tudo: porque assim cada uma tem um
+   problema pequeno e resolve-o depressa — e porque se vê, ao vivo, qual delas
+   está a mandar. Uma rede grande é uma caixa preta; três pequenas são uma
+   explicação.
+   ========================================================================== */
+
+const ATIV = {
+  tanh: Math.tanh,
+  sigmoide: (v) => 1 / (1 + Math.exp(-v)),
+};
+
+class Rede {
+  constructor(nome, nEnt, nEsc, saidas) {
+    this.nome = nome; this.nEnt = nEnt; this.nEsc = nEsc;
+    this.saidas = saidas;                    // ex.: ["tanh","sigmoide"]
+    this.nSai = saidas.length;
+    this.tamanho = nEnt*nEsc + nEsc + nEsc*this.nSai + this.nSai;
+    this._esc = new Float64Array(nEsc);
+    this._sai = new Float64Array(this.nSai);
+  }
+  /* A ordem dos pesos é W1, b1, W2, b2 — e é a MESMA em piloto.py.
+     Se um dia mudar aqui, o teste tests/test_navegacao.py rebenta. Bem. */
+  correr(genes, off, ent) {
+    const { nEnt, nEsc, nSai } = this;
+    let p = off;
+    for (let j = 0; j < nEsc; j++) {
+      let s = 0;
+      for (let i = 0; i < nEnt; i++) s += genes[p + i] * ent[i];
+      this._esc[j] = s;
+      p += nEnt;
+    }
+    for (let j = 0; j < nEsc; j++) this._esc[j] = Math.tanh(this._esc[j] + genes[p + j]);
+    p += nEsc;
+    for (let k = 0; k < nSai; k++) {
+      let s = 0;
+      for (let j = 0; j < nEsc; j++) s += genes[p + j] * this._esc[j];
+      this._sai[k] = s;
+      p += nEsc;
+    }
+    for (let k = 0; k < nSai; k++) this._sai[k] = ATIV[this.saidas[k]](this._sai[k] + genes[p + k]);
+    return this._sai;
+  }
+  paraJSON(genes, off) {
+    const { nEnt, nEsc, nSai } = this;
+    let p = off;
+    const W1 = [], b1 = [], W2 = [], b2 = [];
+    for (let j = 0; j < nEsc; j++) { const l = []; for (let i = 0; i < nEnt; i++) l.push(genes[p+i]); W1.push(l); p += nEnt; }
+    for (let j = 0; j < nEsc; j++) b1.push(genes[p+j]); p += nEsc;
+    for (let k = 0; k < nSai; k++) { const l = []; for (let j = 0; j < nEsc; j++) l.push(genes[p+j]); W2.push(l); p += nEsc; }
+    for (let k = 0; k < nSai; k++) b2.push(genes[p+k]);
+    return { entradas: nEnt, escondidas: nEsc, ativacoes: this.saidas, W1, b1, W2, b2 };
+  }
+  deJSON(j, genes, off) {
+    let p = off;
+    for (const l of j.W1) for (const v of l) genes[p++] = v;
+    for (const v of j.b1) genes[p++] = v;
+    for (const l of j.W2) for (const v of l) genes[p++] = v;
+    for (const v of j.b2) genes[p++] = v;
+    return p;
+  }
+}
+
+/* O conjunto das três, com as contas do tamanho do genoma. Depende do número
+   de feixes, por isso reconstrói-se quando esse número muda. */
+/* ⚠️ A MEMÓRIA — e é ela que decide se o modo puro tem hipótese ou não.
+
+   Sem mapa, o rumo é a linha reta até ao destino. Numa casa com paredes essa
+   linha atravessa-as, e encostar-se à parede virada para o destino é a melhor
+   jogada que existe: qualquer desvio afasta. A robô fica ali para sempre, e
+   não é falta de gerações — é que a rede é uma FUNÇÃO das entradas, e duas
+   posições diferentes que deem as mesmas leituras têm obrigatoriamente a
+   mesma resposta. «Estou a contornar esta parede pela direita» não cabe em
+   nenhuma leitura de sensor: é uma coisa que só se sabe por se ter começado a
+   fazer. Sem sítio onde guardar isso, contornar um obstáculo é impossível,
+   por mais milhares de gerações que passem.
+
+   A memória são uns quantos números que a evasão escreve num passo e volta a
+   ler no passo seguinte (e o árbitro também lê, senão a evasão sabe que está
+   a contornar e não tem o volante para o fazer). Ninguém lhes diz o que
+   significam: a evolução é que decide, e o que costuma sair é um sinal de
+   «vou por este lado» que se mantém aceso durante a manobra. É o que
+   transforma «bate e volta atrás» em «segue a parede».
+
+   O rumo NÃO tem memória de propósito: continua a ser a parte simples e
+   estúpida que só sabe onde é o destino. */
+function fazerCerebro(nRaios, nMem) {
+  nMem = Math.max(0, Math.min(8, nMem | 0));
+  const saidasEvasao = ["tanh", "sigmoide"];
+  for (let i = 0; i < nMem; i++) saidasEvasao.push("tanh");
+  const rumo    = new Rede("rumo",    5,               8,  ["tanh", "sigmoide"]);
+  const evasao  = new Rede("evasao",  2*nRaios+2+nMem, 12, saidasEvasao);
+  const arbitro = new Rede("arbitro", 6+nMem,          6,  ["sigmoide","sigmoide","sigmoide"]);
+  const offs = [0, rumo.tamanho, rumo.tamanho + evasao.tamanho];
+  return { redes: [rumo, evasao, arbitro], offs, nRaios, nMem,
+           tamanho: rumo.tamanho + evasao.tamanho + arbitro.tamanho };
+}
+
+function genomaAoAcaso(cerebro, rnd) {
+  const g = new Float64Array(cerebro.tamanho);
+  for (let i = 0; i < g.length; i++) g[i] = (rnd()*2 - 1) * 1.2;
+  return g;
+}
+
+/* ==========================================================================
+   4. OS OBSTÁCULOS QUE NÃO ESTÃO NA PLANTA
+
+   É por causa destes que não chega ter um mapa. Um mapa sabe onde estão as
+   paredes; não sabe que hoje há um saco no corredor nem que o gato decidiu
+   atravessar. Estes três aparecem em sítios diferentes a cada missão, e é
+   isso que impede o cérebro de decorar uma viagem.
+   ========================================================================== */
+
+class Obstaculo {
+  constructor(tipo, x, y, rnd) {
+    this.tipo = tipo; this.x = x; this.y = y; this.rnd = rnd;
+    if (tipo === "saco")   { this.r = 16; this.vel = 0;  }
+    if (tipo === "gato")   { this.r = 9;  this.vel = 45; }
+    if (tipo === "pessoa") { this.r = 20; this.vel = 52; }
+    this.ang = rnd() * Math.PI * 2;
+    this.espera = 0;
+  }
+  passo(dt) {
+    if (this.vel === 0) return;
+    const rnd = this.rnd;
+    if (this.tipo === "gato") {
+      // O gato dá arrancadas: anda, pára, muda de ideias.
+      this.espera -= dt;
+      if (this.espera <= 0) { this.espera = 0.4 + rnd()*1.6; this.ang += (rnd()*2-1) * 2.2; this.parado = rnd() < 0.3; }
+      if (this.parado) return;
+    } else if (this.espera <= 0) {
+      this.espera = 2 + rnd()*3; this.ang += (rnd()*2-1) * 0.8;
+    } else this.espera -= dt;
+    const nx = this.x + Math.cos(this.ang)*this.vel*dt;
+    const ny = this.y + Math.sin(this.ang)*this.vel*dt;
+    if (Casa.livre(nx, ny, this.r)) { this.x = nx; this.y = ny; }
+    else this.ang = rnd() * Math.PI * 2;   // bateu numa parede: vira-se para outro lado
+  }
+}
+
+/* ==========================================================================
+   5. O MUNDO DE UMA MISSÃO
+   Uma missão é: uma origem, um destino, e um conjunto de obstáculos. Nasce de
+   uma semente — a mesma semente dá exatamente a mesma missão, que é o que
+   torna honesto comparar duas gerações.
+   ========================================================================== */
+
+class Mundo {
+  constructor(cfg, sementeN) {
+    const rnd = semente(sementeN);
+    this.rnd = rnd;
+    /* -1 quer dizer «qualquer divisão»: é assim que se treina um cérebro que
+       vai a qualquer sítio da casa, e não um que decorou uma viagem.
+
+       E há aqui um segundo truque, que é o que faz a diferença entre aprender
+       e nunca sair do sítio: as primeiras gerações só apanham viagens CURTAS.
+       O `cfg.alcance` é o comprimento máximo de missão que este nível deixa
+       sortear, e cresce sozinho à medida que elas começam a chegar. Ninguém
+       ensina uma criança a andar de bicicleta a descer a rua toda ao primeiro
+       dia; com robôs é igual, e quem tenta a rua toda ao primeiro dia obtém
+       200 gerações de zeros. */
+    const comChao = Casa.divisoes.map((_, i) => i).filter((i) => Casa.celulasDe(i).length);
+    const alcance = cfg.alcance || Infinity;
+    const fixos = cfg.origem >= 0 && cfg.destino >= 0;
+    let melhorT = null;
+    for (let t = 0; t < (fixos ? 1 : 24); t++) {
+      let destino = cfg.destino, origem = cfg.origem;
+      if (destino < 0) destino = comChao[(rnd()*comChao.length)|0];
+      if (origem < 0) for (let k = 0; k < 20; k++) {
+        origem = comChao[(rnd()*comChao.length)|0];
+        if (origem !== destino) break;
+      }
+      if (origem === destino && comChao.length > 1) destino = comChao.find((i) => i !== origem);
+      const campo = Casa.campoAte(destino);
+      const pt = Casa.pontoEm(origem, rnd);
+      if (!pt) continue;
+      const dist = Casa.distanciaEm(campo, pt.x, pt.y);
+      if (!isFinite(dist)) continue;
+      if (!melhorT || dist < melhorT.dist) melhorT = { origem, destino, campo, pt, dist };
+      if (dist <= alcance) { melhorT = { origem, destino, campo, pt, dist }; break; }
+    }
+    if (!melhorT) {
+      const destino = cfg.destino >= 0 ? cfg.destino : comChao[0];
+      melhorT = { origem: cfg.origem >= 0 ? cfg.origem : comChao[comChao.length-1],
+                  destino, campo: Casa.campoAte(destino),
+                  pt: { x: Casa.cm*1.5, y: Casa.cm*1.5 }, dist: Infinity };
+    }
+    this.destino = melhorT.destino; this.origemIdx = melhorT.origem;
+    this.origem = melhorT.pt;
+    /* ⚠️ O DESTINO É UM PONTO LÁ DENTRO, NÃO A DIVISÃO INTEIRA.
+       «Vai à sala» não quer dizer «encosta-te à ombreira da sala»: quer dizer
+       entra e vai ter comigo. Escolhe-se o quadrado da divisão que está mais
+       longe das paredes todas (o mais «no meio»), e é a esse que ela vai. */
+    this.pontoDestino = this.escolherPontoNaDivisao(this.destino);
+    this.celulaDestino = Casa.i(Math.floor(this.pontoDestino.x/Casa.cm),
+                                Math.floor(this.pontoDestino.y/Casa.cm));
+    this.campo = mapaVerdade().campoDeCelula(this.celulaDestino);
+
+    /* ⚠️ E SE A MISSÃO FOR SEMPRE A MESMA?
+       Escolher duas divisões à mão (sala → escritório) desligava o nível: só
+       há uma missão possível, e é logo a de nove metros. Resultado: nenhum
+       robô chega nunca, não há nada para selecionar, e ficam quatrocentas
+       gerações de zeros — foi o que o Bruno viu.
+       A saída é a mesma ideia por outro lado: em vez de encurtar a missão,
+       começa-se mais PERTO DO FIM. A primeira geração parte a dois metros e
+       meio da porta do escritório; à medida que vão chegando, o ponto de
+       partida recua pela rota até estar na sala. Chama-se currículo ao
+       contrário, e é o que se faz a quem está a aprender a estacionar. */
+    if (alcance < this.distInicialDe(this.origem) && isFinite(alcance)) {
+      const recuado = this.recuarPelaRota(this.origem, alcance);
+      if (recuado) this.origem = recuado;
+    }
+    /* E o MAPA: a planta mais a mobília que as gerações anteriores já
+       descobriram. Na primeira geração não há mobília nenhuma. */
+    this.mapa = MapaAprendido.mapa(this.origem, this.destino, this.celulaDestino,
+                                   cfg.modo === "descoberta");
+    this.campoMapa = this.mapa.campoDeCelula(this.celulaDestino);
+    this.rumoInicial = rnd() * Math.PI * 2;
+    this.distInicial = Casa.distanciaEm(this.campo, this.origem.x, this.origem.y);
+    /* O comprimento VERDADEIRO da rota, em centímetros de andar. Serve para
+       medir se ela foi pelo caminho curto ou se andou a passear — o campo de
+       distância não serve para isso, porque tem o castigo de encostar às
+       paredes lá dentro e está inflacionado. */
+    const pts = Casa.rota(this.campo, this.origem.x, this.origem.y) || [];
+    this.comprimentoRota = 0;
+    for (let i = 1; i < pts.length; i++) {
+      this.comprimentoRota += Math.hypot(pts[i].x - pts[i-1].x, pts[i].y - pts[i-1].y);
+    }
+    this.comprimentoRota = Math.max(30, this.comprimentoRota);
+    this.distTotal = this.distInicialDe(melhorT.pt);
+    this.obstaculos = [];
+    const folga = Casa.calcularFolga();
+    const livres = [];
+    for (let i = 0; i < Casa.zona.length; i++) if (!Casa.parede[i] && folga[i] >= 2) livres.push(i);
+    const porTipo = [["saco", cfg.sacos], ["gato", cfg.gatos], ["pessoa", cfg.pessoas]];
+    for (const [tipo, quantos] of porTipo) {
+      for (let k = 0; k < quantos && livres.length; k++) {
+        for (let tent = 0; tent < 40; tent++) {
+          const i = livres[(rnd()*livres.length)|0];
+          const p = Casa.centro(i % Casa.cols, (i/Casa.cols)|0);
+          // longe da origem, para ninguém nascer em cima de um saco
+          if (Math.hypot(p.x - this.origem.x, p.y - this.origem.y) < 90) continue;
+          // ⚠️ um saco entalado na única porta não é um treino difícil, é uma
+          //    missão impossível — e uma geração inteira a valer zero não
+          //    ensina nada a ninguém. O gato e a pessoa podem: eles saem de lá.
+          if (tipo === "saco" && this.tapaOCaminho(p.x, p.y, 16)) continue;
+          this.obstaculos.push(new Obstaculo(tipo, p.x, p.y, rnd));
+          break;
+        }
+      }
+    }
+    /* ⚠️ QUANTOS FEIXES ESTÃO VIVOS NESTA MISSÃO.
+       O piloto treina com cinco, e no robô há UM: os outros quatro dizem
+       sempre «não vejo nada». Um piloto que se habituou a sentir a parede de
+       lado é um piloto que, no corredor a sério, raspa nela — mediu-se, com
+       dois mil embates numa travessia.
+       A correção não é treinar com um feixe (também se mediu: é pior). É
+       treinar às cegas DE VEZ EM QUANDO: em parte das missões só o feixe do
+       meio funciona, noutras três, noutras os cinco. Assim o mesmo cérebro
+       serve o robô de hoje e o de depois de comprar os sensores, e aprende a
+       abrandar quando não vê para os lados em vez de contar com isso. */
+    const dado = rnd();
+    this.feixesVivos = dado < 0.35 ? 1 : dado < 0.65 ? 3 : 99;
+    this.spec = this.obstaculos.map((o) => ({ tipo: o.tipo, x: o.x, y: o.y }));
+    this.sementeN = sementeN;
+    // tempo suficiente para a viagem, com folga — e nem mais
+    const seg = (this.distInicial / FISICA.v_max_cm_s) * 2.6 + 8;
+    this.maxPassos = Math.round(limitar(seg, 60, 150) / FISICA.dt);
+  }
+  /* O quadrado mais «no meio» da divisão: o que está mais longe de qualquer
+     parede. Numa sala é o meio da sala; num corredor é o meio do corredor. */
+  escolherPontoNaDivisao(idx) {
+    const folga = mapaVerdade().calcularFolga();
+    let melhor = -1, melhorF = -1;
+    for (let i = 0; i < Casa.zona.length; i++) {
+      if (Casa.zona[i] !== idx || Casa.parede[i]) continue;
+      if (folga[i] > melhorF) { melhorF = folga[i]; melhor = i; }
+    }
+    if (melhor < 0) return this.centroDestino();
+    return Casa.centro(melhor % Casa.cols, (melhor/Casa.cols)|0);
+  }
+
+  distInicialDe(p) {
+    return Casa.distanciaEm(this.campo, p.x, p.y);
+  }
+
+  /* Andar pela rota, a partir da origem, até faltarem só `alcance` cm para o
+     destino — e é daí que se parte. Devolve null se não houver rota. */
+  recuarPelaRota(origem, alcance) {
+    let cx = Math.floor(origem.x/Casa.cm), cy = Math.floor(origem.y/Casa.cm);
+    if (!Casa.dentro(cx, cy)) return null;
+    const visto = new Set();
+    for (let k = 0; k < Casa.cols*Casa.rows; k++) {
+      const aqui = Casa.i(cx, cy);
+      if (visto.has(aqui)) break;
+      visto.add(aqui);
+      if (this.campo[aqui] <= alcance) {
+        const p = Casa.centro(cx, cy);
+        return Casa.livre(p.x, p.y, FISICA.raio_cm + 2) ? p : null;
+      }
+      let melhor = null, melhorD = this.campo[aqui];
+      for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]]) {
+        const nx = cx+dx, ny = cy+dy;
+        if (!Casa.dentro(nx, ny) || Casa.ehParede(nx, ny)) continue;
+        if (dx && dy && (Casa.ehParede(cx+dx, cy) || Casa.ehParede(cx, cy+dy))) continue;
+        const d = this.campo[Casa.i(nx, ny)];
+        if (d < melhorD) { melhorD = d; melhor = [nx, ny]; }
+      }
+      if (!melhor) break;
+      cx = melhor[0]; cy = melhor[1];
+    }
+    return null;
+  }
+
+  /* Guardar de onde partiram os obstáculos permite repetir a MESMA missão
+     para cada robô, um de cada vez, sem voltar a sortear nada. */
+  reiniciar() {
+    const rnd = semente(this.sementeN + 7777);
+    this.obstaculos = this.spec.map((s) => new Obstaculo(s.tipo, s.x, s.y, rnd));
+  }
+  /* Com um obstáculo parado aqui, ainda se chega da origem ao destino? */
+  tapaOCaminho(ox, oy, r) {
+    const bloqueio = r + FISICA.raio_cm + 2;
+    const c0 = Math.floor(this.origem.x/Casa.cm), l0 = Math.floor(this.origem.y/Casa.cm);
+    if (!Casa.dentro(c0, l0)) return true;
+    const n = Casa.cols*Casa.rows, visto = new Uint8Array(n), fila = [Casa.i(c0, l0)];
+    visto[fila[0]] = 1;
+    for (let c = 0; c < fila.length; c++) {
+      const i = fila[c], x = i % Casa.cols, y = (i/Casa.cols)|0;
+      if (Casa.zona[i] === this.destino) return false;
+      for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+        const nx = x+dx, ny = y+dy;
+        if (!Casa.dentro(nx, ny) || Casa.ehParede(nx, ny)) continue;
+        const j = Casa.i(nx, ny);
+        if (visto[j]) continue;
+        const p = Casa.centro(nx, ny);
+        if (Math.hypot(p.x - ox, p.y - oy) < bloqueio) continue;
+        visto[j] = 1; fila.push(j);
+      }
+    }
+    return true;
+  }
+  passo() { for (const o of this.obstaculos) o.passo(FISICA.dt); }
+
+  /* Um feixe de sensor: até onde vê nesta direção. Paredes por travessia de
+     grelha (rápido), obstáculos por interseção com o círculo. */
+  feixe(x, y, ang) {
+    const alcance = FISICA.alcance_cm, cm = Casa.cm;
+    const dx = Math.cos(ang), dy = Math.sin(ang);
+    let cx = Math.floor(x/cm), cy = Math.floor(y/cm);
+    let d = alcance;
+    if (Casa.ehParede(cx, cy)) d = 0;
+    else {
+      const pX = dx > 0 ? 1 : -1, pY = dy > 0 ? 1 : -1;
+      const dtX = dx !== 0 ? Math.abs(cm/dx) : Infinity;
+      const dtY = dy !== 0 ? Math.abs(cm/dy) : Infinity;
+      let tX = dx !== 0 ? (((dx > 0 ? (cx+1)*cm : cx*cm) - x)/dx) : Infinity;
+      let tY = dy !== 0 ? (((dy > 0 ? (cy+1)*cm : cy*cm) - y)/dy) : Infinity;
+      /* ⚠️ O ULTRASSOM NÃO VÊ PAREDES DE LADO, e isto TEM de estar no
+         simulador. O som reflete como um espelho: se a parede não estiver
+         mais ou menos de frente para o feixe, o eco vai-se embora e o sensor
+         diz «não vejo nada». Um robô a andar ao lado de um rodapé não o vê.
+
+         Sem isto, o piloto treinava com um sensor que vê sempre tudo e
+         aprendia a passar rente às paredes — e no corredor a sério, onde as
+         paredes estão de lado, raspava nelas do princípio ao fim. Mediu-se:
+         dois mil embates numa travessia de seis metros, contra zero depois
+         de o sensor no treino passar a mentir como o verdadeiro.
+
+         É determinístico, e ainda bem: a reflexão não é sorte, é geometria. */
+      const COS_LIMITE = Math.cos(50 * Math.PI / 180);
+      for (;;) {
+        let t, normalX;
+        if (tX < tY) { cx += pX; t = tX; tX += dtX; normalX = true; }
+        else { cy += pY; t = tY; tY += dtY; normalX = false; }
+        if (t > alcance) break;
+        if (Casa.ehParede(cx, cy)) {
+          const incidencia = normalX ? Math.abs(dx) : Math.abs(dy);
+          if (incidencia >= COS_LIMITE) { d = t; break; }
+          // eco perdido: o feixe segue como se ali não houvesse nada
+        }
+      }
+    }
+    for (const o of this.obstaculos) {
+      const fx = o.x - x, fy = o.y - y;
+      const proj = fx*dx + fy*dy;
+      const dist2 = fx*fx + fy*fy;
+      if (dist2 < o.r*o.r) { d = 0; break; }
+      if (proj <= 0 || proj - o.r > d) continue;
+      const perp2 = dist2 - proj*proj;
+      if (perp2 > o.r*o.r) continue;
+      const t = proj - Math.sqrt(o.r*o.r - perp2);
+      if (t >= 0 && t < d) d = t;
+    }
+    return d;
+  }
+
+  /* O ponto que a Lylla persegue. Com mapa: desce o campo de distância até
+     ~55 cm à frente e fica-se pelo ponto mais longe que ainda vê em linha
+     reta (é o «esticar o cordel», feito à volta dela e só quando é preciso).
+     Sem mapa: o destino, em linha reta, através das paredes que houver. */
+  /* O quadrado livre mais próximo daqui de onde SE SABE ir para o destino.
+
+     ⚠️ Existe por causa de um bug que no robô a sério acontecia em 30% dos
+     passos. Ela persegue um ponto calculado a partir de onde JULGA estar — e
+     julga-se 20 ou 30 cm ao lado, o que num quadrado de 20 cm quer dizer que,
+     ao passar perto de uma parede, a posição em que acredita cai DENTRO da
+     parede. Lá dentro não há caminho, a descida não sai do sítio, e a função
+     devolvia a própria posição dela: o piloto ouvia «o teu alvo é onde já
+     estás», o ângulo dava zero, e ele virava-se para um ponto cardeal fixo e
+     ficava a rodar. Era isto que se via como «está sempre a rodar para o
+     mesmo lado». */
+  celulaUtil(campo, x, y, raio) {
+    const cm = Casa.cm, mapa = this.mapa;
+    const cx = Math.floor(x/cm), cy = Math.floor(y/cm);
+    if (Casa.dentro(cx, cy) && !mapa.ehParede(cx, cy) && isFinite(campo[Casa.i(cx, cy)])) {
+      return [cx, cy];
+    }
+    for (let r = 1; r <= (raio || 3); r++) {
+      let melhor = null, melhorD = Infinity;
+      for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+        const nx = cx+dx, ny = cy+dy;
+        if (!Casa.dentro(nx, ny) || mapa.ehParede(nx, ny)) continue;
+        const d = campo[Casa.i(nx, ny)];
+        if (isFinite(d) && d < melhorD) { melhorD = d; melhor = [nx, ny]; }
+      }
+      if (melhor) return melhor;
+    }
+    return null;
+  }
+
+  alvoLocal(x, y, comMapa) {
+    if (!comMapa) return this.centroDestino();
+    const cm = Casa.cm, mapa = this.mapa, campo = this.campoMapa;
+    const util = this.celulaUtil(campo, x, y, 3);
+    if (!util) return this.centroDestino();
+    let cx = util[0], cy = util[1];
+    const partida = Casa.centro(cx, cy);
+    if (!Casa.dentro(cx, cy)) return this.centroDestino();
+    let acumulado = 0, melhor = null, ultimo = partida;
+    for (let k = 0; k < 60 && acumulado < FISICA.lookahead_cm; k++) {
+      const aqui = Casa.i(cx, cy);
+      if (campo[aqui] === 0) break;
+      let escolha = null, melhorD = campo[aqui];
+      for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]]) {
+        const nx = cx+dx, ny = cy+dy;
+        if (mapa.ehParede(nx, ny)) continue;
+        if (dx && dy && (mapa.ehParede(cx+dx, cy) || mapa.ehParede(cx, cy+dy))) continue;
+        const d = campo[Casa.i(nx, ny)];
+        if (d < melhorD) { melhorD = d; escolha = [nx, ny]; }
+      }
+      if (!escolha) break;
+      cx = escolha[0]; cy = escolha[1];
+      const p = Casa.centro(cx, cy);
+      acumulado += Math.hypot(p.x - ultimo.x, p.y - ultimo.y);
+      ultimo = p;
+      if (mapa.linhaDeVista({x, y}, p, FISICA.raio_cm + 1)) melhor = p;
+    }
+    if (melhor) return melhor;
+    // nunca devolver a posição de quem pergunta — ver celulaUtil()
+    return Math.hypot(ultimo.x - x, ultimo.y - y) > 1 ? ultimo : partida;
+  }
+  centroDestino() {
+    if (this._centro) return this._centro;
+    const cs = Casa.celulasDe(this.destino);
+    let sx = 0, sy = 0;
+    for (const i of cs) { const p = Casa.centro(i % Casa.cols, (i/Casa.cols)|0); sx += p.x; sy += p.y; }
+    this._centro = cs.length ? { x: sx/cs.length, y: sy/cs.length } : { x: 0, y: 0 };
+    return this._centro;
+  }
+  chegou(x, y) {
+    return Math.hypot(x - this.pontoDestino.x, y - this.pontoDestino.y) <= FISICA.raio_chegada_cm;
+  }
+  bateuEmObstaculo(x, y, r) {
+    for (const o of this.obstaculos) if (Math.hypot(o.x - x, o.y - y) < o.r + r) return true;
+    return false;
+  }
+}
+
+/* ==========================================================================
+   6. A LYLLA DENTRO DA SIMULAÇÃO
+
+   Duas rodas, uma aceleração máxima, um raio. Nada de teletransporte: se o
+   cérebro pedir «para a frente a fundo» a partir de parada, ela leva quatro
+   décimos de segundo a lá chegar, tal como o robô a sério. É esta chatice
+   toda que faz com que o que se aprende aqui sirva lá fora.
+   ========================================================================== */
+
+function angulosDosFeixes(n) {
+  if (n <= 1) return [0];
+  const ab = FISICA.abertura_graus * Math.PI / 180;
+  const out = [];
+  for (let i = 0; i < n; i++) out.push(-ab/2 + ab * i / (n - 1));
+  return out;
+}
+
+class Robo {
+  /* `vies` é o defeito das rodas: uma anda um bocadinho menos do que a outra.
+     É o que faz a Lylla julgar-se num sítio e estar noutro — e treinar sem
+     isso dá um piloto que só sabe conduzir com a posição certa, que é uma
+     coisa que ele nunca vai ter. */
+  constructor(genes, cerebro, mundo, comMapa, vies, rnd, cartografa) {
+    this.genes = genes; this.cerebro = cerebro; this.mundo = mundo; this.comMapa = comMapa;
+    this.vies = vies || 0;
+    this.rnd = rnd || Math.random;
+    this.desdeAncora = 0;
+    this.x = mundo.origem.x; this.y = mundo.origem.y; this.th = mundo.rumoInicial;
+    // onde ela JULGA estar. Começa certo (sabe de onde partiu) e vai-se afastando.
+    this.cx = this.x; this.cy = this.y; this.cth = this.th;
+    this.vl = 0; this.vr = 0; this.v = 0; this.w = 0;
+    this.viragem = 0;
+    this.angs = angulosDosFeixes(cerebro.nRaios);
+    this.d = new Float64Array(cerebro.nRaios).fill(1);
+    this.vivoNoFeixe = new Array(cerebro.nRaios).fill(true);
+    this.dAnt = new Float64Array(cerebro.nRaios).fill(1);
+    this.entRumo = new Float64Array(5);
+    this.entEva = new Float64Array(2*cerebro.nRaios + 2 + cerebro.nMem);
+    this.entArb = new Float64Array(6 + cerebro.nMem);
+    /* A memória começa a zero em cada viagem: uma viagem nova não herda a
+       manobra da anterior a meio. O piloto.py faz o mesmo no reiniciar(). */
+    this.mem = new Float64Array(cerebro.nMem);
+    this.rasto = [];
+    this.vivo = true; this.chegou = false; this.colidiu = false;
+    this.passos = 0;
+    this.melhorDist = mundo.distInicial;
+    this.semProgresso = 0;
+    this.perto = 0; this.jerk = 0; this.re = 0; this.girar = 0; this.somaVel = 0;
+    this.somaViragem = 0;
+    this.sequestros = 0;
+    this.andado = 0;
+    this.cartografa = !!cartografa;
+    this.alvo = null;
+    this.saidas = { peso: 0, teto: 0, rumo: 0, evasao: 0 };
+  }
+
+  passo() {
+    if (!this.vivo) return;
+    const m = this.mundo, dt = FISICA.dt, n = this.cerebro.nRaios;
+    this.passos++;
+
+    // --- o que os sensores veem, e a que ritmo isso está a mudar ----------
+    const vivos = m.feixesVivos === undefined ? 99 : m.feixesVivos;
+    const centro = (n/2)|0;
+    for (let i = 0; i < n; i++) {
+      this.dAnt[i] = this.d[i];
+      // o feixe do meio nunca morre (é o ultrassom); os de fora podem não existir
+      const perto = Math.abs(i - centro) <= (vivos - 1) / 2;
+      this.vivoNoFeixe[i] = perto;
+      this.d[i] = perto ? m.feixe(this.x, this.y, this.th + this.angs[i]) / FISICA.alcance_cm : 1;
+    }
+    let dMin = 1, ddMax = -1, dCentro = this.d[(n/2)|0];
+    for (let i = 0; i < n; i++) {
+      if (this.d[i] < dMin) dMin = this.d[i];
+      const dd = limitar((this.dAnt[i] - this.d[i]) * 20, -1, 1);
+      if (dd > ddMax) ddMax = dd;
+      this.entEva[i] = this.d[i];
+      this.entEva[n + i] = dd;
+    }
+
+    // --- para onde quer ir --------------------------------------------------
+    // ⚠️ TUDO ISTO É NA POSIÇÃO QUE ELA JULGA TER, não na verdadeira. Os
+    //    sensores veem o mundo a sério; o mapa e a rota são vistos de onde ela
+    //    pensa que está. É essa diferença que ela tem de aprender a aguentar.
+    if (!this.alvo || this.passos % 3 === 1) this.alvo = m.alvoLocal(this.cx, this.cy, this.comMapa);
+    const erro = angNorm(Math.atan2(this.alvo.y - this.cy, this.alvo.x - this.cx) - this.cth);
+    const dAlvo = Math.hypot(this.alvo.x - this.cx, this.alvo.y - this.cy);
+    const vN = this.v / FISICA.v_max_cm_s;
+    const wMax = 2 * FISICA.v_max_cm_s / FISICA.entre_eixos_cm;
+    const wN = this.w / wMax;
+
+    this.entRumo[0] = Math.sin(erro);
+    this.entRumo[1] = Math.cos(erro);
+    this.entRumo[2] = limitar(dAlvo / 300, 0, 1);
+    this.entRumo[3] = vN;
+    this.entRumo[4] = wN;
+    this.entEva[2*n] = vN; this.entEva[2*n+1] = wN;
+    // a memória do passo anterior entra como mais umas entradas, nas duas redes
+    const nM = this.cerebro.nMem;
+    for (let i = 0; i < nM; i++) this.entEva[2*n+2+i] = this.mem[i];
+    this.entArb[0] = dMin;
+    this.entArb[1] = dCentro;
+    this.entArb[2] = ddMax;
+    this.entArb[3] = Math.abs(erro) / Math.PI;
+    this.entArb[4] = vN;
+    this.entArb[5] = limitar(this.semProgresso / 100, 0, 1);
+    for (let i = 0; i < nM; i++) this.entArb[6+i] = this.mem[i];
+
+    const [r1, r2, r3] = this.cerebro.redes, offs = this.cerebro.offs;
+    const sRumo = r1.correr(this.genes, offs[0], this.entRumo);
+    const tRumo = sRumo[0], velRumo = sRumo[1];
+    const sEva = r2.correr(this.genes, offs[1], this.entEva);
+    const tEva = sEva[0], travao = sEva[1];
+    /* ⚠️ COPIAR, não guardar a referência: o `_sai` da rede é reutilizado no
+       passo seguinte e ficaria a apontar para os números novos. */
+    for (let i = 0; i < nM; i++) this.mem[i] = sEva[2+i];
+    const sArb = r3.correr(this.genes, offs[2], this.entArb);
+    const peso = sArb[0], teto = 0.25 + 0.75*sArb[1], alfa = 0.15 + 0.6*sArb[2];
+
+    // --- a decisão, que é a mistura das duas opiniões ---------------------
+    const viragemAlvo = (1 - peso)*tRumo + peso*tEva;
+    const velAlvo = Math.min(velRumo, 1 - travao) * teto;
+    const viragemAnt = this.viragem;
+    this.viragem = viragemAnt + alfa*(viragemAlvo - viragemAnt);
+    this.jerk += Math.abs(this.viragem - viragemAnt);
+    this.saidas = { peso, teto, rumo: tRumo, evasao: tEva, velocidade: velAlvo };
+
+    /* ⚠️ A CAMADA DE SEGURANÇA — E ESTA FALTAVA AQUI, QUE FOI O ERRO GRANDE.
+       No robô a sério, o ir_para.py não deixa o piloto conduzir sozinho: se
+       o sensor da frente vir alguma coisa a menos de 25 cm, TIRA-LHE o
+       comando e põe-no a rodar no sítio; entre 25 e 40 cm corta-lhe a
+       velocidade a metade. Isso não é um pormenor, é metade do comportamento
+       — e o simulador não o tinha.
+       Sem isto treinava-se um piloto que passa rente às paredes de propósito
+       (aqui não lhe custava nada) e que, no corredor a sério, era
+       sequestrado pela segurança a cada dois passos: rodava, perdia o rumo,
+       tentava outra vez, rodava outra vez. Mediu-se: dois mil embates numa
+       travessia. Com a segurança dentro do treino, ele aprende a NÃO chegar
+       aos 25 cm, que é o que se queria desde o princípio. */
+    const dFrenteCm = this.d[(n/2)|0] * FISICA.alcance_cm;
+    let velSegura = velAlvo, viragemSegura = this.viragem, sequestrado = false;
+    if (dFrenteCm < FISICA.parar_a_cm) {
+      velSegura = 0;
+      viragemSegura = this.viragem >= 0 ? 0.46 : -0.46;   // roda no sítio, como lá
+      sequestrado = true;
+      this.sequestros++;
+    } else if (dFrenteCm < FISICA.abrandar_a_cm) {
+      velSegura *= 0.5;
+    }
+
+    // --- rodas: pedir não é ter. A aceleração é limitada. ------------------
+    const V = FISICA.v_max_cm_s, passoA = FISICA.acel_cm_s2 * dt;
+    const alvoL = limitar((velSegura - viragemSegura*0.65) * V, -V, V);
+    const alvoR = limitar((velSegura + viragemSegura*0.65) * V, -V, V);
+    this.vl += limitar(alvoL - this.vl, -passoA, passoA);
+    this.vr += limitar(alvoR - this.vr, -passoA, passoA);
+
+    // o que as rodas fazem MESMO (uma anda menos) → a posição verdadeira
+    const vlReal = this.vl * (1 + this.vies);
+    this.v = (vlReal + this.vr) / 2;
+    this.w = (this.vr - vlReal) / FISICA.entre_eixos_cm;
+    const nx = this.x + this.v*Math.cos(this.th)*dt;
+    const ny = this.y + this.v*Math.sin(this.th)*dt;
+    this.th = angNorm(this.th + this.w*dt);
+
+    // o que ela ACHA que as rodas fizeram → a posição que ela julga ter
+    const vc = (this.vl + this.vr) / 2;
+    const wc = (this.vr - this.vl) / FISICA.entre_eixos_cm;
+    this.cx += vc*Math.cos(this.cth)*dt;
+    this.cy += vc*Math.sin(this.cth)*dt;
+    this.cth = angNorm(this.cth + wc*dt);
+
+    /* ⚠️ A DERIVA TEM DE SER LIMITADA, PORQUE NO ROBÔ TAMBÉM É.
+       Deixá-la crescer sem fim durante um minuto e meio dava um erro de
+       metros — e a treinar assim nenhum cérebro consegue nada, porque a rota
+       que ele segue já não tem nada a ver com o sítio onde ele está. Mas o
+       robô a sério NÃO anda assim: de dois em dois metros pára, dá uma volta
+       a medir e volta a saber onde está com poucos centímetros de erro (ver
+       robot/navigation/varrimento.py). O simulador tem de fazer o mesmo,
+       senão está a treinar para um mundo pior do que o verdadeiro — que é o
+       mesmo erro de treinar num mundo melhor, ao contrário. */
+    this.desdeAncora += Math.abs(this.v)*dt;
+    if (this.desdeAncora > FISICA.entre_varrimentos_cm) {
+      this.desdeAncora = 0;
+      /* ⚠️ O RESTO DE ERRO DEPOIS DE SE ORIENTAR É PROPORCIONAL AO PROBLEMA.
+         Com as rodas afinadas (o slider a 0), ela sabe onde está e ponto
+         final — não se lhe deve injetar dez centímetros de engano ao acaso a
+         cada dois metros «para ser realista». Isso não é realismo: é ruído
+         que muda de geração para geração e impede a curva de assentar. */
+      const resto = this.vies === 0 ? 0 : 10;
+      this.cx = nx + (this.rnd()*2 - 1) * resto;
+      this.cy = ny + (this.rnd()*2 - 1) * resto;
+      this.cth = angNorm(this.th + (this.rnd()*2 - 1) * resto * 0.005);
+      this.varrimentos = (this.varrimentos || 0) + 1;
+    }
+    this.erroCrenca = Math.hypot(this.cx - nx, this.cy - ny);
+
+    // --- bateu? --------------------------------------------------------
+    if (!Casa.livre(nx, ny, FISICA.raio_cm) || m.bateuEmObstaculo(nx, ny, FISICA.raio_cm)) {
+      this.colidiu = true; this.vivo = false;
+      return;
+    }
+    this.andado += Math.hypot(nx - this.x, ny - this.y);
+    this.x = nx; this.y = ny;
+    if (this.passos % 4 === 0) { this.rasto.push(nx, ny); if (this.rasto.length > 500) this.rasto.splice(0, 100); }
+
+    // --- contabilidade para o fitness -------------------------------------
+    /* Uma parte da turma vai tomando nota do que vê. Não são todos porque
+       seriam duzentas vezes a mesma leitura — e o que interessa é a casa,
+       não quem a mediu. */
+    /* ⚠️ TODOS OS FEIXES QUE EXISTEM DE FACTO, não só o do meio.
+       Durante um tempo só o feixe central alimentava o mapa, e por isso
+       treinar com cinco feixes dava exatamente o mesmo mapa que treinar com
+       um — mediu-se: 79% da casa vista e 52% das paredes encontradas nos dois
+       casos. Os feixes que a missão desligou (o robô de hoje só tem um) NÃO
+       entram: um feixe desligado devolve «não vejo nada», e isso, metido no
+       mapa, apaga paredes a sério. */
+    if (this.cartografa && this.passos % MapaAprendido.RITMO === 0) {
+      for (let i = 0; i < n; i++) {
+        if (!this.vivoNoFeixe[i]) continue;
+        MapaAprendido.aprender(this.x, this.y, this.th + this.angs[i],
+                               this.d[i]*FISICA.alcance_cm, FISICA.alcance_cm);
+      }
+    }
+    this.somaViragem += Math.abs(this.viragem);
+    if (dMin < 0.1) this.perto++;
+    if (this.v < -1) this.re++;
+    if (Math.abs(this.v) < 2 && Math.abs(this.w) > 0.5) this.girar++;
+    this.somaVel += Math.abs(this.v) / V;
+
+    const d = Casa.distanciaEm(m.campo, this.x, this.y);
+    if (isFinite(d) && d < this.melhorDist - 1) { this.melhorDist = d; this.semProgresso = 0; }
+    else this.semProgresso++;
+
+    if (m.chegou(this.x, this.y)) { this.chegou = true; this.vivo = false; return; }
+    if (this.semProgresso > 200) { this.vivo = false; return; }          // 20 s sem avançar: desistiu
+    if (this.passos >= m.maxPassos) this.vivo = false;
+  }
+
+  /* ------------------------------------------------------------------------
+     O FITNESS — a única coisa que decide quem tem filhos.
+
+     Chegar vale muito. Chegar depressa vale mais. Mas há três castigos que
+     não são sobre chegar, e são eles que fazem a diferença entre um robô que
+     cumpre a tarefa e um robô que se vê andar sem se estranhar:
+     raspar nas paredes, andar aos esses, e girar no sítio.
+     ------------------------------------------------------------------------ */
+  fitness() {
+    const m = this.mundo, p = Math.max(1, this.passos), P = PESOS;
+    const cobertura = limitar(1 - this.melhorDist / Math.max(1, m.distInicial), 0, 1);
+    /* ⚠️ ESTES DOIS NÚMEROS TÊM DE SER LIDOS JUNTOS, E JÁ ESTIVERAM ERRADOS.
+       Com o castigo de bater em 220 e o progresso a valer 100, um robô que
+       andasse 30% do caminho e batesse ficava com −190; um que ficasse
+       parado a rodar no sítio ficava com −40. Ou seja: NÃO TENTAR era a
+       melhor jogada. E como é a melhor jogada que tem filhos, uma geração
+       inteira convergia para robôs a rodar sobre si próprios — que foi
+       exatamente o que se viu.
+       A regra agora, e há três números a segurá-la em vez de um:
+
+         robô parado a rodar no sítio ......... −60 (rodar) −80 (nem tentou) = −140
+         andou 30% do caminho e bateu ......... +60 −150 .................. =  −90  ← melhor
+         arrancou contra a parede e bateu ..... +10 −150 −80 .............. = −220  ← pior
+         foi de uma ponta à outra sem bater ... +200 +300 +tempo ........... > +550
+
+       Baixar o castigo de bater sem subir o de ficar quieto não serve: dá um
+       piloto que chega mais vezes e passa a viagem a raspar nos rodapés.
+       Mediu-se: com o castigo em 80, foram 120 embates numa travessia. */
+    let f = P.progresso * cobertura;
+    if (this.chegou) {
+      /* ⚠️ O PRÉMIO DE CHEGAR DEPRESSA MEDE-SE CONTRA O TEMPO IDEAL, não
+         contra o tempo máximo. Contra o máximo (que é generoso de propósito,
+         para dar hipótese a quem tem de contornar um gato), um robô que
+         demorasse o dobro do necessário ainda levava metade do prémio — e
+         «o dobro do necessário» é exatamente o robô que anda aos arcos.
+         Assim: no tempo ideal leva tudo, ao dobro não leva nada. */
+      const ideal = m.distInicial / FISICA.v_max_cm_s / FISICA.dt;
+      f += P.chegar + P.depressa * limitar(2 - this.passos / Math.max(1, ideal), 0, 1);
+    }
+    if (this.colidiu) f -= P.bater;
+    if (cobertura < 0.05) f -= P.nemTentou;
+    f -= P.raspar * (this.perto / p);
+    // e cada vez que a segurança lhe teve de tirar o volante
+    f -= P.sequestro * (this.sequestros / p);
+    f -= P.esses * (this.jerk / p);
+    /* O `jerk`, acima, mede quanto a viragem MUDA — um robô que ande sempre
+       com meio volante para o mesmo lado tem jerk zero e não paga nada. Isto
+       mede a viragem EM SI, e paga-se por andar de volante torto sem
+       necessidade. É um empurrão pequeno de propósito (curvar é preciso, as
+       casas têm cantos): medido, muda a viragem média de 0,18 para 0,17.
+       Quem faz mesmo o caminho ser curto é o prémio de chegar depressa. */
+    f -= P.volante * (this.somaViragem / p);
+    /* ⚠️ E O CASTIGO QUE FALTAVA: ANDAR A MAIS.
+       Um robô que faça a casa toda numa espiral larga tem jerk zero (a
+       viragem nunca MUDA) e ainda vai fazendo progresso, por isso nada o
+       castigava — e ao fim de milhares de gerações a espécie inteira andava
+       aos círculos até chegar. Isto compara os centímetros que ele andou com
+       os centímetros que a rota tem: ir a direito não custa nada, dar duas
+       voltas a mais custa o dobro. É a medida direta de «foi pelo caminho
+       curto?», e é muito melhor do que castigar o volante — o volante é
+       preciso, as casas têm cantos. */
+    f -= P.desvio * limitar(this.andado / m.comprimentoRota - 1, 0, 4);
+    f -= P.re * (this.re / p);
+    f -= P.girar * (this.girar / p);
+    f += P.andar * (this.somaVel / p);
+    return f;
+  }
+}
+
+/* ==========================================================================
+   7. A EVOLUÇÃO
+
+   Não há aqui nenhum treino no sentido do «gradiente». Ninguém diz a nenhuma
+   rede o que devia ter feito — nem se sabe. Faz-se o que a natureza faz:
+   deixa-se correr, ficam os que se saíram melhor, e os filhos são cópias com
+   defeitos. Repetido umas centenas de vezes, dá um condutor.
+   ========================================================================== */
+
+/* ==========================================================================
+   OS PESOS DO FITNESS — todos num sítio, porque se medem uns contra os outros
+
+   Mexer num destes números muda o comportamento do robô mais do que qualquer
+   linha de código deste ficheiro. A ordem que eles têm de manter está no
+   comentário do fitness().
+   ========================================================================== */
+const PESOS = {
+  progresso: 200,   // por cada bocado do caminho coberto
+  chegar:    300,   // por chegar
+  depressa:  250,   // ... e por chegar perto do tempo ideal
+  bater:     150,
+  nemTentou:  80,   // ficou-se pelos primeiros 5% do caminho
+  raspar:     25,   // tempo passado a menos de 20 cm de alguma coisa
+  sequestro:  70,   // tempo em que a segurança lhe teve de tirar o volante
+  esses:      40,   // quanto a viragem MUDA
+  volante:    20,   // quanto a viragem É — um empurrão para a linha reta
+  desvio:     90,   // por cada vez que andou o comprimento da rota a mais
+  re:         30,
+  girar:      60,   // rodar no sítio sem avançar
+  andar:      25,   // prémio por não ser lesma
+};
+
+const GA = {
+  cerebro: null, populacao: [], geracao: 0, historico: [],
+  melhor: null, melhorFitness: -Infinity,
+
+  iniciar(nRaios, n, sem, nMem) {
+    this.cerebro = fazerCerebro(nRaios, nMem || 0);
+    const rnd = semente(sem || 1234);
+    this.populacao = [];
+    for (let i = 0; i < n; i++) this.populacao.push(genomaAoAcaso(this.cerebro, rnd));
+    this.geracao = 0; this.historico = []; this.melhor = null; this.melhorFitness = -Infinity;
+  },
+
+  redimensionar(n) {
+    const rnd = semente(Date.now() & 0xffff);
+    while (this.populacao.length > n) this.populacao.pop();
+    while (this.populacao.length < n) {
+      const base = this.melhor || genomaAoAcaso(this.cerebro, rnd);
+      const filho = Float64Array.from(base);
+      this.mutar(filho, 0.3, 0.3, rnd);
+      this.populacao.push(filho);
+    }
+  },
+
+  /* ⚠️ SÓ OS MELHORES TÊM FILHOS — e agora está à vista, não escondido.
+
+     Antes era um torneio: tiravam-se quatro ao acaso e ganhava o melhor dos
+     quatro. Funciona, mas é indireto: um robô fraco ainda tem filhos se
+     calhar num grupo de quatro fracos, e ao fim de milhares de gerações isso
+     continua a arrastar a espécie para trás.
+     Agora é o que se espera de uma seleção natural apertada: ordena-se a
+     turma, ficam os `elite` primeiros por cento, e todos os filhos saem
+     desses. O slider mostra a percentagem. */
+  paiEntreOsMelhores(ordem, quantos, rnd) {
+    return this.populacao[ordem[(rnd() * quantos) | 0]];
+  },
+
+  mutar(g, taxa, forca, rnd) {
+    for (let i = 0; i < g.length; i++) {
+      if (rnd() < taxa) {
+        // Box-Muller: mexidelas pequenas quase sempre, grandes de vez em quando
+        const u = Math.max(1e-9, rnd()), v = rnd();
+        g[i] += Math.sqrt(-2*Math.log(u)) * Math.cos(2*Math.PI*v) * forca;
+        g[i] = limitar(g[i], -8, 8);
+      }
+    }
+  },
+
+  /* Quem é a campeã: NÃO é «a melhor pontuação de sempre». Como cada geração
+     apanha missões novas, a melhor pontuação de sempre é quase sempre a de
+     quem calhou numa missão fácil. Por isso a campeã defende o título: corre
+     outra vez, nas MESMAS missões da geração de agora, contra a melhor desta
+     geração. Só perde o lugar quem for batido em igualdade de circunstâncias. */
+  /* ⚠️ A CURIOSIDADE — o remédio para um fitness que MENTE.
+
+     Há problemas em que ir na direção certa afasta da solução, e este é um
+     deles: para sair do escritório é preciso primeiro AFASTAR-SE da sala, e
+     quem se afasta pontua pior e não tem filhos. A espécie inteira converge
+     para a parede porque a parede é, de facto, o melhor sítio à luz da
+     pontuação. Não há castigo que resolva isto — o castigo muda a paisagem,
+     não o facto de o caminho certo passar por um vale.
+
+     A saída conhecida (Lehman & Stanley, 2008, e o exemplo do artigo é
+     precisamente um labirinto destes) é deixar de perguntar só «foste bem?» e
+     passar a perguntar também «foste a um sítio onde mais ninguém foi?».
+     Quem tenta a porta pontua mal mas é RARO, e a raridade compra-lhe filhos
+     — na geração seguinte já há quem esteja do outro lado, e a partir daí a
+     pontuação normal volta a saber orientar-se.
+
+     Aqui a «coisa que se compara» é onde cada robô ficou no fim de cada
+     missão; a novidade é a distância média aos quinze vizinhos mais parecidos
+     da turma. Mistura-se por POSIÇÃO NA TABELA e não por pontos, senão a
+     escala de uma esmaga a outra. E os intocados do topo continuam a ser
+     escolhidos pela pontuação a sério: a curiosidade escolhe quem tem filhos,
+     nunca deita fora a campeã. */
+  novidade(comportamentos) {
+    const n = comportamentos.length;
+    const nov = new Float64Array(n);
+    if (!n || !comportamentos[0] || !comportamentos[0].length) return nov;
+    const k = Math.max(1, Math.min(15, n - 1));
+    const larg = comportamentos[0].length;
+    const ds = new Float64Array(n);
+    for (let i = 0; i < n; i++) {
+      const a = comportamentos[i];
+      for (let j = 0; j < n; j++) {
+        let s = 0;
+        const b = comportamentos[j];
+        for (let q = 0; q < larg; q++) { const d = a[q] - b[q]; s += d*d; }
+        ds[j] = Math.sqrt(s);
+      }
+      const ord = Array.from(ds).sort((x, y) => x - y);
+      let soma = 0;
+      for (let q = 1; q <= k; q++) soma += ord[q];   // o 0 é ele próprio
+      nov[i] = soma / k;
+    }
+    return nov;
+  },
+
+  /* Posição na tabela, de 1 (melhor) a 0 (pior). Empates ficam pela ordem de
+     chegada — não vale a pena mais do que isto. */
+  posicoes(v) {
+    const n = v.length;
+    const ordem = v.map((_, i) => i).sort((a, b) => v[b] - v[a]);
+    const r = new Float64Array(n);
+    ordem.forEach((i, pos) => { r[i] = n > 1 ? 1 - pos/(n-1) : 1; });
+    return r;
+  },
+
+  proximaGeracao(fit, taxa, forca, fracaoElite, comportamentos, curiosidade) {
+    const rnd = semente((this.geracao + 1) * 7919 + 13);
+    const n = this.populacao.length;
+    const ordem = fit.map((f, i) => i).sort((a, b) => fit[b] - fit[a]);
+    /* Quem PASSA INTACTO sai sempre da pontuação a sério. Quem tem FILHOS
+       pode sair da mistura com a curiosidade. */
+    let ordemPais = ordem;
+    this.novidadeMedia = 0;
+    if (curiosidade > 0 && comportamentos && comportamentos.length === n) {
+      const nov = this.novidade(comportamentos);
+      const pF = this.posicoes(fit), pN = this.posicoes(Array.from(nov));
+      const misto = new Array(n);
+      for (let i = 0; i < n; i++) misto[i] = (1-curiosidade)*pF[i] + curiosidade*pN[i];
+      ordemPais = misto.map((_, i) => i).sort((a, b) => misto[b] - misto[a]);
+      let s = 0; for (let i = 0; i < n; i++) s += nov[i];
+      this.novidadeMedia = s / n;
+    }
+    const podemTerFilhos = Math.max(2, Math.round(n * (fracaoElite || 0.3)));
+    const intocados = Math.max(2, Math.round(n * 0.03));
+    const nova = [];
+    // os melhores passam INTACTOS: sem eles, uma geração inteira de mutações
+    // más deitava fora o que já se tinha aprendido
+    for (let e = 0; e < intocados; e++) nova.push(Float64Array.from(this.populacao[ordem[e]]));
+    while (nova.length < n) {
+      const a = this.paiEntreOsMelhores(ordemPais, podemTerFilhos, rnd);
+      const filho = Float64Array.from(a);
+      if (rnd() < 0.7) {
+        const b = this.paiEntreOsMelhores(ordemPais, podemTerFilhos, rnd);
+        for (let i = 0; i < filho.length; i++) if (rnd() < 0.5) filho[i] = b[i];
+      }
+      this.mutar(filho, taxa, forca, rnd);
+      nova.push(filho);
+    }
+    this.populacao = nova;
+    this.geracao++;
+  },
+};
+
+/* ==========================================================================
+   8. DESENHAR
+   ========================================================================== */
+
+const Vista = {
+  cv: null, ctx: null, escala: 1, ox: 0, oy: 0, modoGrelha: false,
+  fundo: document.createElement("canvas"), sujo: true,
+
+  arrancar() {
+    this.cv = document.getElementById("palco");
+    this.ctx = this.cv.getContext("2d");
+    new ResizeObserver(() => this.ajustar()).observe(this.cv.parentElement);
+    this.ajustar();
+  },
+  ajustar() {
+    const r = this.cv.parentElement.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    this.cv.width = Math.max(1, Math.round(r.width * dpr));
+    this.cv.height = Math.max(1, Math.round(r.height * dpr));
+    this.larg = r.width; this.alt = r.height;
+    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const marg = 12;
+    const e = Math.min((r.width - marg*2) / Casa.larguraCm(), (r.height - marg*2) / Casa.alturaCm());
+    this.escala = e;
+    this.ox = (r.width - Casa.larguraCm()*e) / 2;
+    this.oy = (r.height - Casa.alturaCm()*e) / 2;
+    this.sujo = true;
+  },
+  px(x) { return this.ox + x * this.escala; },
+  py(y) { return this.oy + y * this.escala; },
+  cm(px, py) { return { x: (px - this.ox) / this.escala, y: (py - this.oy) / this.escala }; },
+
+  /* O fundo (paredes, chão das divisões) muda muito pouco — vai para um
+     canvas à parte e só se redesenha quando a planta muda. */
+  redesenharFundo() {
+    const e = this.escala, f = this.fundo;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    f.width = Math.max(1, Math.round(Casa.larguraCm()*e*dpr));
+    f.height = Math.max(1, Math.round(Casa.alturaCm()*e*dpr));
+    const c = f.getContext("2d");
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const L = Casa.larguraCm()*e, A = Casa.alturaCm()*e;
+    c.fillStyle = "#12181F"; c.fillRect(0, 0, L, A);
+    const lado = Casa.cm * e;
+    /* Um preenchimento POR DIVISÃO, não por quadrado. Os quadrados
+       sobrepõem-se meio pixel (senão via-se a costura entre eles), e como a
+       cor é translúcida, pintá-los um a um pintava a sobreposição duas vezes
+       — o que dava à sala uma grelha que ninguém desenhou. Um caminho só,
+       preenchido de uma vez, compõe a transparência uma vez. */
+    Casa.divisoes.forEach((d, idx) => {
+      c.fillStyle = d.cor + "22";
+      c.beginPath();
+      for (let y = 0; y < Casa.rows; y++)
+        for (let x = 0; x < Casa.cols; x++)
+          if (Casa.zona[Casa.i(x, y)] === idx) c.rect(x*lado, y*lado, lado+0.5, lado+0.5);
+      c.fill();
+    });
+    if (this.modoGrelha) {
+      c.strokeStyle = "rgba(143,160,178,.12)"; c.lineWidth = 1;
+      c.beginPath();
+      for (let x = 0; x <= Casa.cols; x++) { c.moveTo(x*lado, 0); c.lineTo(x*lado, A); }
+      for (let y = 0; y <= Casa.rows; y++) { c.moveTo(0, y*lado); c.lineTo(L, y*lado); }
+      c.stroke();
+    }
+    c.fillStyle = "#3B4756";
+    for (let y = 0; y < Casa.rows; y++) for (let x = 0; x < Casa.cols; x++)
+      if (Casa.parede[Casa.i(x,y)]) c.fillRect(x*lado, y*lado, lado+0.5, lado+0.5);
+    // nome de cada divisão, no meio dela
+    c.font = "600 11px 'IBM Plex Sans', sans-serif";
+    c.textAlign = "center"; c.textBaseline = "middle";
+    Casa.divisoes.forEach((d, idx) => {
+      const cs = Casa.celulasDe(idx);
+      if (!cs.length) return;
+      let sx = 0, sy = 0;
+      for (const i of cs) { sx += (i % Casa.cols) + 0.5; sy += ((i/Casa.cols)|0) + 0.5; }
+      c.fillStyle = d.cor;
+      c.fillText(d.nome.toUpperCase(), (sx/cs.length)*lado, (sy/cs.length)*lado);
+    });
+    this.sujo = false;
+  },
+
+  limpar() {
+    const c = this.ctx;
+    c.fillStyle = "#161B22";
+    c.fillRect(0, 0, this.larg, this.alt);
+    if (this.sujo) this.redesenharFundo();
+    c.drawImage(this.fundo, this.ox, this.oy, Casa.larguraCm()*this.escala, Casa.alturaCm()*this.escala);
+  },
+
+  marcarPartida() {
+    if (!Casa.partida) return;
+    const c = this.ctx, p = Casa.centro(Casa.partida.cx, Casa.partida.cy);
+    c.strokeStyle = "#36E0FF"; c.lineWidth = 2;
+    c.beginPath(); c.arc(this.px(p.x), this.py(p.y), Math.max(5, FISICA.raio_cm*this.escala), 0, 7); c.stroke();
+    c.beginPath(); c.arc(this.px(p.x), this.py(p.y), 2, 0, 7); c.fillStyle = "#36E0FF"; c.fill();
+  },
+
+  pontoDestino(m) {
+    if (!m.pontoDestino) return;
+    const c = this.ctx, px = this.px(m.pontoDestino.x), py = this.py(m.pontoDestino.y);
+    const r = FISICA.raio_chegada_cm * this.escala;
+    c.strokeStyle = "#4ADE80"; c.lineWidth = 2;
+    c.beginPath(); c.arc(px, py, r, 0, 7); c.stroke();
+    c.beginPath(); c.moveTo(px-5, py); c.lineTo(px+5, py);
+    c.moveTo(px, py-5); c.lineTo(px, py+5); c.stroke();
+  },
+
+  destino(idx) {
+    const c = this.ctx, lado = Casa.cm*this.escala;
+    c.save();
+    c.globalAlpha = 0.35 + 0.15*Math.sin(Date.now()/380);
+    c.fillStyle = "#4ADE80";
+    for (let i = 0; i < Casa.zona.length; i++)
+      if (Casa.zona[i] === idx && !Casa.parede[i])
+        c.fillRect(this.px((i % Casa.cols)*Casa.cm), this.py(((i/Casa.cols)|0)*Casa.cm), lado+0.5, lado+0.5);
+    c.restore();
+  },
+
+  obstaculos(m) {
+    const c = this.ctx;
+    for (const o of m.obstaculos) {
+      const px = this.px(o.x), py = this.py(o.y), r = Math.max(3, o.r*this.escala);
+      c.beginPath(); c.arc(px, py, r, 0, 7);
+      c.fillStyle = o.tipo === "saco" ? "rgba(255,162,61,.25)" : "rgba(255,162,61,.4)";
+      c.fill();
+      c.strokeStyle = "#FFA23D"; c.lineWidth = o.tipo === "saco" ? 1 : 1.6; c.stroke();
+      if (o.tipo !== "saco") {
+        c.beginPath(); c.moveTo(px, py);
+        c.lineTo(px + Math.cos(o.ang)*r*1.6, py + Math.sin(o.ang)*r*1.6);
+        c.stroke();
+      }
+    }
+  },
+
+  /* As células onde o mapa dela não é a casa. É o que a faz falhar, e é
+     invisível se não se desenhar. */
+  errosDoMapa(m) {
+    if (!m.mapa || m.mapa.paredes === Casa.parede) return;
+    const c = this.ctx, lado = Casa.cm*this.escala;
+    for (let i = 0; i < Casa.parede.length; i++) {
+      const dela = m.mapa.paredes[i], real = Casa.parede[i];
+      if (dela === real) continue;
+      const px = this.px((i % Casa.cols)*Casa.cm), py = this.py(((i/Casa.cols)|0)*Casa.cm);
+      if (real && !dela) {           // parede que ela não sabe que existe
+        c.strokeStyle = "rgba(255,59,92,.5)"; c.lineWidth = 1;
+        c.beginPath(); c.moveTo(px, py); c.lineTo(px+lado, py+lado);
+        c.moveTo(px+lado, py); c.lineTo(px, py+lado); c.stroke();
+      } else {                        // parede que ela julga que existe
+        c.fillStyle = "rgba(143,160,178,.30)";
+        c.fillRect(px, py, lado+0.5, lado+0.5);
+      }
+    }
+  },
+
+  rota(m, x, y) {
+    const pts = m.mapa ? m.mapa.rota(m.campoMapa, x, y) : Casa.rota(m.campo, x, y);
+    if (!pts || pts.length < 2) return;
+    const c = this.ctx;
+    c.strokeStyle = "rgba(30,127,212,.85)"; c.lineWidth = 2; c.setLineDash([6, 5]);
+    c.beginPath(); c.moveTo(this.px(pts[0].x), this.py(pts[0].y));
+    for (let i = 1; i < pts.length; i++) c.lineTo(this.px(pts[i].x), this.py(pts[i].y));
+    c.stroke(); c.setLineDash([]);
+  },
+
+  robo(r, cor, detalhe) {
+    const c = this.ctx, px = this.px(r.x), py = this.py(r.y);
+    const raio = Math.max(2.5, FISICA.raio_cm*this.escala);
+    if (detalhe) {
+      c.lineWidth = 1;
+      for (let i = 0; i < r.d.length; i++) {
+        const dist = r.d[i]*FISICA.alcance_cm;
+        const a = r.th + r.angs[i];
+        c.strokeStyle = r.d[i] < 0.999 ? "rgba(255,59,92,.55)" : "rgba(54,224,255,.16)";
+        c.beginPath(); c.moveTo(px, py);
+        c.lineTo(this.px(r.x + Math.cos(a)*dist), this.py(r.y + Math.sin(a)*dist));
+        c.stroke();
+      }
+      if (r.rasto.length > 3) {
+        c.strokeStyle = "rgba(54,224,255,.5)"; c.lineWidth = 1.5;
+        c.beginPath(); c.moveTo(this.px(r.rasto[0]), this.py(r.rasto[1]));
+        for (let i = 2; i < r.rasto.length; i += 2) c.lineTo(this.px(r.rasto[i]), this.py(r.rasto[i+1]));
+        c.stroke();
+      }
+      if (r.alvo) {
+        c.fillStyle = "rgba(30,127,212,.9)";
+        c.beginPath(); c.arc(this.px(r.alvo.x), this.py(r.alvo.y), 3, 0, 7); c.fill();
+      }
+    }
+    if (detalhe && r.cx !== undefined && Math.hypot(r.cx-r.x, r.cy-r.y) > 6) {
+      // o fantasma: onde ela julga estar. Quanto mais longe do corpo, pior.
+      const gx = this.px(r.cx), gy = this.py(r.cy);
+      c.strokeStyle = "rgba(143,160,178,.75)"; c.lineWidth = 1;
+      c.setLineDash([3, 3]);
+      c.beginPath(); c.arc(gx, gy, raio, 0, 7); c.stroke();
+      c.beginPath(); c.moveTo(px, py); c.lineTo(gx, gy); c.stroke();
+      c.setLineDash([]);
+    }
+    c.beginPath(); c.arc(px, py, raio, 0, 7);
+    c.fillStyle = cor; c.fill();
+    if (raio > 4) {
+      c.strokeStyle = "rgba(13,17,23,.9)"; c.lineWidth = 1.4;
+      c.beginPath(); c.moveTo(px, py);
+      c.lineTo(px + Math.cos(r.th)*raio, py + Math.sin(r.th)*raio);
+      c.stroke();
+    }
+  },
+
+  multidao(robos) {
+    const c = this.ctx;
+    const raio = Math.max(2, FISICA.raio_cm*this.escala*0.55);
+    c.fillStyle = "rgba(143,160,178,.18)";
+    c.beginPath();
+    for (const r of robos) if (!r.vivo && !r.chegou) { c.moveTo(this.px(r.x)+raio, this.py(r.y)); c.arc(this.px(r.x), this.py(r.y), raio, 0, 7); }
+    c.fill();
+    c.fillStyle = "rgba(54,224,255,.34)";
+    c.beginPath();
+    for (const r of robos) if (r.vivo) { c.moveTo(this.px(r.x)+raio, this.py(r.y)); c.arc(this.px(r.x), this.py(r.y), raio, 0, 7); }
+    c.fill();
+    c.fillStyle = "rgba(74,222,128,.85)";
+    c.beginPath();
+    for (const r of robos) if (r.chegou) { c.moveTo(this.px(r.x)+raio, this.py(r.y)); c.arc(this.px(r.x), this.py(r.y), raio, 0, 7); }
+    c.fill();
+  },
+};
+
+/* ==========================================================================
+   9. O EDITOR DA PLANTA
+   ========================================================================== */
+
+const Editor = {
+  ferramenta: "parede", pincel: 1, divisaoAtiva: 0, apintar: 0,
+
+  arrancar() {
+    const cv = Vista.cv;
+    cv.addEventListener("pointerdown", (e) => {
+      if (UI.aba !== "planta") return;
+      cv.setPointerCapture(e.pointerId);
+      this.apintar = e.button === 2 || e.ctrlKey ? 2 : 1;
+      this.pintar(e);
+      e.preventDefault();
+    });
+    cv.addEventListener("pointermove", (e) => { if (this.apintar) this.pintar(e); });
+    cv.addEventListener("pointerup", () => { this.apintar = 0; UI.metricasCasa(); guardarLocal(); });
+    cv.addEventListener("pointerleave", () => { this.apintar = 0; });
+    cv.addEventListener("contextmenu", (e) => { if (UI.aba === "planta") e.preventDefault(); });
+  },
+
+  celulaDe(e) {
+    const r = Vista.cv.getBoundingClientRect();
+    const p = Vista.cm(e.clientX - r.left, e.clientY - r.top);
+    return { x: Math.floor(p.x / Casa.cm), y: Math.floor(p.y / Casa.cm) };
+  },
+
+  pintar(e) {
+    const { x, y } = this.celulaDe(e);
+    if (!Casa.dentro(x, y)) return;
+    const apagar = this.apintar === 2;
+    if (this.ferramenta === "partida") {
+      if (!Casa.ehParede(x, y)) Casa.partida = { cx: x, cy: y };
+      Vista.sujo = true; return;
+    }
+    const p = this.pincel - 1;
+    for (let dy = -p; dy <= p; dy++) for (let dx = -p; dx <= p; dx++) {
+      const nx = x+dx, ny = y+dy;
+      if (!Casa.dentro(nx, ny)) continue;
+      const i = Casa.i(nx, ny);
+      if (this.ferramenta === "parede") {
+        Casa.parede[i] = apagar ? 0 : 1;
+        if (!apagar) Casa.zona[i] = -1;
+      } else if (this.ferramenta === "apagar") {
+        Casa.parede[i] = 0; Casa.zona[i] = -1;
+      } else if (this.ferramenta === "divisao") {
+        if (apagar) Casa.zona[i] = -1;
+        else if (!Casa.parede[i]) Casa.zona[i] = this.divisaoAtiva;
+      }
+    }
+    Casa.invalidar(); Vista.sujo = true;
+  },
+};
+
+/* ==========================================================================
+   10. O MOTOR DO TREINO
+
+   Uma geração faz-se em duas partes: a primeira missão corre à vista (é o
+   espetáculo), e as restantes correm sem desenhar nada, aos bocados, para
+   não travar a página. O fitness de cada robô é a média das missões todas —
+   é isso que impede um cérebro de ser campeão só porque calhou.
+   ========================================================================== */
+
+const Treino = {
+  correndo: false, turbo: false, passosPorFrame: 3, nivel: 260,
+  recordes: new Map(),
+  fase: "parado", mundos: [], robos: [], acum: null,
+  cursorK: 1, cursorI: 0, cfg: null, aviso: "",
+  ultima: { melhor: 0, media: 0, chegadas: 0, campea: 0 },
+
+  lerConfig() {
+    return {
+      alcance: this.nivel,
+      modo: $("modo").value, origem: +$("origem").value, destino: +$("destino").value,
+      cenarios: +$("cenarios").value, sacos: +$("sacos").value, gatos: +$("gatos").value,
+      pessoas: +$("pessoas").value, raios: +$("raios").value,
+      deriva: +$("deriva").value / 100,
+      baralhar: $("baralhar").checked,
+      elite: +$("elite").value / 100,
+      memoria: +$("memoria").value,
+      curiosidade: +$("curiosidade").value / 100,
+      populacao: +$("populacao").value,
+      mutacao: +$("mutacao").value/100, forca: +$("forca").value/100,
+    };
+  },
+
+  podeComecar() {
+    const c = this.lerConfig();
+    const comChao = Casa.divisoes.map((_, i) => i).filter((i) => Casa.celulasDe(i).length);
+    if (comChao.length < 2) return "Faz pelo menos duas divisões com chão pintado.";
+    if (c.origem >= 0 && !Casa.celulasDe(c.origem).length) return "A divisão de partida não tem chão pintado.";
+    if (c.destino >= 0 && !Casa.celulasDe(c.destino).length) return "A divisão de destino não tem chão pintado.";
+    if (c.origem >= 0 && c.origem === c.destino) return "A origem e o destino são a mesma divisão.";
+    const comp = Casa.componentes();
+    if (c.origem >= 0 && c.destino >= 0) {
+      if (comp[c.origem] !== comp[c.destino]) return "Não há caminho entre as duas: falta uma porta.";
+    } else {
+      const ilhado = comChao.find((i) => comp[i] !== comp[comChao[0]]);
+      if (ilhado !== undefined) return "A divisão «" + Casa.divisoes[ilhado].nome + "» está fechada — falta-lhe uma porta.";
+    }
+    if (c.origem >= 0 && !Casa.pontoEm(c.origem, semente(7))) return "Não cabe um robô de 24 cm dentro da divisão de partida.";
+    return null;
+  },
+
+  comecar() {
+    const erro = this.podeComecar();
+    if (erro) { this.aviso = erro; UI.pintarBarras(); return; }
+    this.aviso = "";
+    this.cfg = this.lerConfig();
+    if (!GA.cerebro || GA.cerebro.nRaios !== this.cfg.raios
+        || GA.cerebro.nMem !== this.cfg.memoria) {
+      GA.iniciar(this.cfg.raios, this.cfg.populacao, 20260831, this.cfg.memoria);
+    } else if (GA.populacao.length !== this.cfg.populacao) {
+      GA.redimensionar(this.cfg.populacao);
+    }
+    this.correndo = true;
+    this.prepararGeracao();
+  },
+
+  parar() { this.correndo = false; this.fase = "pausa"; },
+
+  reiniciar() {
+    this.nivel = 260;
+    this.ultimoAjuste = 0;
+    this.ultimaDescida = undefined;
+    this.recordes = new Map();
+    this.cfg = this.lerConfig();
+    GA.iniciar(this.cfg.raios, this.cfg.populacao, (Date.now() & 0xffff), this.cfg.memoria);
+    MapaAprendido.esquecer();
+    this.fase = "parado"; this.correndo = false; this.robos = []; this.mundos = [];
+    UI.pintarTreino();
+  },
+
+  /* Uma impressão digital da tarefa. Se ela mudar, o nível que se tinha
+     alcançado deixa de querer dizer o que queria. */
+  assinaturaDaTarefa(c) {
+    return [c.origem, c.destino, c.modo, c.raios, c.memoria,
+            Casa.cols, Casa.rows, Casa.divisoes.length].join("|");
+  },
+
+  prepararGeracao() {
+    const c = this.cfg;
+    /* ⚠️ TROCAR O DESTINO TEM DE REPOR O NÍVEL.
+       O nível é «a que distância do destino é que elas partem», e está
+       calibrado para AQUELE percurso. Ao mudar de destino a meio, o nível
+       ficava lá em cima e a geração seguinte era largada a meio caminho do
+       novo percurso — que é o que o Bruno viu: «não começa da origem, parece
+       começar do corredor». E com uma dificuldade que ninguém tinha ganho.
+       Agora a tarefa nova começa do princípio. */
+    const assinatura = this.assinaturaDaTarefa(c);
+    if (this.assinatura && this.assinatura !== assinatura) {
+      this.nivel = 260;
+      this.ultimoAjuste = GA.geracao;
+      this.aviso = "Missão nova — o nível recomeçou do princípio.";
+    }
+    this.assinatura = assinatura;
+    MapaAprendido.novaGeracao();     // o que se aprendeu entra agora na rota
+    /* ⚠️ AS MISSÕES SÃO AS MESMAS EM TODAS AS GERAÇÕES, e é esta linha que
+       decide se o gráfico se pode ler ou não.
+
+       Antes: `GA.geracao * 977 + 41` — cada geração apanhava obstáculos
+       novos, num sítio novo. Isso mede DUAS coisas ao mesmo tempo (o cérebro
+       e a sorte da missão) e a percentagem saltava 40 pontos de uma geração
+       para a outra ao fim de três mil. Não era ruído de medição: era a prova
+       a mudar de exame para exame.
+
+       Agora a prova é fixa. A geração 2000 é comparada com a 1999 no MESMO
+       percurso, com os obstáculos nos MESMOS sítios — e aí a curva sobe e
+       fica em cima, como no Code Bullet. O currículo continua a mexer o
+       ponto de partida, mas isso é uma rampa, não um dado.
+
+       O preço: um cérebro que decore ESTAS missões. É por isso que há mais
+       do que uma (o slider «missões por geração») e que o botão «baralhar»
+       existe — para ver se o que aprendeu passa noutro percurso. */
+    const base = this.cfg.baralhar ? GA.geracao * 977 + 41 : 41;
+    this.mundos = [];
+    for (let k = 0; k < c.cenarios; k++) {
+      const m = new Mundo(c, base + k*131);
+      /* ⚠️ A CORRIDA: o tempo desta missão é o RECORDE mais 60%.
+         É o que se vê nos vídeos do Code Bullet e o Bruno tem razão — quando
+         o primeiro chega, aquele passa a ser a referência e os outros deixam
+         de ter a tarde toda. À medida que vão ficando bons, o limite aperta
+         sozinho, e a pressão deixa de ser «chega» e passa a ser «chega
+         depressa». Sem isto, dar uma volta grande custa o mesmo que ir a
+         direito, desde que se chegue antes do tempo máximo. */
+      /* ⚠️ O RECORDE ENTRA NA PONTUAÇÃO, NÃO NO CRONÓMETRO.
+         Tentou-se o que o Bruno viu no Code Bullet — quando o primeiro chega,
+         aquele tempo passa a ser o limite dos outros. Mediu-se e não serve
+         aqui: bastava uma passagem com sorte para o limite fechar numa marca
+         que mais ninguém repetia, e a missão acabava SEMPRE por tempo, a
+         60 cm da porta, para sempre. Pôr o limite a afrouxar sozinho resolveu
+         isso mas criou outra coisa pior: três sistemas a adaptar-se ao mesmo
+         tempo (o nível, o cronómetro e o mapa) começaram a oscilar uns contra
+         os outros, e a variação voltou aos 20 pontos.
+         A pressão para ir depressa fica onde não faz mal a ninguém: no
+         prémio de chegar perto do tempo ideal, e no castigo de andar mais
+         metros do que a rota tem. Ambos empurram para o caminho curto sem
+         nunca fecharem a porta a quem ainda está a aprender. */
+      m.chave = base + k*131;
+      this.mundos.push(m);
+    }
+    this.acum = new Float64Array(GA.populacao.length);
+    /* ONDE CADA UM FICOU, em cada missão — dois números por missão. É isto
+       que a curiosidade compara: dois robôs que acabem no mesmo canto são «a
+       mesma ideia», por muito diferentes que sejam os pesos lá dentro. */
+    this.comp = GA.populacao.map(() => new Float64Array(2 * c.cenarios));
+    /* Puro = sem rota nenhuma. Descoberta e híbrido = com rota; o que muda
+       entre os dois é DE ONDE vem o mapa que faz a rota (do que elas
+       desenharam, ou da planta mais o que elas desenharam). */
+    const comMapa = c.modo !== "puro";
+    /* Sem planta, o que não for medido fica buraco: mede-se a cada passo e com
+       metade da turma, em vez de a cada dois passos e um oitavo. */
+    MapaAprendido.RITMO = c.modo === "descoberta" ? 1 : 2;
+    MapaAprendido.FATIA = c.modo === "descoberta" ? 2 : 8;
+    /* Cada robô leva o SEU defeito de rodas, o mesmo em todas as missões da
+       geração: senão o fitness estava a medir a sorte de calhar com rodas
+       boas, e não o cérebro. */
+    const rndVies = semente(GA.geracao * 31 + 7);
+    this.vieses = GA.populacao.map(() => (rndVies()*2 - 1) * c.deriva * 0.04);
+    this.rnds = GA.populacao.map((_, i) => semente(GA.geracao * 7919 + i * 31 + 5));
+    this.robos = GA.populacao.map((g, i) =>
+      new Robo(g, GA.cerebro, this.mundos[0], comMapa, this.vieses[i], this.rnds[i],
+               i % MapaAprendido.FATIA === 0));
+    this.fase = "vivo";
+    this.cursorK = 1; this.cursorI = 0;
+    this.chegadasContadas = 0; this.missoesContadas = 0;
+    this.chegouNaMissao = this.mundos.map(() => false);
+  },
+
+  /* Um episódio inteiro, sem desenhar — usado nas missões 2, 3, ... */
+  /* ⚠️ E ISTO ESTAVA A DEITAR FORA SETE OITAVOS DO QUE ELAS VIAM.
+     Quem tomava notas eram só os robôs da missão que se vê no ecrã (a 0); as
+     outras missões corriam por aqui, sem cartógrafo nenhum. Com quatro
+     missões, três quartos do que a turma viu ia para o lixo — e o mapa ficava
+     preso em pouco mais de metade da casa, por mais gerações que passassem.
+     No modo híbrido isso quase não se nota (as paredes vêm da planta e só
+     falta a mobília); no modo descoberta é a diferença entre haver mapa e
+     não haver. */
+  avaliar(genes, mundo, vies, rnd, cartografa) {
+    mundo.reiniciar();
+    const r = new Robo(genes, GA.cerebro, mundo, this.cfg.modo !== "puro", vies || 0, rnd,
+                       cartografa);
+    let guarda = 0;
+    while (r.vivo && guarda++ <= mundo.maxPassos + 2) { mundo.passo(); r.passo(); }
+    return { f: r.fitness(), chegou: r.chegou, passos: r.passos, x: r.x, y: r.y };
+  },
+
+  tick(orcamentoMs) {
+    if (this.fase === "vivo") {
+      const t0 = performance.now();
+      const alvo = this.turbo ? 1e9 : this.passosPorFrame;
+      let n = 0;
+      while (n < alvo && performance.now() - t0 < orcamentoMs) {
+        let vivos = 0;
+        this.mundos[0].passo();
+        for (const r of this.robos) { r.passo(); if (r.vivo) vivos++; }
+        n++;
+        if (!vivos) break;
+      }
+      if (!this.robos.some((r) => r.vivo)) {
+        for (let i = 0; i < this.robos.length; i++) {
+          this.acum[i] += this.robos[i].fitness();
+          this.comp[i][0] = this.robos[i].x; this.comp[i][1] = this.robos[i].y;
+          if (this.robos[i].chegou) { this.chegadasContadas++; this.registarRecorde(this.mundos[0], this.robos[i].passos); }
+          this.missoesContadas++;
+        }
+        this.fase = this.cfg.cenarios > 1 ? "extra" : "fim";
+      }
+      return;
+    }
+    if (this.fase === "extra") {
+      const t0 = performance.now();
+      while (performance.now() - t0 < orcamentoMs) {
+        if (this.cursorI >= GA.populacao.length) { this.cursorI = 0; this.cursorK++; }
+        if (this.cursorK >= this.cfg.cenarios) { this.fase = "fim"; return; }
+        {
+          // ⚠️ contar as chegadas em TODAS as missões, não só na que se vê.
+          // Com uma missão só, a percentagem saltava de 0 para 80 e para 0
+          // outra vez — não porque o cérebro mudasse, mas porque a missão
+          // mudava. Três missões dão um número que já se pode ler.
+          const res = this.avaliar(GA.populacao[this.cursorI], this.mundos[this.cursorK],
+                                   this.vieses[this.cursorI], this.rnds[this.cursorI],
+                                   this.cursorI % MapaAprendido.FATIA === 0);
+          this.acum[this.cursorI] += res.f;
+          this.comp[this.cursorI][2*this.cursorK] = res.x;
+          this.comp[this.cursorI][2*this.cursorK+1] = res.y;
+          if (res.chegou) { this.chegadasContadas++; this.registarRecorde(this.mundos[this.cursorK], res.passos); }
+          this.missoesContadas++;
+        }
+        this.cursorI++;
+      }
+      return;
+    }
+    if (this.fase === "fim") {
+      const fit = Array.from(this.acum, (v) => v / this.cfg.cenarios);
+      const melhor = Math.max(...fit);
+      // --- o desafio ao título, nas mesmas missões desta geração ---------
+      let iMelhor = 0;
+      for (let i = 1; i < fit.length; i++) if (fit[i] > fit[iMelhor]) iMelhor = i;
+      if (!GA.melhor) { GA.melhor = Float64Array.from(GA.populacao[iMelhor]); GA.melhorFitness = fit[iMelhor]; }
+      else {
+        // com as MESMAS rodas tortas do adversário — senão o campeão defende
+        // o título com rodas novas, o que não é um combate justo
+        let f = 0, chegouCampea = 0;
+        for (let k = 0; k < this.cfg.cenarios; k++) {
+          const res = this.avaliar(GA.melhor, this.mundos[k], this.vieses[iMelhor], this.rnds[iMelhor], false);
+          f += res.f;
+          if (res.chegou) chegouCampea++;
+        }
+        f /= this.cfg.cenarios;
+        this.ultima.campea = chegouCampea / this.cfg.cenarios;
+        if (fit[iMelhor] > f) { GA.melhor = Float64Array.from(GA.populacao[iMelhor]); GA.melhorFitness = fit[iMelhor]; }
+        else GA.melhorFitness = f;
+      }
+      const media = fit.reduce((a, b) => a + b, 0) / fit.length;
+      this.ultima.chegadas = this.missoesContadas ? this.chegadasContadas / this.missoesContadas : 0;
+      this.ultima.melhor = melhor; this.ultima.media = media;
+      GA.historico.push({ g: GA.geracao, melhor, media, chegadas: this.ultima.chegadas,
+                          campea: this.ultima.campea, nivel: this.nivel });
+      // --- o nível: quando a maioria já chega, as viagens ficam mais longas
+      /* ⚠️ A BARRA PARA SUBIR DE NÍVEL TEM DE SER ALCANÇÁVEL.
+         Estava nos 55% e o treino estacionava nos 40%: com três obstáculos
+         a aparecer em sítios diferentes a cada geração, 55% é um número que
+         raramente sai, e o nível ficava preso a meio caminho para sempre.
+         42% ao longo de seis gerações é uma turma que já sabe a matéria. */
+      /* ⚠️ QUEM DECIDE SE SE SOBE DE NÍVEL É A CAMPEÃ, NÃO A TURMA.
+         A média da turma traz lá dentro os filhos com defeitos, que existem
+         de propósito (é deles que sai a variedade) e que nunca vão chegar a
+         lado nenhum. Esperar que a MÉDIA passe dos 42% é esperar por uma
+         coisa que não vai acontecer — e o nível ficava preso a meio caminho.
+         A pergunta certa é «o melhor cérebro já sabe fazer isto?». */
+      const ultimas = GA.historico.slice(-6);
+      if (ultimas.length === 6) {
+        const m = ultimas.reduce((a, h) => a + (h.campea || 0), 0) / 6;
+        const tecto = Casa.maiorViagem() * 1.05;
+        /* ⚠️ O NÍVEL SOBE DEPRESSA E DESCE DEVAGAR — e TEM de poder descer.
+           Primeiro deixei-o descer a cada má geração: oscilava, e a
+           dificuldade oscilava com ele. Depois proibi-o de descer — e aí, se
+           uma boa maré o empurrasse para lá do que a campeã aguenta, ficava
+           preso lá em cima e a percentagem ia a zero PARA SEMPRE, sem volta
+           possível. Foi o que aconteceu ao Bruno: a linha verde caiu e nunca
+           mais levantou, com a laranja lá em cima.
+           A saída é a assimetria: sobe com seis gerações boas, mas só desce
+           depois de VINTE E CINCO seguidas em que a campeã não chega. Vinte
+           e cinco a zero não é uma má maré — é o nível estar errado. */
+        const agora = GA.geracao;
+        const podeMexer = !this.ultimoAjuste || agora - this.ultimoAjuste >= 8;
+        if (m > 0.6 && this.nivel < tecto && podeMexer) {
+          this.nivel = Math.min(tecto, this.nivel * 1.06);
+          this.ultimoAjuste = agora;
+        }
+        /* A descida tem o SEU próprio relógio. Partilhar o relógio com a
+           subida fazia a válvula de segurança ficar bloqueada pela última
+           promoção — e a válvula que não abre é pior do que não a ter. */
+        const longas = GA.historico.slice(-25);
+        if (longas.length === 25 && this.nivel > 260
+            && agora - (this.ultimaDescida === undefined ? -99 : this.ultimaDescida) >= 25) {
+          const mLonga = longas.reduce((a, h) => a + (h.campea || 0), 0) / 25;
+          if (mLonga < 0.08) {
+            this.nivel = Math.max(260, this.nivel * 0.85);
+            this.ultimaDescida = agora;
+            this.aviso = "A campeã não chegava há 25 gerações — encurtei as missões.";
+          }
+        }
+      }
+      GA.proximaGeracao(fit, this.cfg.mutacao, this.cfg.forca, this.cfg.elite,
+                        this.comp, this.cfg.curiosidade);
+      $("guardar-piloto").disabled = !GA.melhor;
+      $("aba-campeao").disabled = !GA.melhor;
+      guardarLocal();
+      if (this.correndo) { this.cfg = this.lerConfig(); this.prepararGeracao(); }
+      else this.fase = "pausa";
+    }
+  },
+
+  /* ⚠️ O APERTO TEM DE SABER AFROUXAR.
+     A primeira versão guardava o recorde e dava-lhe 60% de folga, e ficava
+     assim para sempre. Bastava uma passagem com sorte (o gato a passar no
+     momento certo) para o limite ficar apertado numa marca que mais ninguém
+     repetia — e a missão passava a acabar SEMPRE por tempo, a 60 cm da
+     porta, geração após geração. Um cronómetro que só sabe apertar acaba por
+     fechar a corrida a toda a gente.
+     Agora: quem chega aperta um bocadinho, quem não chega uma geração
+     inteira afrouxa. */
+  registarRecorde(mundo, passos) {
+    const chave = mundo.chave;
+    if (chave === undefined) return;
+    const r = this.recordes.get(chave);
+    if (!r) this.recordes.set(chave, { passos, folga: 1.8 });
+    else {
+      if (passos < r.passos) r.passos = passos;
+      r.folga = Math.max(1.5, r.folga - 0.05);
+    }
+    if (this.chegouNaMissao) this.chegouNaMissao[this.mundos.indexOf(mundo)] = true;
+  },
+
+  afrouxarQuemNinguemChegou() {
+    if (!this.chegouNaMissao) return;
+    this.mundos.forEach((m, k) => {
+      if (this.chegouNaMissao[k]) return;
+      const r = this.recordes.get(m.chave);
+      if (r) r.folga = Math.min(3.5, r.folga + 0.2);
+    });
+  },
+
+  /* A percentagem que chega, alisada com as últimas dez gerações.
+
+     Não é maquilhagem: é a única forma de ler o número. Cada geração apanha
+     obstáculos novos, um mapa mau novo e rodas tortas novas, por isso o valor
+     de UMA geração salta de 0 a 80% sem o cérebro ter mudado nada. O que se
+     quer ver é a tendência, e a tendência precisa de dez pontos. */
+  chegadasSuavizadas(campo) {
+    const h = GA.historico.slice(-10);
+    const c = campo || "chegadas";
+    return h.length ? h.reduce((a, x) => a + (x[c] || 0), 0) / h.length : 0;
+  },
+
+  /* A que distância, em média, os robôs vivos estão de onde julgam estar.
+     É o número que mostra o problema todo numa linha. */
+  erroMedioCrenca() {
+    let soma = 0, n = 0;
+    for (const r of this.robos) if (r.vivo) { soma += Math.hypot(r.cx - r.x, r.cy - r.y); n++; }
+    return n ? soma / n : 0;
+  },
+
+  desenhar() {
+    Vista.limpar();
+    if (!this.mundos.length) { Vista.marcarPartida(); return; }
+    const m = this.mundos[0];
+    Vista.destino(m.destino);
+    Vista.pontoDestino(m);
+    let lider = null;
+    for (const r of this.robos) if (!lider || r.melhorDist < lider.melhorDist) lider = r;
+    if (this.cfg.modo !== "puro" && lider) Vista.rota(m, lider.cx, lider.cy);
+    Vista.obstaculos(m);
+    Vista.multidao(this.robos);
+    if (lider) { Vista.robo(lider, "#36E0FF", true); UI.pintarConselho(lider, ""); }
+  },
+};
+
+/* ==========================================================================
+   11. A CAMPEÃ — um só cérebro, à velocidade a que ela anda mesmo
+   ========================================================================== */
+
+const Campea = {
+  mundo: null, robo: null, acumulado: 0, ultimo: 0, correndo: false,
+
+  novaViagem(baralhar) {
+    if (!GA.melhor) return;
+    const c = {
+      origem: +$("c-origem").value, destino: +$("c-destino").value,
+      sacos: +$("c-sacos").value, gatos: +$("c-gatos").value, pessoas: +$("c-pessoas").value,
+      deriva: +$("deriva").value / 100,
+    };
+    if (c.origem === c.destino) { Treino.aviso = "Escolhe um destino diferente da origem."; UI.pintarBarras(); return; }
+    Treino.aviso = "";
+    this.semente = baralhar || !this.semente ? (Date.now() & 0x7fffffff) : this.semente;
+    this.mundo = new Mundo(c, this.semente);
+    if (!isFinite(this.mundo.distInicial)) {
+      Treino.aviso = "Daqui não há caminho até lá — falta uma porta.";
+      this.mundo = null; this.robo = null; UI.pintarBarras(); return;
+    }
+    const cfg = Treino.cfg || Treino.lerConfig();
+    this.robo = new Robo(GA.melhor, GA.cerebro, this.mundo, cfg.modo !== "puro",
+                         (Math.random()*2 - 1) * cfg.deriva * 0.04);
+    this.acumulado = 0; this.ultimo = performance.now(); this.correndo = true;
+  },
+
+  tick() {
+    if (!this.correndo || !this.robo) return;
+    const agora = performance.now();
+    this.acumulado += Math.min(0.25, (agora - this.ultimo) / 1000);
+    this.ultimo = agora;
+    let n = 0;
+    while (this.acumulado >= FISICA.dt && n++ < 20) {
+      this.acumulado -= FISICA.dt;
+      if (!this.robo.vivo) { this.correndo = false; break; }
+      this.mundo.passo(); this.robo.passo();
+    }
+  },
+
+  desenhar() {
+    Vista.limpar();
+    if (!this.mundo) { Vista.marcarPartida(); return; }
+    Vista.destino(this.mundo.destino);
+    Vista.pontoDestino(this.mundo);
+    if (this.robo.comMapa) Vista.rota(this.mundo, this.robo.cx, this.robo.cy);
+    Vista.obstaculos(this.mundo);
+    Vista.robo(this.robo, this.robo.colidiu ? "#FF3B5C" : this.robo.chegou ? "#4ADE80" : "#36E0FF", true);
+    UI.pintarConselho(this.robo, "c");
+  },
+};
+
+/* ==========================================================================
+   12. FICHEIROS — casa.json e piloto.json
+
+   Estes dois ficheiros são a ponte para o robô a sério. O casa.json é a
+   planta; o piloto.json é o cérebro. Os dois vão para a pasta data/ do robô,
+   e o robot/navegacao/ lê-os tal e qual.
+   ========================================================================== */
+
+const $ = (id) => document.getElementById(id);
+const LETRAS = "abcdefghijklmnopqrstuvwxyz";
+
+function casaParaJSON() {
+  const paredes = [], zonas = [];
+  for (let y = 0; y < Casa.rows; y++) {
+    let lp = "", lz = "";
+    for (let x = 0; x < Casa.cols; x++) {
+      const i = Casa.i(x, y);
+      lp += Casa.parede[i] ? "#" : ".";
+      lz += Casa.zona[i] >= 0 ? LETRAS[Casa.zona[i]] : ".";
+    }
+    paredes.push(lp); zonas.push(lz);
+  }
+  return {
+    formato: "lylla-casa-1",
+    nome: "Casa da Lara",
+    colunas: Casa.cols, linhas: Casa.rows, cm_por_celula: Casa.cm,
+    partida: { coluna: Casa.partida.cx, linha: Casa.partida.cy },
+    divisoes: Casa.divisoes.map((d) => ({ nome: d.nome, cor: d.cor })),
+    paredes, zonas,
+  };
+}
+
+function casaDeJSON(j) {
+  if (!j || j.formato !== "lylla-casa-1") throw new Error("Isto não é um casa.json da Lylla.");
+  Casa.criar(j.colunas, j.linhas, j.cm_por_celula);
+  Casa.divisoes = j.divisoes.map((d, i) => ({ nome: d.nome, cor: d.cor || CORES_DIVISAO[i % CORES_DIVISAO.length] }));
+  for (let y = 0; y < Casa.rows; y++) for (let x = 0; x < Casa.cols; x++) {
+    const i = Casa.i(x, y);
+    Casa.parede[i] = j.paredes[y][x] === "#" ? 1 : 0;
+    const z = LETRAS.indexOf(j.zonas[y][x]);
+    Casa.zona[i] = z;
+  }
+  Casa.partida = { cx: j.partida.coluna, cy: j.partida.linha };
+  Casa.invalidar();
+}
+
+function vetoresDeTeste(n) {
+  const rnd = semente(424242), out = [];
+  const c = GA.cerebro;
+  for (let t = 0; t < n; t++) {
+    const ent = c.redes.map((r) => Array.from({ length: r.nEnt }, () => +(rnd()*2 - 1).toFixed(6)));
+    const sai = c.redes.map((r, k) => Array.from(r.correr(GA.melhor, c.offs[k], ent[k])).map((v) => +v.toFixed(9)));
+    out.push({
+      entradas: { rumo: ent[0], evasao: ent[1], arbitro: ent[2] },
+      saidas:   { rumo: sai[0], evasao: sai[1], arbitro: sai[2] },
+    });
+  }
+  return out;
+}
+
+/* ⚠️ O TESTE QUE APANHA O ERRO QUE OS OUTROS NÃO APANHAM.
+
+   Os `vetoresDeTeste` acima comparam UMA conta de cada rede — e passariam na
+   mesma se o Python metesse a memória nas entradas erradas, ou lesse as
+   saídas de memória pela ordem trocada, ou (o clássico) atualizasse a memória
+   ANTES de a usar em vez de depois. Nada disso se vê num passo único: só se
+   vê ao segundo, quando o que ficou guardado volta a entrar.
+
+   Por isso isto: uma SEQUÊNCIA. As entradas de fora são sorteadas, a memória
+   é a que veio do passo anterior, e o Python tem de reproduzir a cadeia toda.
+   Se a ligação estiver mal feita de um lado, o primeiro passo bate certo e o
+   segundo já não. */
+function vetoresDeMemoria(n) {
+  const c = GA.cerebro, nM = c.nMem;
+  if (!nM) return [];
+  const rnd = semente(20260901);
+  const mem = new Float64Array(nM);
+  const passos = [];
+  const sorteia = (q) => Array.from({ length: q }, () => +(rnd()*2 - 1).toFixed(6));
+  for (let t = 0; t < n; t++) {
+    const eva = sorteia(c.redes[1].nEnt - nM);
+    const arb = sorteia(c.redes[2].nEnt - nM);
+    const sEva = Array.from(c.redes[1].correr(GA.melhor, c.offs[1], eva.concat(Array.from(mem))));
+    const sArb = Array.from(c.redes[2].correr(GA.melhor, c.offs[2], arb.concat(Array.from(mem))));
+    passos.push({
+      evasao_sem_memoria: eva, arbitro_sem_memoria: arb,
+      memoria_a_entrada: Array.from(mem).map((v) => +v.toFixed(9)),
+      saida_evasao: sEva.map((v) => +v.toFixed(9)),
+      saida_arbitro: sArb.map((v) => +v.toFixed(9)),
+    });
+    for (let i = 0; i < nM; i++) mem[i] = sEva[2+i];
+  }
+  return passos;
+}
+
+function pilotoParaJSON() {
+  const c = GA.cerebro;
+  return {
+    formato: "lylla-piloto-1",
+    criado: new Date().toISOString(),
+    modo: Treino.cfg ? Treino.cfg.modo : "hibrido",
+    geracoes: GA.geracao,
+    fitness: +GA.melhorFitness.toFixed(2),
+    fisica: FISICA,
+    sensores: {
+      raios: c.nRaios,
+      angulos_graus: angulosDosFeixes(c.nRaios).map((a) => +(a*180/Math.PI).toFixed(3)),
+      alcance_cm: FISICA.alcance_cm,
+      variacao_ganho: 20,
+      /* ⚠️ Quantos números a evasão escreve para si própria e volta a ler no
+         passo seguinte. O piloto.py tem de os repor a zero em cada viagem e
+         voltar a metê-los nas entradas — e sabe-o por aqui, ou (se este campo
+         faltar, num piloto antigo) por contar as ativações da evasão. */
+      memoria: c.nMem,
+    },
+    /* As constantes da mistura. Estão aqui e não escondidas no código para
+       que o Python leia exatamente os mesmos números. */
+    fusao: { teto_base: 0.25, teto_amplitude: 0.75, alfa_base: 0.15, alfa_amplitude: 0.6, viragem_rodas: 0.65 },
+    redes: {
+      rumo:    c.redes[0].paraJSON(GA.melhor, c.offs[0]),
+      evasao:  c.redes[1].paraJSON(GA.melhor, c.offs[1]),
+      arbitro: c.redes[2].paraJSON(GA.melhor, c.offs[2]),
+    },
+    testes: vetoresDeTeste(6),
+    testes_memoria: vetoresDeMemoria(5),
+  };
+}
+
+function pilotoDeJSON(j) {
+  if (!j || j.formato !== "lylla-piloto-1") throw new Error("Isto não é um piloto.json da Lylla.");
+  const n = j.sensores.raios;
+  /* Pilotos treinados antes de haver memória não trazem o campo: contam-se
+     as saídas da evasão, que são duas mais uma por cada número de memória.
+     Assim um piloto antigo continua a carregar sem nada de especial. */
+  const nMem = j.sensores.memoria !== undefined
+    ? j.sensores.memoria
+    : Math.max(0, (j.redes.evasao.ativacoes || ["tanh","sigmoide"]).length - 2);
+  GA.iniciar(n, +$("populacao").value, Date.now() & 0xffff, nMem);
+  const c = GA.cerebro;
+  const g = new Float64Array(c.tamanho);
+  let p = 0;
+  p = c.redes[0].deJSON(j.redes.rumo, g, p);
+  p = c.redes[1].deJSON(j.redes.evasao, g, p);
+  p = c.redes[2].deJSON(j.redes.arbitro, g, p);
+  GA.melhor = g; GA.melhorFitness = j.fitness || 0;
+  /* ⚠️ CARREGAR UM CÉREBRO MUDA O NÚMERO DE FEIXES — TEM DE MUDAR, porque a
+     forma da rede depende dele. Mas NÃO PODE MUDAR O MODO em silêncio, e
+     durante uns dias mudou: quem tivesse treinado uma vez em modo puro
+     ficava com o modo puro colado à página para sempre (o cérebro é guardado
+     no browser e volta a ser lido no arranque seguinte), sem nada no ecrã a
+     dizê-lo. Deu três mil gerações de treino num modo que, com um feixe e
+     nove divisões, não tem hipótese — e a culpa parecia ser da evolução.
+     Agora o modo é escolha de quem treina, e o que muda diz-se em voz alta. */
+  $("raios").value = n; $("raios-v").value = n;
+  $("memoria").value = nMem; $("memoria-v").value = nMem;
+  const modoDoPiloto = j.modo || "hibrido";
+  const modoAtual = $("modo").value;
+  Treino.aviso = "Cérebro carregado: " + j.geracoes + " gerações, " + n + " feixe(s), "
+    + (nMem ? nMem + " de memória" : "sem memória")
+    + (modoDoPiloto !== modoAtual
+        ? " — treinado em modo «" + (modoDoPiloto === "puro" ? "pura" : "híbrida")
+          + "» e tu estás em «" + (modoAtual === "puro" ? "pura" : "híbrida") + "»."
+        : ".");
+  /* a população começa toda a partir deste cérebro, com defeitos */
+  const rnd = semente(99);
+  GA.populacao = GA.populacao.map((_, i) => {
+    const f = Float64Array.from(g);
+    if (i > 0) GA.mutar(f, 0.1, 0.15, rnd);
+    return f;
+  });
+  $("guardar-piloto").disabled = false;
+  $("aba-campeao").disabled = false;
+}
+
+/* --- Uma caixa para ver, copiar, ou colar texto ---------------------------
+   Dentro do Claude os downloads não saem da página, por isso o caminho que
+   funciona sempre é o botão de copiar. Aberta a partir do ficheiro que está
+   no repositório, a transferência também funciona. */
+function caixa(titulo, texto, aoAceitar) {
+  const fundo = document.createElement("div");
+  fundo.style.cssText = "position:fixed;inset:0;background:rgba(6,10,14,.82);display:flex;align-items:center;justify-content:center;padding:24px;z-index:50";
+  const cx = document.createElement("div");
+  cx.style.cssText = "background:#161B22;border:1px solid #2A3440;border-radius:12px;padding:18px;width:min(720px,100%);display:flex;flex-direction:column;gap:12px;max-height:86vh";
+  cx.innerHTML = '<h3 style="font-family:Syne,sans-serif;font-size:16px">' + titulo + "</h3>";
+  const ta = document.createElement("textarea");
+  ta.value = texto;
+  ta.readOnly = !aoAceitar;
+  ta.spellcheck = false;
+  ta.style.cssText = "flex:1;min-height:230px;background:#0D1117;color:#F4F6F8;border:1px solid #2A3440;border-radius:8px;padding:10px;font-family:'IBM Plex Mono',monospace;font-size:11.5px;resize:vertical";
+  cx.appendChild(ta);
+  const linha = document.createElement("div");
+  linha.style.cssText = "display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap";
+  const btn = (rot, principal, fn) => {
+    const b = document.createElement("button");
+    b.className = "acao" + (principal ? " principal" : "");
+    b.style.width = "auto"; b.textContent = rot;
+    b.onclick = fn; linha.appendChild(b); return b;
+  };
+  btn("Fechar", false, () => fundo.remove());
+  if (aoAceitar) {
+    btn("Usar isto", true, () => { try { aoAceitar(ta.value); fundo.remove(); } catch (e) { alert(e.message); } });
+  } else {
+    const nome = titulo.split(" ").pop();
+    const transferir = btn("Transferir", false, async () => {
+      // Dentro do Claude, a página não pode transferir nada por si: quem
+      // pergunta ao utilizador é a plataforma. Fora dele (o ficheiro que
+      // está no repositório), é o link de sempre.
+      try {
+        const guardar = window.claude && window.claude.use ? await window.claude.use("downloads") : null;
+        if (guardar) {
+          await guardar.save({ filename: nome, data: texto });
+          transferir.textContent = "Guardado ✓";
+          setTimeout(() => (transferir.textContent = "Transferir"), 1800);
+          return;
+        }
+      } catch (erro) {
+        transferir.textContent = erro && erro.code === "declined" ? "Cancelado" : "Não deu — usa o Copiar";
+        setTimeout(() => (transferir.textContent = "Transferir"), 2200);
+        return;
+      }
+      const url = URL.createObjectURL(new Blob([texto], { type: "application/json" }));
+      const a = document.createElement("a");
+      a.href = url; a.download = nome; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+    });
+    const c = btn("Copiar", true, () => {
+      ta.select();
+      const feito = () => { c.textContent = "Copiado ✓"; setTimeout(() => (c.textContent = "Copiar"), 1600); };
+      if (navigator.clipboard) navigator.clipboard.writeText(texto).then(feito, () => { document.execCommand("copy"); feito(); });
+      else { document.execCommand("copy"); feito(); }
+    });
+  }
+  cx.appendChild(linha);
+  fundo.appendChild(cx);
+  fundo.addEventListener("click", (e) => { if (e.target === fundo) fundo.remove(); });
+  document.body.appendChild(fundo);
+  if (aoAceitar) { ta.value = ""; ta.focus(); }
+}
+
+/* --- Guardar entre visitas (só neste browser) ---------------------------- */
+function guardarLocal() {
+  try {
+    localStorage.setItem("lylla.casa", JSON.stringify(casaParaJSON()));
+    if (GA.melhor) localStorage.setItem("lylla.piloto", JSON.stringify(pilotoParaJSON()));
+  } catch (e) { /* sem espaço, ou sem localStorage: paciência */ }
+}
+function lerLocal() {
+  try {
+    const c = localStorage.getItem("lylla.casa");
+    if (c) { casaDeJSON(JSON.parse(c)); return true; }
+  } catch (e) { /* ignorar */ }
+  return false;
+}
+
+/* ==========================================================================
+   13. A CASA DE EXEMPLO — um T3 com corredor, para se poder carregar em
+   «Vai lá!» nos primeiros trinta segundos.
+   ========================================================================== */
+
+function casaDeExemplo() {
+  Casa.criar(48, 32, 20);
+  Casa.divisoes = [
+    { nome: "sala",           cor: CORES_DIVISAO[0] },
+    { nome: "cozinha",        cor: CORES_DIVISAO[1] },
+    { nome: "quarto dos pais",cor: CORES_DIVISAO[2] },
+    { nome: "quarto da Lara", cor: CORES_DIVISAO[3] },
+    { nome: "casa de banho",  cor: CORES_DIVISAO[4] },
+    { nome: "escritório",     cor: CORES_DIVISAO[5] },
+    { nome: "corredor",       cor: CORES_DIVISAO[6] },
+  ];
+  const P = (x, y) => { if (Casa.dentro(x, y)) Casa.parede[Casa.i(x, y)] = 1; };
+  const Z = (x0, y0, x1, y1, z) => {
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++)
+      if (Casa.dentro(x, y) && !Casa.parede[Casa.i(x, y)]) Casa.zona[Casa.i(x, y)] = z;
+  };
+  for (let x = 0; x < 48; x++) { P(x, 0); P(x, 31); }
+  for (let y = 0; y < 32; y++) { P(0, y); P(47, y); }
+  const porta = (a, b) => (v) => v >= a && v <= b;
+  const portasCima = [porta(8, 11), porta(24, 27), porta(38, 41)];
+  const portasBaixo = [porta(6, 9), porta(19, 22), porta(35, 38)];
+  for (let x = 1; x < 47; x++) {
+    if (!portasCima.some((f) => f(x))) P(x, 13);
+    if (!portasBaixo.some((f) => f(x))) P(x, 19);
+  }
+  for (let y = 1; y < 13; y++) { P(17, y); P(32, y); }
+  for (let y = 20; y < 31; y++) { P(15, y); P(26, y); }
+  Z(1, 1, 16, 12, 0);
+  Z(18, 1, 31, 12, 1);
+  Z(33, 1, 46, 12, 2);
+  Z(1, 20, 14, 30, 3);
+  Z(16, 20, 25, 30, 4);
+  Z(27, 20, 46, 30, 5);
+  Z(1, 14, 46, 18, 6);
+  Casa.partida = { cx: 3, cy: 16 };
+  Casa.invalidar();
+}
+
+/* ==========================================================================
+   14. OS BOTÕES E OS NÚMEROS
+   ========================================================================== */
+
+const UI = {
+  aba: "planta", contador: 0,
+
+  arrancar() {
+    document.querySelectorAll(".passo").forEach((b) => {
+      b.onclick = () => this.trocarAba(b.dataset.aba);
+    });
+    document.querySelectorAll(".ferramenta").forEach((b) => {
+      b.onclick = () => {
+        Editor.ferramenta = b.dataset.ferr;
+        document.querySelectorAll(".ferramenta").forEach((o) => o.setAttribute("aria-pressed", o === b));
+      };
+    });
+    const liga = (id, fn) => { const e = $(id); if (e) e.oninput = fn; };
+    liga("pincel", (e) => { Editor.pincel = +e.target.value; $("pincel-v").value = e.target.value; });
+    liga("escala", (e) => { Casa.cm = +e.target.value; $("escala-v").value = e.target.value; Casa.invalidar(); Vista.ajustar(); this.metricasCasa(); });
+    liga("cols", (e) => { Casa.redimensionar(limitar(+e.target.value|0, 10, 120), Casa.rows); Vista.ajustar(); this.metricasCasa(); });
+    liga("rows", (e) => { Casa.redimensionar(Casa.cols, limitar(+e.target.value|0, 10, 120)); Vista.ajustar(); this.metricasCasa(); });
+    liga("cenarios", (e) => { $("cenarios-v").value = e.target.value; });
+    liga("populacao", (e) => { $("populacao-v").value = e.target.value; });
+    liga("mutacao", (e) => { $("mutacao-v").value = e.target.value + "%"; });
+    liga("forca", (e) => { $("forca-v").value = (+e.target.value/100).toFixed(2); });
+    liga("raios", (e) => { $("raios-v").value = e.target.value; this.notaSensores(); this.explicaModo(); });
+    liga("deriva", (e) => { $("deriva-v").value = e.target.value + "%"; });
+    liga("curiosidade", (e) => { $("curiosidade-v").value = e.target.value + "%"; });
+    liga("memoria", (e) => { $("memoria-v").value = e.target.value; });
+    liga("elite", (e) => { $("elite-v").value = e.target.value + "%"; });
+    liga("modo", () => this.explicaModo());
+    $("modo").onchange = () => this.explicaModo();
+
+    $("nova-divisao").onclick = () => {
+      if (Casa.divisoes.length >= 12) return;
+      Casa.divisoes.push({ nome: "divisão " + (Casa.divisoes.length + 1), cor: CORES_DIVISAO[Casa.divisoes.length % CORES_DIVISAO.length] });
+      Editor.divisaoAtiva = Casa.divisoes.length - 1;
+      Editor.ferramenta = "divisao";
+      document.querySelectorAll(".ferramenta").forEach((o) => o.setAttribute("aria-pressed", o.dataset.ferr === "divisao"));
+      this.pintarDivisoes(); this.pintarSelects();
+    };
+    $("exemplo").onclick = () => { casaDeExemplo(); this.depoisDeCarregar(); };
+    $("limpar").onclick = () => {
+      Casa.criar(Casa.cols, Casa.rows, Casa.cm);
+      Casa.divisoes = [{ nome: "sala", cor: CORES_DIVISAO[0] }];
+      Casa.partida = { cx: 2, cy: 2 };
+      this.depoisDeCarregar();
+    };
+    $("contorno").onclick = () => {
+      for (let x = 0; x < Casa.cols; x++) { Casa.parede[Casa.i(x,0)] = 1; Casa.parede[Casa.i(x,Casa.rows-1)] = 1; }
+      for (let y = 0; y < Casa.rows; y++) { Casa.parede[Casa.i(0,y)] = 1; Casa.parede[Casa.i(Casa.cols-1,y)] = 1; }
+      Casa.invalidar(); Vista.sujo = true; this.metricasCasa(); guardarLocal();
+    };
+    $("guardar-casa").onclick = () => caixa("A tua planta — casa.json", JSON.stringify(casaParaJSON(), null, 1));
+    $("importar-casa").onclick = () => caixa("Cola aqui um casa.json", "", (t) => { casaDeJSON(JSON.parse(t)); this.depoisDeCarregar(); });
+    $("guardar-piloto").onclick = () => caixa("O cérebro treinado — piloto.json", JSON.stringify(pilotoParaJSON(), null, 1));
+    $("importar-piloto").onclick = () => caixa("Cola aqui um piloto.json", "", (t) => { pilotoDeJSON(JSON.parse(t)); this.pintarTreino(); });
+    $("c-correr").onclick = () => Campea.novaViagem(false);
+    $("c-obstaculos").onclick = () => Campea.novaViagem(true);
+
+    $("esquecer-mapa").onclick = () => { MapaAprendido.esquecer(); this.metricasMapa(); };
+    this.explicaModo(); this.notaSensores();
+    this.pintarDivisoes(); this.pintarSelects(); this.metricasCasa();
+  },
+
+  depoisDeCarregar() {
+    $("cols").value = Casa.cols; $("rows").value = Casa.rows;
+    $("escala").value = Casa.cm; $("escala-v").value = Casa.cm;
+    Editor.divisaoAtiva = 0;
+    Vista.ajustar(); Vista.sujo = true;
+    this.pintarDivisoes(); this.pintarSelects(); this.metricasCasa();
+    guardarLocal();
+  },
+
+  trocarAba(nome) {
+    if ($("aba-" + nome).disabled) return;
+    this.aba = nome;
+    document.querySelectorAll(".passo").forEach((b) => b.setAttribute("aria-selected", b.dataset.aba === nome));
+    document.querySelectorAll("[data-so]").forEach((d) => { d.hidden = d.dataset.so !== nome; });
+    Vista.modoGrelha = nome === "planta";
+    Vista.sujo = true;
+    if (nome === "treino" && this.botaoTreino === undefined) this.criarBotoesTreino();
+    if (nome === "campeao" && !Campea.mundo) Campea.novaViagem(true);
+  },
+
+  /* Os botões de comando do treino vivem por baixo do palco, porque é onde a
+     mão vai estar quando se está a ver. */
+  criarBotoesTreino() {
+    const barra = $("barra-fundo");
+    const b = (rot, fn, principal) => {
+      const el = document.createElement("button");
+      el.className = "acao" + (principal ? " principal" : "");
+      el.style.width = "auto"; el.textContent = rot; el.onclick = fn;
+      return el;
+    };
+    this.botaoTreino = b("Começar a evoluir", () => {
+      if (Treino.correndo) Treino.parar();
+      else Treino.comecar();
+    }, true);
+    const turbo = b("Turbo", () => {
+      Treino.turbo = !Treino.turbo;
+      turbo.style.borderColor = Treino.turbo ? "#36E0FF" : "";
+      turbo.textContent = Treino.turbo ? "Turbo ligado" : "Turbo";
+    });
+    const veloc = document.createElement("input");
+    veloc.type = "range"; veloc.min = 1; veloc.max = 12; veloc.value = 3;
+    veloc.style.width = "110px";
+    veloc.oninput = () => { Treino.passosPorFrame = +veloc.value; };
+    const rotulo = document.createElement("span");
+    rotulo.textContent = "velocidade";
+    barra.append(this.botaoTreino, turbo, b("Recomeçar do zero", () => { Treino.reiniciar(); this.botaoTreino.textContent = "Começar a evoluir"; }), rotulo, veloc);
+  },
+
+  pintarDivisoes() {
+    const el = $("lista-divisoes");
+    el.innerHTML = "";
+    Casa.divisoes.forEach((d, i) => {
+      const linha = document.createElement("div");
+      linha.className = "divisao";
+      linha.setAttribute("aria-pressed", i === Editor.divisaoAtiva);
+      linha.onclick = () => { Editor.divisaoAtiva = i; this.pintarDivisoes(); };
+      const bolha = document.createElement("span");
+      bolha.className = "bolha"; bolha.style.background = d.cor;
+      const nome = document.createElement("input");
+      nome.value = d.nome; nome.setAttribute("aria-label", "nome da divisão");
+      nome.oninput = () => { d.nome = nome.value; Vista.sujo = true; this.pintarSelects(); guardarLocal(); };
+      const apagar = document.createElement("button");
+      apagar.textContent = "×"; apagar.title = "apagar divisão";
+      apagar.onclick = (e) => {
+        e.stopPropagation();
+        Casa.divisoes.splice(i, 1);
+        for (let k = 0; k < Casa.zona.length; k++) {
+          if (Casa.zona[k] === i) Casa.zona[k] = -1;
+          else if (Casa.zona[k] > i) Casa.zona[k]--;
+        }
+        Editor.divisaoAtiva = 0; Casa.invalidar(); Vista.sujo = true;
+        this.pintarDivisoes(); this.pintarSelects(); guardarLocal();
+      };
+      linha.append(bolha, nome, apagar);
+      el.appendChild(linha);
+    });
+  },
+
+  pintarSelects() {
+    for (const id of ["origem", "destino", "c-origem", "c-destino"]) {
+      const s = $(id); if (!s) continue;
+      const antes = s.value;
+      s.innerHTML = "";
+      if (id === "origem" || id === "destino") {
+        const q = document.createElement("option");
+        q.value = "-1"; q.textContent = "qualquer divisão";
+        s.appendChild(q);
+      }
+      Casa.divisoes.forEach((d, i) => {
+        const o = document.createElement("option");
+        o.value = i; o.textContent = d.nome;
+        s.appendChild(o);
+      });
+      if (antes && antes < Casa.divisoes.length) s.value = antes;
+      else if (id.endsWith("destino") && Casa.divisoes.length > 1) s.value = "0";
+      else if (id.endsWith("origem") && Casa.divisoes.length > 1) s.value = String(Casa.divisoes.length - 1);
+    }
+  },
+
+  /* Um aviso quando a combinação escolhida não tem hipótese. Vale mais do
+     que mil gerações a olhar para uma linha a zero. */
+  avisoDeConfiguracao() {
+    const modo = $("modo").value;
+    const memoria = +$("memoria").value;
+    const curiosidade = +$("curiosidade").value;
+    const divisoes = Casa.divisoes.filter((_, i) => Casa.celulasDe(i).length).length;
+    const diagonal = Math.hypot(Casa.larguraCm(), Casa.alturaCm()) / 100;
+    const casaGrande = divisoes >= 6 || diagonal > 9;
+    if (modo !== "puro" || !casaGrande) return "";
+    if (memoria === 0 || curiosidade === 0) {
+      return "⚠️ <strong>Modo puro sem memória ou sem curiosidade não sai do sítio nesta casa.</strong> "
+        + "Sem memória, contornar uma parede é impossível por construção: a rede é uma função das "
+        + "entradas, e duas posições que deem a mesma leitura têm de dar a mesma resposta. Sem "
+        + "curiosidade, sair do escritório implica primeiro AFASTAR-SE do destino, e quem se afasta "
+        + "pontua pior e não tem filhos. Medido nesta casa, um feixe: com as duas a zero, 300 gerações "
+        + "e o nível nunca passou dos 2,8 m. Com memória 4 e curiosidade 35%, o nível chegou à casa "
+        + "toda em 300 gerações.";
+    }
+    return "⚠️ <strong>Mesmo assim, o modo puro decora as missões em que treina.</strong> Medido nesta "
+      + "casa: com memória e curiosidade a campeã faz a casa toda nas missões do treino, mas em "
+      + "missões que nunca viu chega a 1 em 14. A casa tem de estar guardada em algum lado, e 339 "
+      + "números de rede não chegam — por isso é que o mapa existe. Experimenta <strong>descoberta</strong>: "
+      + "elas continuam a não receber planta nenhuma, mas o que descobrem fica guardado num sítio com espaço.";
+  },
+
+  explicaModo() {
+    const modo = $("modo").value;
+    const alerta = this.avisoDeConfiguracao();
+    const texto = {
+      puro: "<strong>Sem mapa nenhum.</strong> Ela só sabe a direção do destino em linha reta — através das paredes. Tudo o resto tem de sair da evolução, e tem de caber nos pesos da rede. É lindo de ver e é o do vídeo do Code Bullet; para uma casa a sério, o que ela decora são as missões em que treinou.",
+      descoberta: "<strong>Nenhuma planta — o mapa é desenhado por elas.</strong> A primeira geração não sabe onde estão as paredes: mede com o ultrassom, e o que fica provado passa a mapa. Nas primeiras dezenas de gerações a rota é a linha reta (porque não há mapa nenhum) e é feio; depois as paredes começam a aparecer e a rota dá-lhes a volta sozinha. É a resposta honesta a «só com o sensor de distância»: a casa fica guardada num mapa, e não nos pesos da rede.",
+      hibrido: "<strong>A planta dá a rota, o cérebro conduz.</strong> A rota diz por onde é o caminho; as redes tratam de o percorrer depressa, sem raspar nas paredes e a desviar-se do que aparecer. A mobília continua a ser descoberta por elas. É este que serve para a casa a sério.",
+    }[modo] || "";
+    $("explica-modo").innerHTML = (alerta ? '<span style="color:#FFA23D">' + alerta + "</span><br><br>" : "") + texto;
+  },
+
+  notaSensores() {
+    const n = +$("raios").value;
+    const texto = {
+      1: "<strong>Um feixe é o que a Lylla tem hoje</strong> — o ultrassom apontado à frente. Treina assim uma vez, só para ver o que ela consegue e o que não consegue: sem visão para os lados, contornar é quase adivinhar.",
+      3: "Três feixes = o ultrassom da frente mais dois VL53L1X nos cantos (~12 €). É o primeiro salto grande.",
+      5: "Cinco feixes é o ponto certo: chega para contornar um gato sem parar, e são quatro sensores a 6 € no mesmo barramento I²C.",
+      7: "Sete feixes já é mais do que cabe hoje na sonda. Serve para medir quanto se ganharia — e é assim que se decide se vale a pena comprar.",
+      9: "Nove feixes é praticamente um LiDAR pequeno. Treina, compara com cinco, e vê se a diferença justifica o preço.",
+    }[n];
+    $("nota-sensores").innerHTML = texto || "";
+  },
+
+  metricasMapa() {
+    const r = MapaAprendido;
+    this.metricas("metricas-mapa", [
+      ["Leituras", r.leituras > 9999 ? (r.leituras/1000).toFixed(0) + "k" : r.leituras],
+      ["Casa vista", (r.explorado()*100).toFixed(0) + "%"],
+      ["Mobília", (r.mobilia || 0) + " quadrados", "destaque"],
+    ]);
+  },
+
+  metricasCasa() {
+    const cs = Casa.cm/100;
+    let chao = 0;
+    for (let i = 0; i < Casa.zona.length; i++) if (Casa.zona[i] >= 0 && !Casa.parede[i]) chao++;
+    // Que divisões é que se alcançam a partir da partida? Apanha portas esquecidas.
+    const alcance = new Set();
+    const p0 = Casa.i(Casa.partida.cx, Casa.partida.cy);
+    if (!Casa.parede[p0]) {
+      const visto = new Uint8Array(Casa.zona.length), fila = [p0];
+      visto[p0] = 1;
+      for (let c = 0; c < fila.length; c++) {
+        const i = fila[c], x = i % Casa.cols, y = (i/Casa.cols)|0;
+        if (Casa.zona[i] >= 0) alcance.add(Casa.zona[i]);
+        for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+          const nx = x+dx, ny = y+dy;
+          if (!Casa.dentro(nx, ny) || Casa.ehParede(nx, ny)) continue;
+          const j = Casa.i(nx, ny);
+          if (!visto[j]) { visto[j] = 1; fila.push(j); }
+        }
+      }
+    }
+    const faltam = Casa.divisoes.length - alcance.size;
+    this.metricas("metricas-casa", [
+      ["Divisões", Casa.divisoes.length],
+      ["Chão", (chao*cs*cs).toFixed(1) + " m²"],
+      ["Casa", (Casa.larguraCm()/100).toFixed(1) + "×" + (Casa.alturaCm()/100).toFixed(1) + " m"],
+      ["Alcançáveis", alcance.size + "/" + Casa.divisoes.length, faltam > 0 ? "aviso" : "destaque"],
+    ]);
+  },
+
+  metricas(id, linhas) {
+    const el = $(id);
+    el.innerHTML = linhas.map(([t, v, cl]) =>
+      '<div class="metrica' + (cl === "destaque" ? " destaque" : "") + '"><dt>' + t + "</dt><dd" +
+      (cl === "aviso" ? ' style="color:#FF3B5C"' : "") + ">" + v + "</dd></div>").join("");
+  },
+
+  pintarTreino() {
+    const vivos = Treino.robos.filter((r) => r.vivo).length;
+    this.metricas("metricas-treino", [
+      ["Geração", GA.geracao],
+      ["Missões de", Treino.mundos.length
+        ? (Treino.mundos[0].distInicial/100).toFixed(1) + " de "
+          + (Treino.mundos[0].distTotal/100).toFixed(1) + " m"
+        : (Treino.nivel/100).toFixed(1) + " m"],
+      ["A campeã chega", (Treino.chegadasSuavizadas("campea")*100).toFixed(0) + "%", "destaque"],
+      ["A turma toda", (Treino.chegadasSuavizadas()*100).toFixed(0) + "%"],
+    ]);
+    this.grafico();
+  },
+
+  pintarCampea() {
+    const r = Campea.robo;
+    if (!r) return;
+    const enganada = Math.hypot(r.cx - r.x, r.cy - r.y);
+    const estado = r.chegou ? "Chegou!" : r.colidiu ? "Bateu" : r.vivo ? "A caminho" : "Desistiu";
+    this.metricas("metricas-campeao", [
+      ["Tempo", (r.passos*FISICA.dt).toFixed(1) + " s"],
+      ["Estado", estado, r.chegou ? "destaque" : r.colidiu ? "aviso" : ""],
+      ["Velocidade", (r.somaVel/Math.max(1,r.passos)*FISICA.v_max_cm_s).toFixed(0) + " cm/s"],
+      ["Enganada em", enganada.toFixed(0) + " cm", enganada > 40 ? "aviso" : ""],
+    ]);
+  },
+
+  pintarConselho(r, p) {
+    const s = r.saidas;
+    const pon = (b, v) => { const e = $(p + b); if (e) e.style.width = limitar(v*100, 0, 100) + "%"; };
+    const txt = (b, v) => { const e = $(p + b); if (e) e.textContent = v; };
+    pon("b-rumo", 1 - s.peso);
+    pon("b-evasao", s.peso);
+    pon("b-arbitro", s.teto);
+    txt("v-rumo", (s.rumo > 0 ? "direita " : "esquerda ") + Math.abs(s.rumo).toFixed(2));
+    txt("v-evasao", (s.evasao > 0 ? "direita " : "esquerda ") + Math.abs(s.evasao).toFixed(2));
+    txt("v-arbitro", "teto " + (s.teto*100).toFixed(0) + "%");
+  },
+
+  grafico() {
+    const cv = $("grafico"), h = GA.historico;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const L = cv.clientWidth || 260, A = 96;
+    cv.width = L*dpr; cv.height = A*dpr;
+    const c = cv.getContext("2d");
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    c.clearRect(0, 0, L, A);
+    if (h.length < 2) {
+      c.fillStyle = "#8FA0B2"; c.font = "11px 'IBM Plex Sans'";
+      c.fillText("ainda não há gerações", 8, A/2);
+      return;
+    }
+    let lo = Infinity, hi = -Infinity;
+    for (const p of h) { lo = Math.min(lo, p.media); hi = Math.max(hi, p.melhor); }
+    if (hi - lo < 1) hi = lo + 1;
+    const X = (i) => 4 + (L-8) * (i/(h.length-1));
+    const Y = (v) => A - 6 - (A-14) * ((v-lo)/(hi-lo));
+    c.strokeStyle = "#2A3440"; c.lineWidth = 1;
+    c.beginPath(); c.moveTo(0, A-6); c.lineTo(L, A-6); c.stroke();
+    const linha = (campo, cor, esc) => {
+      c.strokeStyle = cor; c.lineWidth = 1.6; c.beginPath();
+      h.forEach((p, i) => {
+        const y = esc ? A - 6 - (A-14)*p[campo] : Y(p[campo]);
+        i ? c.lineTo(X(i), y) : c.moveTo(X(i), y);
+      });
+      c.stroke();
+    };
+    linha("media", "#8FA0B2");
+    linha("melhor", "#36E0FF");
+    linha("chegadas", "rgba(74,222,128,.25)", true);
+    /* ⚠️ A LINHA DO NÍVEL É O QUE FAZ O GRÁFICO FAZER SENTIDO.
+       A percentagem que chega fica quase sempre à volta dos 30%, e olhando só
+       para ela parece que não aprende nada. Mas a MISSÃO vai ficando mais
+       comprida: 30% aos oito metros é muito melhor do que 30% aos dois. É a
+       linha laranja a subir por baixo da verde que mostra a aprendizagem. */
+    const nivelMax = Math.max(...h.map((x) => x.nivel || 0), 1);
+    c.strokeStyle = "rgba(255,162,61,.85)"; c.lineWidth = 1.5;
+    c.setLineDash([4, 3]); c.beginPath();
+    h.forEach((x, i) => {
+      const y = A - 6 - (A-14) * ((x.nivel || 0) / nivelMax);
+      i ? c.lineTo(X(i), y) : c.moveTo(X(i), y);
+    });
+    c.stroke(); c.setLineDash([]);
+
+    // e as duas linhas que interessam: a turma e a campeã, alisadas
+    const alisada = (campo, cor, largura) => {
+      c.strokeStyle = cor; c.lineWidth = largura; c.beginPath();
+      h.forEach((_, i) => {
+        const janela = h.slice(Math.max(0, i-9), i+1);
+        const m = janela.reduce((a, x) => a + (x[campo] || 0), 0) / janela.length;
+        const y = A - 6 - (A-14)*m;
+        i ? c.lineTo(X(i), y) : c.moveTo(X(i), y);
+      });
+      c.stroke();
+    };
+    alisada("chegadas", "rgba(74,222,128,.9)", 1.5);
+    alisada("campea", "#4ADE80", 2.5);
+  },
+
+  pintarBarras() {
+    if (this.contador++ % 5) return;
+    const topo = $("barra-topo");
+    if (this.aba === "planta") {
+      topo.innerHTML = '<span class="pilula" style="color:#36E0FF"><i></i>' + Editor.ferramenta +
+        '</span> <strong>' + (Casa.divisoes[Editor.divisaoAtiva] ? Casa.divisoes[Editor.divisaoAtiva].nome : "—") +
+        '</strong> <span>arrasta para pintar · botão direito apaga</span>';
+    } else if (this.aba === "treino") {
+      const f = { vivo: "a correr", extra: "a avaliar as outras missões", fim: "a fazer a geração seguinte", pausa: "em pausa", parado: "parado" }[Treino.fase];
+      topo.innerHTML = '<span class="pilula" style="color:' + (Treino.correndo ? "#4ADE80" : "#8FA0B2") + '"><i></i>' + f + "</span>" +
+        '<strong>geração ' + GA.geracao + "</strong>" +
+        (Treino.cfg ? "<span>" + (Treino.cfg.modo === "puro" ? "sem mapa" : "com rota") + " · " + Treino.cfg.raios + " feixes · " + Treino.cfg.cenarios + " missões</span>" : "") +
+        "<span>nesta geração: campeã " + (Treino.ultima.campea*100).toFixed(0) + "% · turma " +
+        (Treino.ultima.chegadas*100).toFixed(0) + "% · enganada em " +
+        Treino.erroMedioCrenca().toFixed(0) + " cm</span>" +
+        (Treino.aviso ? '<span style="color:#FF3B5C">' + Treino.aviso + "</span>" : "");
+      this.pintarTreino();
+      this.metricasMapa();
+      if (this.botaoTreino) {
+        // O rótulo sai do ESTADO, não de quem carregou no botão: assim nunca
+        // diz «Pausa» com o treino parado por outra razão qualquer.
+        const rotulo = Treino.correndo ? "Pausa" : GA.geracao ? "Continuar" : "Começar a evoluir";
+        if (this.botaoTreino.textContent !== rotulo) this.botaoTreino.textContent = rotulo;
+      }
+    } else {
+      const r = Campea.robo;
+      topo.innerHTML = '<span class="pilula" style="color:#36E0FF"><i></i>a campeã da geração ' + GA.geracao + "</span>" +
+        "<strong>" + (Casa.divisoes[+$("c-origem").value] || {}).nome + " → " + (Casa.divisoes[+$("c-destino").value] || {}).nome + "</strong>" +
+        (r && r.chegou ? '<span style="color:#4ADE80">chegou em ' + (r.passos*FISICA.dt).toFixed(1) + " s</span>" : "") +
+        (r && r.colidiu ? '<span style="color:#FF3B5C">bateu — carrega em «Vai lá!» outra vez</span>' : "");
+      this.pintarCampea();
+    }
+    if (this.aba !== "treino") {
+      $("barra-fundo").style.display = this.aba === "treino" ? "" : "none";
+    } else $("barra-fundo").style.display = "";
+  },
+};
+
+/* ==========================================================================
+   15. ARRANQUE
+   ========================================================================== */
+
+function laco() {
+  if (UI.aba === "planta") {
+    Vista.limpar(); Vista.marcarPartida();
+  } else if (UI.aba === "treino") {
+    if (Treino.correndo || Treino.fase === "vivo" || Treino.fase === "extra" || Treino.fase === "fim") Treino.tick(11);
+    Treino.desenhar();
+  } else {
+    Campea.tick(); Campea.desenhar();
+  }
+  UI.pintarBarras();
+  requestAnimationFrame(laco);
+}
+
+(function arrancar() {
+  Casa.criar(48, 32, 20);
+  if (!lerLocal()) casaDeExemplo();
+  Vista.arrancar();
+  Vista.modoGrelha = true;
+  Editor.arrancar();
+  UI.arrancar();
+  UI.depoisDeCarregar();
+  try {
+    const p = localStorage.getItem("lylla.piloto");
+    if (p) { pilotoDeJSON(JSON.parse(p)); }
+  } catch (e) { /* sem cérebro guardado: começa-se do zero */ }
+  requestAnimationFrame(laco);
+})();
+</script>
+
+</body>
+</html>

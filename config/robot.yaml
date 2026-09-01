@@ -106,6 +106,93 @@ seguir:
   ganho_rotacao: 0.55       # quanto vira por unidade de erro
 
 # ----------------------------------------------------------------------------
+# NAVEGAÇÃO — atravessar a casa até uma divisão com nome
+#
+# A planta desenha-se e o piloto treina-se em docs/escola-de-conducao.html.
+# Saem de lá dois ficheiros, e é só isso que este bloco aponta.
+#
+# ⚠️ VEM DESLIGADO no robô a sério, pela mesma razão do `seguir`: um robô a
+#    atravessar a casa sozinho passa por sítios que ninguém verificou. Em
+#    ROBO_SIMULAR=1 anda sempre — lá não há nada para partir.
+#
+# A explicação toda (incluindo porque é que ela se «perde») está em
+# docs/navegacao.md.
+# ----------------------------------------------------------------------------
+navegacao:
+  ativo: false              # ⚠️ ligar só depois dos sensores de precipício
+                            #    montados, calibrados e testados nas escadas
+  casa: "data/casa.json"
+  piloto: "data/piloto.json"
+
+  velocidade_max: 0.45      # teto próprio, mais baixo que o do chão: ela anda
+                            # às cegas para os lados (ver feixes_reais)
+
+  # Quantos sensores de distância existem MESMO no robô, virados para a
+  # frente. Hoje é um: o ultrassons. O piloto treinado com cinco feixes
+  # continua a funcionar — os quatro que faltam recebem "não vejo nada" —
+  # mas ele passa ao lado de coisas que não vê, e o arranque avisa disso.
+  # Dois VL53L1X nos cantos (~12 €) põem isto a 3.
+  feixes_reais: 1
+
+  # ⚠️ O NÚMERO MAIS IMPORTANTE DESTE BLOCO.
+  # Ela sabe onde está a somar o que mandou as rodas fazer — não tem GPS. O
+  # erro acumula-se, e a partir daqui a planta deixa de servir: ela julga-se
+  # à porta e está meio metro ao lado. Quando passa disto, PARA e pergunta
+  # onde está, em vez de continuar convencida contra o rodapé.
+  # 55 cm ≈ dois terços de uma porta. Subir isto é trocar segurança por
+  # alcance, e dá exatamente o que se pede: mais viagens acabadas, e mais
+  # embates. A solução a sério são os encoders das rodas (fase futura).
+  deriva_maxima_cm: 55
+
+  passos_encravado: 60      # 6 s a rodar sem sair do sítio = desiste
+
+  # ----------------------------------------------------------------------
+  # A MEMÓRIA DO ESPAÇO — o que ela vai aprendendo com o ultrassom
+  #
+  # A planta sabe as PAREDES; isto aprende a MOBÍLIA (o sofá, o cesto da
+  # roupa, a caixa que ficou no corredor). Cada leitura soma evidência a
+  # cada quadrado: visto muitas vezes conta para a rota, visto duas não.
+  # Ver robot/navigation/memoria_espaco.py e docs/navegacao.md.
+  # ----------------------------------------------------------------------
+  mapear: true
+  mapa: "data/mapa.json"
+
+  # ⚠️ SÓ SE APRENDE COM A POSIÇÃO BOA. Mapear com a posição errada desenha
+  #    a mesma parede duas vezes, meio metro ao lado — e um mapa borrado é
+  #    pior do que mapa nenhum. Acima desta deriva ela continua a andar, mas
+  #    deixa de tomar notas até se voltar a encontrar.
+  deriva_para_mapear: 25
+  mapear_ate_cm: 150          # ⚠️ e só até 1,5 m depois do último varrimento
+                              #    que correu bem. A conta da deriva é otimista;
+                              #    ter emparelhado com o mapa há pouco caminho
+                              #    é a única confirmação a sério que existe
+
+  segundos_entre_mapas: 2.0   # de quanto em quanto tempo a mobília aprendida
+                              # volta a entrar no cálculo da rota (é um
+                              # Dijkstra de cada vez: barato, mas não de graça)
+
+  # O varrimento: parar, dar uma volta lenta a medir, e comparar com o mapa
+  # para descobrir onde está mesmo. É o que substituiu o «perdi-me».
+  velocidade_varrer: 0.32   # uma volta inteira em ~7 s. Mais depressa dá menos
+                            # medidas por grau; mais devagar passa a viagem a rodar
+  metros_entre_varrimentos: 2.0   # ⚠️ verificar CEDO. Esperar por estar perdida
+  deriva_para_varrer: 20          #    não funciona: quando a conta dispara, o
+                                  #    erro verdadeiro já pode estar fora do
+                                  #    que o emparelhamento procura.
+                                  #
+                                  # A regra: este número é UM QUARTO do que o
+                                  # varrimento procura à volta (90 cm), porque
+                                  # o erro verdadeiro chega a ser o triplo do
+                                  # calculado quando uma roda patina.
+
+  # Às escondidas (robot/navigation/procurar.py)
+  segundos_a_espreitar: 6.0   # quanto tempo dá a volta sobre si ao chegar a
+                              # uma divisão. A câmara vê ~60°: menos de uma
+                              # volta inteira é procurar de olhos meio fechados
+  velocidade_espreitar: 0.22  # devagar de propósito — o detetor de caras corre
+                              # a 10 imagens por segundo e precisa de as ver
+
+# ----------------------------------------------------------------------------
 # CARAS
 # ----------------------------------------------------------------------------
 faces:
@@ -142,7 +229,7 @@ voz:
   # o que se quer. Só se preenche isto para apontar a voz a OUTRA máquina que
   # não a do cérebro. O Pi guarda cada WAV em data/voz/ e volta a usá-lo sem
   # rede nenhuma — é isso que o faz falar com o mini desligado.
-  servidor: ""
+  servidor: "mini:8000"
   voz_mac: "Joana"                   # Joana | Catarina | Joaquim
   tempo_limite_s: 5                  # a partir daqui desiste e usa o recurso
   velocidade_fala: 1.0               # 0.8 fala mais devagar; 1.2 mais depressa
