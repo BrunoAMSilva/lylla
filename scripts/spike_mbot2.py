@@ -442,6 +442,15 @@ def medir_latencias(cyber, n: int) -> dict[str, float]:
     resultados: dict[str, float] = {}
 
     seccao(f"pedidos (ida-e-volta bloqueante) × {n}")
+    print("  A primeira linha não toca no shield: é o custo do CABO e do canal")
+    print("  de script. As outras duas atravessam o shield, que é um segundo")
+    print("  microcontrolador com o seu próprio barramento. A diferença entre")
+    print("  elas diz QUEM está a ser lento — e isso muda a solução.")
+    resultados["cyberpi"] = relatar(
+        "só ao CyberPi (get_name)",
+        cronometrar(n, lambda: cyber.get_name(), "get_name"),
+        n,
+    )
     resultados["ler"] = relatar(
         "ler um encoder (EM_get_angle)",
         cronometrar(n, lambda: cyber.mbot2.EM_get_angle("EM1"), "EM_get_angle"),
@@ -493,9 +502,10 @@ def medir_latencias(cyber, n: int) -> dict[str, float]:
         pack = subscricao_a_medida(cyber, "cyberpi.mbot2.EM_get_angle", "('EM1',)")
         primeiro = pack.subscribe_value
         print(f"  valor inicial: {primeiro}")
-        print("  → RODA A RODA ESQUERDA À MÃO durante os próximos 3 segundos")
+        input("  Põe a mão na roda ESQUERDA e carrega Enter — depois roda-a ")
+        print("  → RODA A RODA AGORA (6 segundos)")
         mudou = False
-        fim = time.time() + 3.0
+        fim = time.time() + 6.0
         while time.time() < fim:
             if pack.subscribe_value != primeiro:
                 mudou = True
@@ -566,7 +576,14 @@ def medir_encoders_a_mao(cyber, diametro_cm: float = 8.0) -> None:
     if e1 in (None, 0) and e2 in (None, 0):
         falhou("nenhum dos dois mexeu. Os motores estão nas portas EM1/EM2?")
         return
-    movido, parado = ("EM1", "EM2") if abs(e1 or 0) > abs(e2 or 0) else ("EM2", "EM1")
+    a1, a2 = abs(e1 or 0), abs(e2 or 0)
+    if a1 and a2 and min(a1, a2) / max(a1, a2) > 0.5:
+        aviso(f"os DOIS mexeram, e quase o mesmo ({e1} e {e2}).")
+        aviso("o robô estava assente no chão? ao rodar uma roda ele pivota e a")
+        aviso("outra roda também anda. Repete com o robô EM CIMA DE UM LIVRO,")
+        aviso("com as duas rodas no ar — senão a régua sai errada.")
+        return
+    movido, parado = ("EM1", "EM2") if a1 > a2 else ("EM2", "EM1")
     ok(f"a roda esquerda é a {movido} (a {parado} ficou quieta — como devia)")
     valor = e1 if movido == "EM1" else e2
     if valor and valor < 0:
@@ -581,6 +598,10 @@ def medir_encoders_a_mao(cyber, diametro_cm: float = 8.0) -> None:
         print(f"      {graus / perimetro:.1f} graus por cm  ·  "
               f"{perimetro / graus * 10:.2f} mm por grau")
         print("      (é esta a régua da odometria — guarda os dois números)")
+        if not 300 <= graus <= 420:
+            aviso(f"{graus:.0f}° para uma volta inteira é estranho — esperava-se")
+            aviso("perto de 360. Ou a volta não foi inteira, ou o shield não está")
+            aviso("a contar bem. Repete antes de escrever este número em lado nenhum.")
 
 
 def mexer_motores(cyber) -> None:
@@ -618,6 +639,9 @@ def mexer_motores(cyber) -> None:
 
 def ver_sensores(cyber) -> None:
     titulo("SENSORES QUE JÁ LÁ ESTÃO")
+    print("  ⚠️ Quase tudo isto são SUBSCRIÇÕES, e a primeira leitura devolve o")
+    print("  marcador (zero) antes de o CyberPi empurrar o valor verdadeiro.")
+    print("  Por isso lê-se duas vezes, com meio segundo pelo meio.")
     for nome, chamada in (
         ("ultrassons (cm)", lambda: cyber.ultrasonic2.get()),
         ("RGB quádruplo l1", lambda: cyber.quad_rgb_sensor.get_gray("l1")),
@@ -626,7 +650,11 @@ def ver_sensores(cyber) -> None:
         ("volume do microfone", lambda: cyber.get_loudness()),
     ):
         try:
-            print(f"    {nome:<22} {chamada()}")
+            primeira = chamada()
+            time.sleep(0.5)
+            segunda = chamada()
+            extra = "" if primeira == segunda else f"   (1.ª leitura dizia {primeira})"
+            print(f"    {nome:<22} {segunda}{extra}")
         except Exception as erro:  # noqa: BLE001
             print(f"    {nome:<22} — ({erro})")
 
@@ -670,6 +698,19 @@ def veredicto(r: dict[str, float]) -> None:
         print(f"\n  E com os encoders subscritos (chegam sozinhos):")
         print(f"    {mandar:.0f} ms + {r['encoder_subscrito']:.2f} ms ≈ {esperto:.0f} ms  "
               f"→ {1000 / esperto:.1f} Hz")
+
+    base = r.get("cyberpi", 0.0)
+    if base:
+        print(f"\n  E de quem é a lentidão:")
+        print(f"    pedido que NÃO passa pelo shield ... {base:6.0f} ms")
+        print(f"    pedido ao shield (encoder) ......... {ler:6.0f} ms")
+        if ler > base * 1.8:
+            print("    → a diferença é o SHIELD, não o cabo. Um shield desligado ou")
+            print("      sem bateria dá exatamente isto: o CyberPi fica à espera")
+            print("      dele até desistir. Ligar o interruptor e repetir.")
+        else:
+            print("    → os dois custam o mesmo: a lentidão é do canal de script,")
+            print("      e nenhuma afinação do shield a vai tirar.")
 
     print("\n  Régua para decidir:")
     print("    ≥ 20 Hz  → dá para a navegação toda; o mBot2 fica inteiro.")
