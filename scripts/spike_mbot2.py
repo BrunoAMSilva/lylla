@@ -363,10 +363,14 @@ def identificar(cyber) -> bool:
         return False
 
     ok(f"firmware: {versao}")
+    # ⚠️ O CyberPi NÃO TEM BATERIA (confirmado na doc da Makeblock): a única
+    # bateria do sistema é a do shield, e é ela que alimenta o CyberPi. Por isso
+    # o `get_battery` é a bateria do shield, e o `get_extra_battery` é a de uma
+    # Pocket Shield que aqui não existe — dar 0 é a resposta certa, não avaria.
     for nome, chamada in (
         ("nome", lambda: cyber.get_name()),
-        ("bateria do CyberPi", lambda: cyber.get_battery()),
-        ("bateria do shield", lambda: cyber.get_extra_battery()),
+        ("bateria (é a do shield)", lambda: cyber.get_battery()),
+        ("bateria extra (Pocket Shield, se houver)", lambda: cyber.get_extra_battery()),
     ):
         try:
             print(f"    {nome:<22} {chamada()}")
@@ -437,6 +441,34 @@ def subscricao_a_medida(cyber, funcao: str, paras: str, espera: float = 2.0):
 # ─────────────────────────────────────────────────────────────────────────────
 # as medições
 # ─────────────────────────────────────────────────────────────────────────────
+def medir_cadencia(ler, segundos: float = 5.0) -> float:
+    """De quanto em quanto tempo é que o valor subscrito se RENOVA.
+
+    Ler uma subscrição custa zero — mas isso não serve de nada se o CyberPi só
+    empurrar cinco vezes por segundo. É esta cadência, e não a latência da
+    leitura, que passa a ser o teto da odometria. Mede-se a olhar para o valor
+    e a cronometrar as mudanças.
+    """
+    anterior = ler()
+    marcas: list[float] = []
+    fim = time.time() + segundos
+    while time.time() < fim:
+        atual = ler()
+        if atual != anterior:
+            marcas.append(time.perf_counter())
+            anterior = atual
+        time.sleep(0.002)
+
+    if len(marcas) < 3:
+        aviso("o valor quase não mudou — sem mudanças não há cadência para medir.")
+        return 0.0
+    intervalos = [(b - a) * 1000.0 for a, b in zip(marcas, marcas[1:])]
+    p50 = statistics.median(intervalos)
+    print(f"  {len(marcas)} atualizações em {segundos:.0f} s · mediana "
+          f"{p50:.0f} ms entre elas → ~{1000.0 / p50:.0f} Hz")
+    return p50
+
+
 def medir_latencias(cyber, n: int) -> dict[str, float]:
     titulo("LATÊNCIA — o número que decide tudo")
     resultados: dict[str, float] = {}
@@ -475,6 +507,15 @@ def medir_latencias(cyber, n: int) -> dict[str, float]:
         )
     except Exception as erro:  # noqa: BLE001
         falhou(f"ultrassons: {erro} (o sensor está ligado à cadeia mBuild?)")
+
+    seccao("cadência — de quanto em quanto tempo o valor subscrito se renova")
+    print("  → abana a mão à frente dos ultrassons durante 5 segundos")
+    try:
+        cadencia = medir_cadencia(lambda: cyber.ultrasonic2.get(), 5.0)
+        if cadencia:
+            resultados["cadencia"] = cadencia
+    except Exception as erro:  # noqa: BLE001
+        falhou(f"cadência: {erro}")
 
     seccao("EXPERIMENTAL — três valores numa ida-e-volta só")
     print("  (se falhar, não é um problema: é o fim desta ideia, não do plano)")
@@ -553,7 +594,8 @@ def medir_cpu(cyber, segundos: float = 5.0) -> None:
         aviso("mais de um quarto de núcleo só para falar com o mBot2. Contar com isto.")
 
 
-def medir_encoders_a_mao(cyber, diametro_cm: float = 8.0) -> None:
+def medir_encoders_a_mao(cyber, diametro_cm: float = 8.0,
+                         distancia_cm: float = 100.0) -> None:
     titulo("ENCODERS — a régua, medida à mão")
     print("  Isto dá o número que falta ao robot.yaml: quantos graus de encoder")
     print("  são uma volta da roda. Sem ele não há odometria.")
@@ -577,15 +619,17 @@ def medir_encoders_a_mao(cyber, diametro_cm: float = 8.0) -> None:
         falhou("nenhum dos dois mexeu. Os motores estão nas portas EM1/EM2?")
         return
     a1, a2 = abs(e1 or 0), abs(e2 or 0)
-    if a1 and a2 and min(a1, a2) / max(a1, a2) > 0.5:
+    ambiguo = bool(a1 and a2 and min(a1, a2) / max(a1, a2) > 0.5)
+    if ambiguo:
         aviso(f"os DOIS mexeram, e quase o mesmo ({e1} e {e2}).")
         aviso("o robô estava assente no chão? ao rodar uma roda ele pivota e a")
-        aviso("outra roda também anda. Repete com o robô EM CIMA DE UM LIVRO,")
-        aviso("com as duas rodas no ar — senão a régua sai errada.")
-        return
-    movido, parado = ("EM1", "EM2") if a1 > a2 else ("EM2", "EM1")
-    ok(f"a roda esquerda é a {movido} (a {parado} ficou quieta — como devia)")
-    valor = e1 if movido == "EM1" else e2
+        aviso("outra roda também anda. Não dá para dizer qual é qual assim —")
+        aviso("repete com o robô EM CIMA DE UM LIVRO, as duas rodas no ar.")
+        valor = None
+    else:
+        movido, parado = ("EM1", "EM2") if a1 > a2 else ("EM2", "EM1")
+        ok(f"a roda esquerda é a {movido} (a {parado} ficou quieta — como devia)")
+        valor = e1 if movido == "EM1" else e2
     if valor and valor < 0:
         aviso("veio NEGATIVO: para a frente conta ao contrário. É um sinal no código,")
         aviso("não é um cabo trocado — não desmontes nada por causa disto.")
@@ -600,8 +644,41 @@ def medir_encoders_a_mao(cyber, diametro_cm: float = 8.0) -> None:
         print("      (é esta a régua da odometria — guarda os dois números)")
         if not 300 <= graus <= 420:
             aviso(f"{graus:.0f}° para uma volta inteira é estranho — esperava-se")
-            aviso("perto de 360. Ou a volta não foi inteira, ou o shield não está")
-            aviso("a contar bem. Repete antes de escrever este número em lado nenhum.")
+            aviso("perto de 360. A volta à mão é difícil de acertar; a régua boa")
+            aviso("é a do passo seguinte, com fita métrica.")
+
+    # A volta à mão serve para ver SE conta e em que SENTIDO. Para a régua a
+    # sério mede-se uma distância grande: o erro de acertar o ponto de partida
+    # dilui-se, e a conta já inclui o escorregamento das rodas no chão real.
+    seccao("a régua boa — empurrar uma distância medida")
+    print(f"  Vais empurrar o robô {distancia_cm:.0f} cm em LINHA RETA, no chão,")
+    print("  com uma fita métrica ao lado. Marca onde ele começa.")
+    resposta = input("  (Enter para pôr os contadores a zero, 's' para saltar) ")
+    if resposta.strip().lower().startswith("s"):
+        return
+    try:
+        cyber.mbot2.EM_reset_angle("EM1")
+        cyber.mbot2.EM_reset_angle("EM2")
+        input(f"  empurra os {distancia_cm:.0f} cm e carrega Enter ")
+        g1 = abs(cyber.mbot2.EM_get_angle("EM1") or 0)
+        g2 = abs(cyber.mbot2.EM_get_angle("EM2") or 0)
+    except Exception as erro:  # noqa: BLE001
+        falhou(f"EM_get_angle: {erro}")
+        return
+
+    print(f"\n    EM1 {g1:.0f}°   EM2 {g2:.0f}°  em {distancia_cm:.0f} cm")
+    if not g1 or not g2:
+        falhou("um dos encoders não contou — repete.")
+        return
+    print(f"    → {g1 / distancia_cm:.2f} e {g2 / distancia_cm:.2f} graus por cm")
+    print(f"      ({distancia_cm / g1 * 10:.2f} e {distancia_cm / g2 * 10:.2f} mm por grau)")
+    desvio = abs(g1 - g2) / max(g1, g2)
+    if desvio > 0.05:
+        aviso(f"as duas rodas diferem {desvio * 100:.0f}% — em linha reta deviam")
+        aviso("contar quase o mesmo. Empurraste a direito? Se sim, é isto que o")
+        aviso("compensacao_esq/dir andava a tapar, e agora dá-se para medir.")
+    else:
+        ok(f"as duas rodas concordam a {desvio * 100:.1f}% — a régua é de confiança")
 
 
 def mexer_motores(cyber) -> None:
@@ -705,12 +782,22 @@ def veredicto(r: dict[str, float]) -> None:
         print(f"    pedido que NÃO passa pelo shield ... {base:6.0f} ms")
         print(f"    pedido ao shield (encoder) ......... {ler:6.0f} ms")
         if ler > base * 1.8:
-            print("    → a diferença é o SHIELD, não o cabo. Um shield desligado ou")
-            print("      sem bateria dá exatamente isto: o CyberPi fica à espera")
-            print("      dele até desistir. Ligar o interruptor e repetir.")
+            print("    → o que custa é atravessar o SHIELD (é um segundo")
+            print("      microcontrolador, com barramento próprio). O cabo e o canal")
+            print("      de script são mais baratos do que isso.")
         else:
-            print("    → os dois custam o mesmo: a lentidão é do canal de script,")
-            print("      e nenhuma afinação do shield a vai tirar.")
+            print("    → os dois custam o mesmo: o preço é do CANAL DE SCRIPT, e")
+            print("      nenhuma afinação do shield o vai tirar. A saída é mandar")
+            print("      menos vezes — subscrições e comandos que se mantêm.")
+        print("    Em qualquer dos casos: o `EM_set_speed` é malha fechada NO")
+        print("    shield, portanto a velocidade mantém-se sem ser reenviada. O")
+        print("    ciclo não precisa de um comando por passo — só de correções.")
+
+    if "cadencia" in r:
+        cad = r["cadencia"]
+        print(f"\n  Mas um valor subscrito só se renova de {cad:.0f} em {cad:.0f} ms")
+        print(f"  (~{1000 / cad:.0f} Hz): ler mais depressa do que isso é ler duas")
+        print("  vezes o mesmo. É este o teto verdadeiro da odometria.")
 
     print("\n  Régua para decidir:")
     print("    ≥ 20 Hz  → dá para a navegação toda; o mBot2 fica inteiro.")
@@ -733,6 +820,8 @@ def main() -> int:
     parser.add_argument("--sem-cpu", action="store_true", help="salta a medição de CPU")
     parser.add_argument("--diametro-roda", type=float, default=8.0,
                         help="diâmetro da roda em cm (mBot2: 8)")
+    parser.add_argument("--empurrar-cm", type=float, default=100.0,
+                        help="distância a empurrar para calibrar (cm)")
     args = parser.parse_args()
 
     titulo("SPIKE mBot2 — o shield e o CyberPi vistos do Pi, por um cabo USB")
@@ -765,7 +854,7 @@ def main() -> int:
         if not args.sem_cpu:
             medir_cpu(cyber)
         ver_sensores(cyber)
-        medir_encoders_a_mao(cyber, args.diametro_roda)
+        medir_encoders_a_mao(cyber, args.diametro_roda, args.empurrar_cm)
         if args.com_motores:
             mexer_motores(cyber)
         if args.servo:
