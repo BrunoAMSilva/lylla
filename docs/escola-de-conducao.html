@@ -277,8 +277,12 @@ button.acao:disabled { opacity: .4; cursor: not-allowed; }
       <div class="bloco">
         <h3>O mapa que elas desenham</h3>
         <dl class="metricas" id="metricas-mapa"></dl>
-        <button class="acao" id="esquecer-mapa" style="margin-top:9px">Esquecer o mapa</button>
+        <div style="display:flex;gap:8px;margin-top:9px;flex-wrap:wrap">
+          <button class="acao" id="mapear-casa">Mandar mapear a casa</button>
+          <button class="acao" id="esquecer-mapa">Esquecer o mapa</button>
+        </div>
         <p class="nota" style="margin-top:9px">A primeira geração não sabe nada da mobília. Elas vão medindo com o ultrassom e o mapa vai-se fazendo: o saco que está sempre no mesmo canto acaba lá marcado e a rota passa a dar-lhe a volta. O gato apaga-se sozinho, porque nunca está no mesmo sítio.</p>
+        <p class="nota"><strong>«Mandar mapear» é outra coisa, e é a que interessa se não houver planta.</strong> Aqui ela pára e dá uma volta sobre si própria a medir, e depois vai à beira do que ainda não conhece — repete até não haver mais fronteira. Andar pela casa a medir só para a frente encontra 8% das paredes (o eco de uma parede de que se passa rente vai-se embora); parar e rodar encontra 48%. Nesta casa dá ~160 paragens e ~160 metros, e com esse mapa — <em>sem planta nenhuma</em> — a campeã faz tantas missões novas como faz com a planta desenhada à mão. Faz a volta com a casa vazia (sacos, gatos e pessoas a zero), senão o gato fica desenhado no mapa.</p>
       </div>
 
       <div class="bloco">
@@ -929,7 +933,7 @@ const MapaAprendido = {
      da turma é que toma notas. Com a planta dada, mapear é um extra e chega
      pouco. No modo descoberta o mapa é a ÚNICA coisa que ela vai ter, e o que
      não for medido fica buraco — por isso mede-se muito mais. */
-  RITMO: 2, FATIA: 8,
+  RITMO: 2, FATIA: 8, TOLERANCIA_CM: 12, FRACAO_SEM_ECO: 0.70,
 
   garantir() {
     if (!this.valores || this.valores.length !== Casa.cols*Casa.rows) this.esquecer();
@@ -946,25 +950,43 @@ const MapaAprendido = {
     const v = this.garantir();
     this.leituras++;
     const semEco = distanciaCm >= alcanceCm * 0.99;
-    const ateOnde = semEco ? alcanceCm * 0.7 : Math.max(0, distanciaCm - 12);
+    const ateOnde = semEco ? alcanceCm * this.FRACAO_SEM_ECO : Math.max(0, distanciaCm - this.TOLERANCIA_CM);
     const pesoLivre = semEco ? this.LIVRE_SEM_ECO : this.LIVRE;
     const passo = Casa.cm * 0.5, meio = 7.5 * Math.PI / 180;
+
+    /* ⚠️ UMA LEITURA É UMA COISA SÓ, E O «ESTÁ AQUI» GANHA AO «ESTÁ VAZIO».
+       Isto estava certo no memoria_espaco.py e errado aqui, e a diferença
+       não é de pormenor: a banda do eco e os raios vizinhos do mesmo cone
+       caem muitas vezes no MESMO quadrado, e a somar os dois a parede
+       apagava-se a si própria no instante em que era vista. Cada leitura
+       decide uma vez por quadrado — e se o eco disse «aqui está», é isso que
+       conta, porque é a única coisa que aquela leitura mediu de facto.
+       O resto (o vazio pelo caminho) é dedução.
+       Medido a mapear a casa toda: 22% das paredes verdadeiras antes, 50%
+       depois — e é a diferença entre um mapa que dá rota e um que não dá. */
+    const tocadas = new Map();
+
     for (let k = -1; k <= 1; k++) {
       const ang = rumo + k*meio, ca = Math.cos(ang), sa = Math.sin(ang);
+      // ---- o vazio: o cone todo, até onde o eco garante que não há nada
       for (let d = passo; d < ateOnde; d += passo) {
         const cx = Math.floor((x + ca*d)/Casa.cm), cy = Math.floor((y + sa*d)/Casa.cm);
         if (!Casa.dentro(cx, cy)) break;
         const i = Casa.i(cx, cy);
-        v[i] = limitar(v[i] + pesoLivre, -this.TETO, this.TETO);
+        const antes = tocadas.get(i);
+        if (antes === undefined || antes > pesoLivre) tocadas.set(i, pesoLivre);
       }
       if (semEco) continue;
-      for (let d = Math.max(0, distanciaCm-12); d <= distanciaCm+12; d += passo) {
+      // ---- o obstáculo: espalhado pelo arco, com o peso dividido
+      const peso = this.OCUPADO / 3;
+      for (let d = Math.max(0, distanciaCm-this.TOLERANCIA_CM); d <= distanciaCm+this.TOLERANCIA_CM; d += passo) {
         const cx = Math.floor((x + ca*d)/Casa.cm), cy = Math.floor((y + sa*d)/Casa.cm);
         if (!Casa.dentro(cx, cy)) continue;
         const i = Casa.i(cx, cy);
-        v[i] = limitar(v[i] + this.OCUPADO/3, -this.TETO, this.TETO);
+        tocadas.set(i, Math.max(tocadas.get(i) === undefined ? -9.9 : tocadas.get(i), peso));
       }
     }
+    for (const [i, peso] of tocadas) v[i] = limitar(v[i] + peso, -this.TETO, this.TETO);
   },
 
   /* A planta MAIS a mobília de que já há prova. Reconstruído uma vez por
@@ -2738,6 +2760,190 @@ const Campea = {
 };
 
 /* ==========================================================================
+   11-bis. A VOLTA DE MAPEAMENTO — a Lylla a desenhar a casa sozinha
+
+   Isto não é treino: não há evolução nenhuma aqui. É a Lylla a fazer o que
+   faz um robô cujo trabalho É mapear, e é a resposta à pergunta «se ela sabe
+   medir distâncias, não devia conseguir mapear a casa?». Devia, e consegue —
+   mas só assim, e não a mapear o que calha estar à frente enquanto vai a
+   algum lado.
+
+   Duas coisas fazem a diferença entre 8% e 48% das paredes encontradas:
+
+   1. PARAR E DAR UMA VOLTA SOBRE SI PRÓPRIA. Um feixe apontado à frente só
+      mede na direção em que anda, e o eco de uma parede de que se passa rente
+      vai-se embora (reflexão especular — está no `Mundo.feixe`, de propósito).
+      Andar pelo corredor nunca encontra as paredes do corredor. Rodar no
+      sítio encontra-as todas: em 360° cada parede à vista apanha, a certa
+      altura, um raio de frente para ela. É exatamente o que o
+      `varrimento.py` já faz no robô para se localizar.
+
+   2. IR À FRONTEIRA. Depois de varrer, o sítio que interessa a seguir é a
+      beira do que já se conhece — o quadrado livre encostado ao desconhecido.
+      Ir ao mais próximo, varrer, repetir. É o algoritmo clássico de
+      exploração (Yamauchi, 1997), e sai daqui uma casa inteira em ~160
+      paragens e ~160 metros andados.
+
+   Medido nesta casa, com UM feixe e a casa vazia: 83% da casa vista, 48% das
+   paredes verdadeiras, e as 72 rotas possíveis entre divisões todas válidas.
+   Com esse mapa — e SEM planta nenhuma — a campeã faz 12 de 14 missões novas.
+   Com a planta desenhada à mão faz as mesmas 12. É igual.
+   ========================================================================== */
+const Explorador = {
+  correndo: false, varrimentos: 0, andado: 0, cx: 0, cy: 0,
+  jaVarrido: null, mundo: null, aviso: "",
+
+  comecar(raiosPorVolta) {
+    if (!Casa.divisoes.some((_, i) => Casa.celulasDe(i).length)) {
+      this.aviso = "Pinta o chão de pelo menos uma divisão primeiro."; UI.pintarBarras(); return;
+    }
+    this.raios = raiosPorVolta || 72;
+    this.varrimentos = 0; this.andado = 0; this.aviso = "";
+    this.jaVarrido = new Set();
+    MapaAprendido.esquecer();
+    /* Um mundo só para ter o sensor. Com os obstáculos que estiverem
+       escolhidos: mapear com o gato em casa dá um mapa com o gato lá dentro,
+       e é por isso que a volta de mapeamento se faz com a casa vazia. */
+    const c = Treino.lerConfig();
+    this.mundo = new Mundo(Object.assign({}, c, { alcance: Infinity, modo: "descoberta" }), 4242);
+    this.mundo.reiniciar();
+    this.cx = Casa.partida.cx; this.cy = Casa.partida.cy;
+    if (Casa.ehParede(this.cx, this.cy)) {
+      const livre = Casa.zona.findIndex((z, i) => z >= 0 && !Casa.parede[i]);
+      if (livre < 0) { this.aviso = "Não há chão nenhum onde começar."; return; }
+      this.cx = livre % Casa.cols; this.cy = (livre / Casa.cols) | 0;
+    }
+    this.varrer();
+    this.correndo = true;
+  },
+
+  parar() { this.correndo = false; },
+
+  /* Parar e dar uma volta a medir. */
+  varrer() {
+    const x = (this.cx + 0.5) * Casa.cm, y = (this.cy + 0.5) * Casa.cm;
+    for (let k = 0; k < this.raios; k++) {
+      const ang = k * 2 * Math.PI / this.raios;
+      MapaAprendido.aprender(x, y, ang, this.mundo.feixe(x, y, ang), FISICA.alcance_cm);
+    }
+    this.varrimentos++;
+    this.jaVarrido.add(Casa.i(this.cx, this.cy));
+  },
+
+  /* O quadrado livre mais próximo que ainda tem desconhecido ao lado. */
+  proximaFronteira() {
+    const v = MapaAprendido.garantir(), cols = Casa.cols, rows = Casa.rows;
+    const conhecido = (i) => Math.abs(v[i]) > 1;
+    const livre = (i) => v[i] < -1;
+    const parede = (i) => v[i] >= MapaAprendido.LIMIAR;
+    const dist = new Int32Array(cols * rows).fill(-1);
+    const i0 = Casa.i(this.cx, this.cy);
+    const fila = [i0]; dist[i0] = 0;
+    for (let q = 0; q < fila.length; q++) {
+      const i = fila[q], x = i % cols, y = (i / cols) | 0;
+      for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
+        const jj = ny * cols + nx;
+        if (dist[jj] >= 0 || parede(jj)) continue;
+        if (!conhecido(jj) && !this.jaVarrido.has(i)) return { x, y, passos: dist[i] };
+        if (!livre(jj)) continue;
+        dist[jj] = dist[i] + 1; fila.push(jj);
+      }
+    }
+    return null;
+  },
+
+  /* ⚠️ TRAVADO DE PROPÓSITO. A casa toda mapeia-se em menos de um décimo de
+     segundo, e se se deixar correr à velocidade do computador o ecrã salta de
+     «não sei nada» para «casa feita» num frame — que é precisamente a parte
+     que vale a pena ver. Dois varrimentos por frame dão ~3 segundos, e vê-se
+     o mapa a nascer da partida para fora. */
+  POR_FRAME: 2,
+
+  tick(orcamentoMs) {
+    if (!this.correndo) return;
+    const t0 = performance.now();
+    let feitos = 0;
+    while (performance.now() - t0 < orcamentoMs && feitos++ < this.POR_FRAME) {
+      const f = this.proximaFronteira();
+      if (!f) { this.correndo = false; this.aviso = "Casa mapeada — já não há fronteira nenhuma."; break; }
+      this.andado += f.passos * Casa.cm;
+      this.cx = f.x; this.cy = f.y;
+      for (let t = 0; t < 3; t++) this.mundo.passo();   // o gato mexe-se
+      this.varrer();
+      if (this.varrimentos > 1200) { this.correndo = false; break; }
+    }
+    MapaAprendido.novaGeracao();
+  },
+
+  /* O que ela já desenhou, e onde está a varrer agora. Sem a planta por
+     baixo, para se ver mesmo só o que saiu do ultrassom. */
+  desenhar() {
+    const c = Vista.ctx;
+    /* ⚠️ AQUI A PLANTA TAPA-SE. É o único ecrã da página em que ver a planta
+       seria enganar: o que interessa é exatamente o que ela já sabe e o que
+       ainda não sabe. Fica o fundo liso, e por cima só o que saiu do
+       ultrassom. As cruzes vermelhas são as paredes que existem mesmo e que
+       ela ainda não descobriu — essas só se podem desenhar porque a planta
+       está ali ao lado; em casa ninguém as saberia. */
+    c.fillStyle = "#0D1117";
+    c.fillRect(0, 0, Vista.larg, Vista.alt);
+    const v = MapaAprendido.garantir(), lado = Casa.cm*Vista.escala;
+    c.fillStyle = "#12181F";
+    c.fillRect(Vista.px(0), Vista.py(0), Casa.larguraCm()*Vista.escala, Casa.alturaCm()*Vista.escala);
+    for (let i = 0; i < v.length; i++) {
+      const px = Vista.px((i % Casa.cols)*Casa.cm), py = Vista.py(((i/Casa.cols)|0)*Casa.cm);
+      if (v[i] >= MapaAprendido.LIMIAR) {
+        c.fillStyle = "#E8EDF2";                       // «aqui há qualquer coisa»
+        c.fillRect(px, py, lado+0.5, lado+0.5);
+      } else if (v[i] < -1) {
+        c.fillStyle = "rgba(54,224,255,.16)";          // «por aqui passa-se»
+        c.fillRect(px, py, lado+0.5, lado+0.5);
+      }
+    }
+    for (let i = 0; i < Casa.parede.length; i++) {
+      if (!Casa.parede[i] || v[i] >= MapaAprendido.LIMIAR) continue;
+      /* Só as que INTERESSAM: uma parede que ela ainda não descobriu mas que
+         dá para um sítio onde ela já esteve. As paredes do lado de fora da
+         casa nunca vão ser descobertas nem fazem falta a ninguém — marcá-las
+         só enchia o ecrã de vermelho e dava a ideia errada. */
+      const x = i % Casa.cols, y = (i/Casa.cols)|0;
+      let interessa = false;
+      for (const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+        const nx = x+dx, ny = y+dy;
+        if (nx<0||ny<0||nx>=Casa.cols||ny>=Casa.rows) continue;
+        if (v[ny*Casa.cols+nx] < -1) { interessa = true; break; }
+      }
+      if (!interessa) continue;
+      const px = Vista.px(x*Casa.cm), py = Vista.py(y*Casa.cm);
+      c.strokeStyle = "rgba(255,59,92,.55)"; c.lineWidth = 1;
+      c.beginPath(); c.moveTo(px+2, py+2); c.lineTo(px+lado-2, py+lado-2);
+      c.moveTo(px+lado-2, py+2); c.lineTo(px+2, py+lado-2); c.stroke();
+    }
+    const x = Vista.px((this.cx+0.5)*Casa.cm), y = Vista.py((this.cy+0.5)*Casa.cm);
+    c.strokeStyle = "rgba(255,162,61,.30)"; c.lineWidth = 1;
+    c.beginPath(); c.arc(x, y, FISICA.alcance_cm*Vista.escala, 0, Math.PI*2); c.stroke();
+    c.fillStyle = "#FFA23D";
+    c.beginPath(); c.arc(x, y, Math.max(4, FISICA.raio_cm*Vista.escala), 0, Math.PI*2); c.fill();
+  },
+
+  /* Quanto é que o mapa desenhado acerta — só para o ecrã. Na casa a sério
+     ninguém sabe isto, claro: aqui sabe-se porque a planta está ali ao lado. */
+  qualidade() {
+    const v = MapaAprendido.garantir();
+    let ok = 0, falso = 0, total = 0, visto = 0;
+    for (let i = 0; i < v.length; i++) {
+      if (Math.abs(v[i]) > 1) visto++;
+      const eh = Casa.parede[i] === 1, diz = v[i] >= MapaAprendido.LIMIAR;
+      if (eh) { total++; if (diz) ok++; } else if (diz) falso++;
+    }
+    return { paredes: Math.round(ok / Math.max(1, total) * 100),
+             visto: Math.round(visto / v.length * 100), falsas: falso };
+  },
+};
+
+/* ==========================================================================
    12. FICHEIROS — casa.json e piloto.json
 
    Estes dois ficheiros são a ponte para o robô a sério. O casa.json é a
@@ -3096,6 +3302,11 @@ const UI = {
     $("c-obstaculos").onclick = () => Campea.novaViagem(true);
 
     $("esquecer-mapa").onclick = () => { MapaAprendido.esquecer(); this.metricasMapa(); };
+    $("mapear-casa").onclick = () => {
+      if (Explorador.correndo) { Explorador.parar(); }
+      else { Treino.parar(); Explorador.comecar(72); }
+      this.pintarBarras();
+    };
     this.explicaModo(); this.notaSensores();
     this.pintarDivisoes(); this.pintarSelects(); this.metricasCasa();
   },
@@ -3250,11 +3461,21 @@ const UI = {
 
   metricasMapa() {
     const r = MapaAprendido;
-    this.metricas("metricas-mapa", [
+    const linhas = [
       ["Leituras", r.leituras > 9999 ? (r.leituras/1000).toFixed(0) + "k" : r.leituras],
       ["Casa vista", (r.explorado()*100).toFixed(0) + "%"],
       ["Mobília", (r.mobilia || 0) + " quadrados", "destaque"],
-    ]);
+    ];
+    if (Explorador.varrimentos) {
+      const q = Explorador.qualidade();
+      linhas.push(["Varrimentos", Explorador.varrimentos + " · " + (Explorador.andado/100).toFixed(0) + " m"]);
+      /* Só se pode mostrar isto porque a planta está ali ao lado. Na casa a
+         sério ninguém sabe quantas paredes é que faltam ao mapa. */
+      linhas.push(["Paredes acertadas", q.paredes + "%", "destaque"]);
+    }
+    this.metricas("metricas-mapa", linhas);
+    const bt = $("mapear-casa");
+    if (bt) bt.textContent = Explorador.correndo ? "Parar de mapear" : "Mandar mapear a casa";
   },
 
   metricasCasa() {
@@ -3439,8 +3660,11 @@ function laco() {
   if (UI.aba === "planta") {
     Vista.limpar(); Vista.marcarPartida();
   } else if (UI.aba === "treino") {
-    if (Treino.correndo || Treino.fase === "vivo" || Treino.fase === "extra" || Treino.fase === "fim") Treino.tick(11);
-    Treino.desenhar();
+    if (Explorador.correndo) { Explorador.tick(11); UI.metricasMapa(); Explorador.desenhar(); }
+    else {
+      if (Treino.correndo || Treino.fase === "vivo" || Treino.fase === "extra" || Treino.fase === "fim") Treino.tick(11);
+      Treino.desenhar();
+    }
   } else {
     Campea.tick(); Campea.desenhar();
   }

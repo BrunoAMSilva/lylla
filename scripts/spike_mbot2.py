@@ -153,10 +153,23 @@ def candidatas() -> list[str]:
     /dev/ttyUSB0 troca de número conforme a ordem em que as coisas arrancam.
     Com dois aparelhos na série (ESP32 da cara + CyberPi) isso não é um
     pormenor: é o robô a mandar expressões para os motores.
+
+    ⚠️ O by-id é um atalho para o /dev/ttyUSBx — são NOMES do mesmo aparelho,
+    não aparelhos diferentes. Contá-los duas vezes dava um aviso falso de
+    "há mais do que uma porta", por isso a lista é reduzida por destino real.
     """
-    portas = sorted(glob.glob("/dev/serial/by-id/*"))
-    portas += sorted(glob.glob("/dev/ttyUSB*")) + sorted(glob.glob("/dev/ttyACM*"))
-    portas += sorted(glob.glob("/dev/cu.usbserial*")) + sorted(glob.glob("/dev/cu.wchusbserial*"))
+    brutas = sorted(glob.glob("/dev/serial/by-id/*"))
+    brutas += sorted(glob.glob("/dev/ttyUSB*")) + sorted(glob.glob("/dev/ttyACM*"))
+    brutas += sorted(glob.glob("/dev/cu.usbserial*")) + sorted(glob.glob("/dev/cu.wchusbserial*"))
+
+    vistas: set[str] = set()
+    portas: list[str] = []
+    for porta in brutas:
+        real = os.path.realpath(porta)
+        if real in vistas:
+            continue
+        vistas.add(real)
+        portas.append(porta)
     return portas
 
 
@@ -172,7 +185,7 @@ def escolher_porta(pedida: str | None) -> str | None:
         real = os.path.realpath(porta)
         marca = ""
         if cara and (porta == cara or real == os.path.realpath(cara)):
-            marca = "   ← é a porta da CARA (config/robot.yaml)"
+            marca = "   ← é o NOME que o robot.yaml dá à cara"
         print(f"    {porta}{marca}")
         if porta != real:
             print(f"        → {real}")
@@ -180,6 +193,11 @@ def escolher_porta(pedida: str | None) -> str | None:
     if pedida:
         ok(f"usar a pedida: {pedida}")
         return pedida
+
+    if cara and len(lista) == 1:
+        print("\n  (o robot.yaml aponta a cara para este mesmo nome. Enquanto o")
+        print("   ESP32 não existir, quem apanha o /dev/ttyUSB0 é o CyberPi —")
+        print("   quando a cara chegar, os dois vão disputá-lo: usar sempre by-id.)")
 
     escolhida = lista[0]
     if len(lista) > 1:
@@ -242,6 +260,39 @@ def importar():
     return mb, cyberpi, porta_mod.SerialPort, rebentou
 
 
+def ja_ligado(porta: str):
+    """A ligação que o `import` já fez sozinho — se for à porta certa.
+
+    ⚠️ ISTO É O BUG QUE FAZIA O connect() ENCRAVAR, e custou uma sessão a
+    perceber. A armadilha 1 não é só um incómodo: quando existe uma porta
+    CH340 (e o CyberPi É CH340), o import ABRE-A e faz o aperto de mão todo —
+    fica com uma ligação PRONTA. Se depois abrirmos uma SEGUNDA ligação ao
+    mesmo /dev/ttyUSB0, ficam duas threads a ler o mesmo tty: cada uma apanha
+    metade dos bytes, nenhuma resposta chega inteira, e o `protocol.ready` do
+    segundo board nunca fica verdadeiro. Espera para sempre — por uma resposta
+    que está a ser lida pelo outro.
+
+    O sintoma que denuncia isto: o ecrã do CyberPi APAGA-SE (recebeu comandos,
+    portanto o cabo e a porta estão bons) e mesmo assim ninguém responde.
+    """
+    api = sys.modules.get("makeblock.modules.cyberpi.api_cyberpi_api")
+    if api is None or getattr(api, "module_auto", None) is None:
+        return None, None
+    board = getattr(api.module_auto, "_board", None)
+    dev = getattr(board, "_dev", None) if board is not None else None
+    aberta = getattr(getattr(dev, "_ser", None), "port", None)
+    if not aberta:
+        return None, None
+    if os.path.realpath(aberta) != os.path.realpath(porta):
+        aviso(f"a biblioteca agarrou {aberta}, que não é a que queremos — a fechar")
+        try:
+            dev.exit()
+        except Exception:  # noqa: BLE001
+            pass
+        return None, None
+    return api, dev
+
+
 def ligar(porta: str, espera: float = 20.0):
     """Devolve (api, uart) ou (None, None).
 
@@ -260,8 +311,13 @@ def ligar(porta: str, espera: float = 20.0):
 
     abertas = [p for p in getattr(makeblock, "_ports", []) or [] if p is not None]
     if abertas:
-        aviso(f"o import já abriu {len(abertas)} porta(s) sozinho (armadilha 1).")
-        aviso("se o ESP32 da cara estiver ligado, desliga-o e repete.")
+        ok(f"o import abriu {len(abertas)} porta(s) sozinho (armadilha 1)")
+
+    api, dev = ja_ligado(porta)
+    if api is not None:
+        ok("e essa ligação é a esta porta e já está feita — reaproveitada.")
+        ok("abrir uma segunda ligação ao mesmo tty é o que encravava o connect().")
+        return api, dev
 
     uart = SerialPort(porta, 115200)          # ⚠️ o construtor dorme 2 s
     if not hasattr(uart, "_ser"):
@@ -274,6 +330,10 @@ def ligar(porta: str, espera: float = 20.0):
         api = com_prazo(espera, CyberPi.connect, uart)
     except Prazo:
         falhou("o CyberPi não respondeu — o connect() ficaria aqui para sempre.")
+        print("      · o ecrã do CyberPi apagou-se quando correste isto? Então ele")
+        print("        RECEBEU comandos, e o problema é de quem está a LER as")
+        print("        respostas — vê se há outro processo agarrado à porta:")
+        print("          sudo fuser -v /dev/ttyUSB0")
         print("      · está aceso, com o shield ligado e a bateria com carga?")
         print("      · é mesmo esta a porta? (tenta as outras com --porta)")
         print("      · o firmware é recente? (mBlock → Ligar → Atualizar)")

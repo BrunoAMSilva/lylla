@@ -44,7 +44,8 @@ consegue fazer.
 | O que recebe no início | a direção do destino em linha reta, através das paredes | as divisões com nome, e **zero paredes** | a planta |
 | Onde fica a casa guardada | nos pesos da rede | no mapa que elas desenham com o ultrassom | na planta, mais a mobília que elas descobrem |
 | O que evolui | conduzir *e* adivinhar o caminho | conduzir, enquanto o mapa se faz | só conduzir |
-| Serve para o robô a sério? | não | ainda não — ver os números | **sim** |
+| Exame (14 missões novas) | 21% | **12/14 — igual à planta**, depois de uma volta de mapeamento | 12/14 |
+| Serve para o robô a sério? | não | sim, se não houver planta | **sim** |
 
 **A pura é a do vídeo do Code Bullet.** Vale a pena vê-la uma vez, porque é ali
 que se percebe o que é a evolução. Mas numa casa a sério ela **decora as missões
@@ -52,9 +53,11 @@ em que treinou** — a secção «só com o sensor de distância» tem a mediç�
 
 **A descoberta é a resposta honesta a «e sem planta nenhuma?».** A primeira
 geração não sabe onde estão as paredes: mede, e o que fica provado passa a
-mapa. As primeiras dezenas de gerações são feias, porque sem mapa a rota é a
-linha reta; depois as paredes começam a aparecer e a rota dá-lhes a volta
-sozinha.
+mapa. Com uma volta de mapeamento feita primeiro (o botão «Mandar mapear a
+casa»), o mapa que sai dá **tanta navegação como a planta desenhada à mão** —
+está medido na secção a seguir. Sem essa volta, a mapear só o que calha estar à
+frente, não dá: um feixe apontado para onde se anda nunca vê as paredes por que
+passa.
 
 **A híbrida é a que vai para o robô.** A planta dá a rota — isso é um problema
 resolvido há cinquenta anos e não vale a pena reinventá-lo — e a rede trata do
@@ -154,104 +157,124 @@ uma criança a andar de bicicleta a descer a rua toda ao primeiro dia.
 
 ---
 
-## ⚠️ «Só com o sensor de distância» — o que dá e o que não dá
+## ⚠️ «Só com o sensor de distância» — e a diferença para o Flappy Bird
 
-A pergunta é justa: ao fim de gerações que cheguem, não devia ela navegar a
-casa só com o ultrassom? A resposta medida é **sim, aprende a conduzir muito
-bem; não, não aprende a casa.** E o caminho até lá teve três surpresas.
+A pergunta certa, feita pelo Bruno: se o Code Bullet treina um Flappy Bird em
+poucas dezenas de gerações, e se nós sabemos medir distâncias, porque é que a
+Lylla não aprende a casa? A resposta tem duas metades, e a segunda foi uma
+correção a mim próprio.
 
-### 1. Sem memória, contornar uma parede não pode acontecer
+### O Flappy Bird é um corredor. Uma casa é um grafo.
 
-A rede é uma **função das entradas**. Duas posições diferentes que deem a mesma
-leitura de sensor e o mesmo ângulo para o destino têm obrigatoriamente a mesma
+No Flappy Bird tudo o que interessa está à vista: a altura do pássaro, a altura
+do buraco, a distância ao cano. Não há nada escondido, e **não há por onde te
+enganares** — não existe «virar à esquerda». É a classe de problema mais fácil
+que há para a evolução, e uma rede minúscula sem memória resolve-a.
+
+E isso não é uma diferença de opinião — dá para medir. Fiz uma casa que é uma
+**pista** (dois cotovelos, sempre com a saída à vista) e corri lá o nosso
+código, o mesmo, sem memória e sem curiosidade nenhuma:
+
+| a MESMA rede, o MESMO código, 400 gerações | campeã |
+|---|---|
+| pista sem obstáculos (o Flappy Bird nosso) | **100%** |
+| pista com saco, gato e pessoa | **100%** |
+| casa do Bruno, nove divisões | **50%, e nunca mais sobe** |
+
+Não é o algoritmo. É a topologia. Numa pista, seguir a direção do destino está
+sempre certo. Numa casa, para sair do escritório é preciso primeiro **afastar-se**
+da sala — e num sítio onde a resposta certa é «vai para trás», uma rede que só
+vê a direção do destino não tem por onde a descobrir.
+
+O que faltava eram duas coisas, e **cada uma sozinha torna o problema
+impossível, não difícil**:
+
+**1. Memória.** A rede é uma *função* das entradas: duas posições que deem a
+mesma leitura e o mesmo ângulo ao destino têm obrigatoriamente a mesma
 resposta. E «estou a contornar esta parede pela direita» não cabe em nenhuma
-leitura de sensor: é uma coisa que só se sabe **por se ter começado a fazer**.
+leitura de sensor — é uma coisa que só se sabe *por se ter começado a fazer*.
+São quatro números que a evasão escreve num passo e volta a ler no seguinte.
 
-Sem sítio onde guardar isso, não há gerações que cheguem — não é um problema de
-treino, é de construção. A **memória** são uns números que a evasão escreve num
-passo e volta a ler no seguinte (e o árbitro também os lê, senão a evasão sabe
-que está a contornar e não tem o volante para o fazer). Ninguém lhes diz o que
-significam: o que sai da evolução é um sinal de «vou por este lado» que se
-mantém aceso durante a manobra.
+**2. Curiosidade.** Quem se afasta do destino pontua pior e não tem filhos, por
+isso a espécie converge para a parede: a parede *é* a melhor jogada à luz da
+pontuação. Um castigo não resolve, porque o caminho certo passa por um vale. A
+saída conhecida (Lehman & Stanley, 2008 — e o exemplo do artigo é precisamente
+um labirinto destes) é premiar também **quem foi a um sítio onde mais ninguém
+foi**.
 
-O rumo **não** tem memória, de propósito: continua a ser a parte simples que só
-sabe onde é o destino.
+Nesta casa, um feixe, 300 gerações: com as duas a zero o currículo ficou nos
+**2,8 m** para sempre; com memória 4 e curiosidade 35% chegou aos **11,8 m**, a
+casa toda. (Curiosidade a 20% não chega: é 35% ou nada.)
 
-### 2. O fitness mente, e o castigo não resolve isso
+### Mas o modo puro decora — a casa não cabe nos pesos
 
-Para sair do escritório é preciso primeiro **afastar-se** da sala. Quem se
-afasta pontua pior, e quem pontua pior não tem filhos. A espécie inteira
-converge para a parede porque a parede é, de facto, a melhor jogada à luz da
-pontuação. Um castigo por estar encostado muda a paisagem, mas não muda o facto
-de o caminho certo passar por um vale.
+Pus um **exame** a sério: catorze missões que ela nunca viu, qualquer divisão
+para qualquer divisão, casa toda, sem currículo. E aí:
 
-A saída conhecida (Lehman & Stanley, 2008 — e o exemplo do artigo é
-precisamente um labirinto destes) é deixar de perguntar só «foste bem?» e
-passar a perguntar também **«foste a um sítio onde mais ninguém foi?»**. Quem
-tenta a porta pontua mal, mas é raro, e a raridade compra-lhe filhos. Na
-geração seguinte já há quem esteja do outro lado, e a partir daí a pontuação
-normal volta a saber orientar-se.
-
-É o *slider* da **curiosidade**. Compara-se onde cada robô ficou no fim de cada
-missão, e a novidade é a distância média aos quinze mais parecidos. Mistura-se
-por posição na tabela e não por pontos (senão a escala de uma esmaga a outra), e
-**os intocados do topo continuam a sair da pontuação a sério**: a curiosidade
-escolhe quem tem filhos, nunca deita fora a campeã.
-
-Nesta casa, um feixe, 300 gerações — e cada uma das duas sozinha quase não
-chega:
-
-| | campeã | nível a que o currículo chegou |
+| | missões do treino | exame (14 novas) |
 |---|---|---|
-| sem memória, sem curiosidade | 50%, para sempre | **2,8 m** (nunca saiu do início) |
-| memória 4, curiosidade 0 | 59% | 4,9 m |
-| memória 0, curiosidade 35% | 75% | 10,5 m |
-| **memória 4, curiosidade 35%** | **75–100%** | **11,8 m — a casa toda** |
+| puro, 4 missões de treino | 75% | 7% |
+| puro, 8 missões de treino | 83% | **21%** |
+| híbrido (planta) | 98% | **64%** |
 
-### 3. E depois o exame, que mudou a conclusão toda
+Dobrar as missões de treino sobe o exame de 7% para 21% — está a generalizar um
+bocadinho, e mais missões dariam mais. Mas a casa tem de estar guardada em algum
+lado, e **339 números de rede não chegam** para nove divisões e as portas todas.
 
-A percentagem que se vê a subir é nas **missões em que ela treina**, e a prova é
-fixa de propósito (é o que faz a curva assentar). Isso mede aprender — mas não
-mede *navegar a casa*. Para isso há agora um **exame**: catorze missões que ela
-nunca viu, de qualquer divisão para qualquer divisão, a casa toda, sem currículo
-nenhum e com os obstáculos todos.
+E o cérebro **não** é o problema: o mesmo cérebro treinado às escuras, se lhe
+derem a rota certa, faz metade do exame. **Conduzir aprende-se sem mapa; saber
+por onde é que se vai, não.**
 
-| cérebro | de onde vem a rota | missões do treino | **exame (14 novas)** |
-|---|---|---|---|
-| puro, 4 missões | de lado nenhum | 75% | 7% |
-| puro, 8 missões | de lado nenhum | 83% | **21%** |
-| descoberta | do mapa que ela desenhou | 64–80% | **0%** |
-| descoberta | *(o mesmo cérebro, com a planta)* | — | 50% |
-| **híbrido** | da planta | 98% | **64%** |
+### E a segunda metade: ela CONSEGUE mapear a casa sozinha
 
-Três coisas para ler aqui, e a terceira é a que interessa:
+A primeira versão desta secção dizia que o mapa desenhado por ela não chegava.
+Estava errado, e o erro era meu, não da ideia. O mapa estava a ser feito **da
+maneira errada**, de três maneiras:
 
-- **O modo puro decora.** Com o dobro das missões de treino, o exame sobe de 7%
-  para 21% — está a generalizar um bocadinho, e mais missões dariam mais. Mas a
-  casa tem de caber em algum lado, e **339 números de rede não chegam** para nove
-  divisões e as portas todas.
-- **O cérebro não é o problema.** O mesmo cérebro treinado às escuras, se lhe
-  derem a rota certa, faz 50% do exame — quase tanto como o treinado com ela.
-  **Conduzir aprende-se sem mapa; saber por onde é que se vai, não.**
-- **Um mapa a 60% é pior do que mapa nenhum.** O modo descoberta encontrou 53%
-  das paredes com um feixe e 60% com cinco, e fez **0%** do exame — pior do que o
-  modo puro, que não tem mapa nenhum. A razão é simples e vale a pena guardá-la:
-  *um mapa com buracos dá rotas erradas com confiança*, e o piloto segue-as.
+1. **Nunca parava para olhar.** Um feixe apontado à frente só mede na direção em
+   que anda — e o eco de uma parede de que se passa rente vai-se embora
+   (reflexão especular; está no simulador de propósito). *Andar* pelo corredor
+   nunca encontra as paredes do corredor.
+2. **Uma leitura estava a apagar-se a si própria.** No browser, o «está vazio
+   pelo caminho» e o «está aqui alguma coisa» da MESMA leitura somavam-se ao
+   mesmo quadrado — e a banda do eco, mais os raios vizinhos do cone, caem
+   muitas vezes no mesmo sítio. O `memoria_espaco.py` já fazia isto bem (dentro
+   de uma leitura, o «está aqui» ganha); o browser não. 22% → 48% das paredes.
+3. Só os robôs da missão que se vê no ecrã é que mapeavam — sete oitavos do que
+   a turma via ia para o lixo.
 
-### O que isto quer dizer para a Lylla
+Com isso corrigido e uma **volta de mapeamento a sério** — parar, dar uma volta
+sobre si própria a medir, e ir à beira do que ainda não conhece (exploração por
+fronteira, Yamauchi 1997) — a casa vazia, um feixe:
 
-O mapa não é uma cábula que se dá ao robô para lhe poupar trabalho — **é o único
-sítio com espaço para guardar uma casa**. A rede aprende o que é para aprender
-(conduzir, contornar, não raspar); a casa vive no mapa. Foi por isso que a ideia
-do mapa desenhado por elas estava certa desde o início; o que falta não é
-esperteza, é **medir mais**: com um único olho apontado à frente, e a ver mal as
-paredes de que passa rente, o mapa fica a meio por muito que ela ande.
+```
+179 paragens · 161 m andados
+83% da casa vista · 48% das paredes verdadeiras encontradas
+72 de 72 pares de divisões com rota válida
 
-É também a resposta à pergunta dos sensores, e agora com um número em vez de uma
-opinião: cinco feixes em vez de um levam o mapa desenhado de 53% para 60% das
-paredes. Ajuda, e não chega. O que faltaria a seguir é **varrer de propósito** —
-parar e dar uma volta sobre si própria de vez em quando, como o `varrimento.py`
-já faz para se localizar — em vez de mapear só o que calha estar à frente.
+EXAME · rota vinda do mapa que ELA desenhou → 12/14
+EXAME · rota vinda da planta desenhada à mão → 12/14
+```
+
+**Igual.** O mapa que ela desenha sozinha, sem planta nenhuma, dá tanta
+navegação como a planta.
+
+A diferença entre mapear a andar e mapear a parar, medida nos dois lados
+(browser e `memoria_espaco.py`): **8% das paredes contra 48%.** Não é o sensor
+que não chega — é que um sensor apontado à frente só vê o que está à frente, e
+quem quer um mapa tem de virar a cara para as coisas.
+
+Na página é o botão **«Mandar mapear a casa»**. Faz-se com a casa vazia (sacos,
+gatos e pessoas a zero), senão o gato fica desenhado no mapa.
+
+### O que fica
+
+- Para a Lylla, **híbrido**: a planta já existe, é exata, e é de graça.
+- Para uma casa sem planta, **descoberta com uma volta de mapeamento primeiro**
+  — e isso é agora uma coisa que funciona, não uma promessa.
+- O que **não** se resolve com mais gerações é guardar a casa nos pesos da rede.
+  O mapa não é uma cábula que se dá ao robô para lhe poupar trabalho: é o sítio
+  certo para guardar uma casa, e ela sabe desenhá-lo.
 
 ---
 
