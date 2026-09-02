@@ -121,6 +121,17 @@ def tentar(texto: str) -> str | None:
     for frases, funcao in COMANDOS:
         if limpo in frases or sem_chave in frases:
             return funcao()
+
+    # ⚠️ SÓ DEPOIS os comandos que a Lara ensinou (o `@comando` do lylla).
+    # A ordem não é um pormenor: nenhuma função dela pode tapar o «pára» nem o
+    # «não olhes». Segurança e privacidade primeiro, sempre — mesmo contra
+    # código nosso, não só contra o LLM.
+    from lylla import comandos as comandos_da_lara
+
+    for frase in (sem_chave, limpo):
+        resposta = comandos_da_lara.executar(frase)
+        if resposta is not None:
+            return resposta
     return None
 
 

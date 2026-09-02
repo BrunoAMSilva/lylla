@@ -16,11 +16,16 @@ TB6612FNG, que aguenta 1,2 A por canal.
 ║  é o mesmo no Pi 4 e no Pi 5. Este código não vai partir com a próxima   ║
 ║  atualização do sistema.                                                 ║
 ║                                                                          ║
-║  NOTA SOBRE OS ENCODERS: os motores têm-nos e os fios estão ligados,    ║
-║  mas a v1 não os usa. Contar quadratura em Python a ~1200 Hz por canal  ║
-║  desperdiça CPU, e o pigpio (que fazia isto por DMA) não funciona no    ║
-║  Pi 5. Ficam prontos para a v2 com o ESP32, que tem 8 contadores de     ║
-║  quadratura em hardware.                                                ║
+║  OS ENCODERS: contar quadratura em Python a ~1200 Hz por canal           ║
+║  desperdiça CPU, e o pigpio (que fazia isto por DMA) não funciona        ║
+║  no Pi 5. Por isso este caminho (tb6612) NÃO os usa.                     ║
+║                                                                          ║
+║  ⚠️ MAS HÁ UM SEGUNDO CAMINHO, e é o que resolve isso: com               ║
+║  `motores.ligacao: mbot2` no robot.yaml o mBot2 fica INTEIRO e           ║
+║  fala com o Pi por USB — o shield conta a quadratura em hardware         ║
+║  e devolve graus. Aí o `andar_cm` deixa de ser um cronómetro e           ║
+║  passa a ser uma medição, e o `virar_graus` usa o giroscópio.            ║
+║  Ver robot/hardware/mbot2.py.                                            ║
 ╚══════════════════════════════════════════════════════════════════════════╝
 
 Funções para usar:
@@ -36,7 +41,16 @@ import atexit
 import time
 
 from robot import config
-from robot.hardware import pca9685
+from robot.hardware import mbot2, pca9685
+
+
+def _ligacao() -> str:
+    """"tb6612" (motores canibalizados) ou "mbot2" (o robô inteiro, por USB)."""
+    return str(config.obter("motores.ligacao", "tb6612")).lower()
+
+
+def _pelo_mbot2() -> bool:
+    return _ligacao() == "mbot2"
 
 # Canais do PCA9685 #1 ligados ao TB6612FNG
 _PWMA, _AIN1, _AIN2 = 0, 1, 2
@@ -135,11 +149,25 @@ def mover(esquerdo: float, direito: float) -> None:
 
     if config.a_simular():
         config.sim(f"motores → esq={esquerdo:+.2f} dir={direito:+.2f}")
+        if _pelo_mbot2():
+            # Mesmo a simular: é isto que mantém o conta-quilómetros de mentira
+            # a andar, para a Lara poder aprender no Mac sem o robô ligado.
+            mbot2.velocidade(*_em_rpm(esquerdo, direito))
+    elif _pelo_mbot2():
+        # A fração -1..1 vira RPM. O shield mantém a velocidade sozinho, em
+        # malha fechada: não é preciso reenviar isto num ciclo.
+        mbot2.velocidade(*_em_rpm(esquerdo, direito))
     else:
         _motor(_PWMA, _AIN1, _AIN2, esquerdo)
         _motor(_PWMB, _BIN1, _BIN2, direito)
 
     _a_mover_desde = None if (esquerdo == 0 and direito == 0) else time.monotonic()
+
+
+def _em_rpm(esquerdo: float, direito: float) -> tuple[float, float]:
+    """A fração -1..1 de cada roda, em RPM."""
+    rpm = float(config.obter("mbot2.rpm_max", 86.0))
+    return (esquerdo * rpm, direito * rpm)
 
 
 def _v() -> float:
@@ -170,29 +198,87 @@ def parar() -> None:
     mover(0, 0)
 
 
-def andar_cm(centimetros: float) -> None:
-    """Anda uma distância aproximada.
+def andar_cm(centimetros: float) -> float:
+    """Anda uma distância. Devolve quanto andou mesmo, quando dá para saber.
 
-    NOTA: sem encoders, o robô não sabe onde está. Só sabe durante quanto
-    tempo andou. Por isso isto nunca é exato — e por isso é que os robôs a
-    sério têm sensores nas rodas.
+    Há duas maneiras de fazer isto, e a diferença entre elas é a diferença
+    entre um brinquedo e um robô:
+
+    · pelo CRONÓMETRO (tb6612) — anda durante o tempo que a conta diz. Se o
+      chão for mais macio, se a bateria estiver mais fraca, se uma roda
+      escorregar, ele não sabe. Nunca é exato.
+    · pela MEDIÇÃO (mbot2) — pergunta às rodas quanto já andaram e pára
+      quando chegou. Isso é uma malha fechada, e corta o erro na origem em
+      vez de o acumular.
     """
     centimetros = max(-50.0, min(50.0, centimetros))
-    cm_por_s = float(config.obter("motores.cm_por_segundo", 18.0))
-    duracao = abs(centimetros) / max(cm_por_s, 1.0)
+    if not _pelo_mbot2() or config.a_simular():
+        cm_por_s = float(config.obter("motores.cm_por_segundo", 18.0))
+        duracao = abs(centimetros) / max(cm_por_s, 1.0)
+        frente() if centimetros > 0 else tras()
+        time.sleep(min(duracao, 3.0))
+        parar()
+        return centimetros
+
+    alvo = abs(centimetros)
+    mbot2.zerar()
     frente() if centimetros > 0 else tras()
-    time.sleep(min(duracao, 3.0))
+    # A rede de segurança é o tempo: se uma roda ficar presa, o contador nunca
+    # chega ao alvo e isto andaria para sempre.
+    limite = time.monotonic() + min(20.0, alvo / max(1.0, cm_por_s_atual()) * 3.0 + 2.0)
+    while time.monotonic() < limite:
+        if mbot2.progresso_cm() >= alvo:
+            break
+        time.sleep(0.05)
     parar()
+    andou = mbot2.progresso_cm()
+    return andou if centimetros > 0 else -andou
 
 
-def virar_graus(graus: float) -> None:
-    """Roda no lugar. Positivo = direita, negativo = esquerda."""
+# O `motores.cm_por_segundo` do robot.yaml foi medido a esta fração de
+# velocidade — é a referência que permite escalar a conta para as outras.
+VELOCIDADE_DE_REFERENCIA = 0.5
+
+
+def cm_por_s_atual() -> float:
+    """A velocidade que está configurada, em cm/s.
+
+    Com o mBot2 é uma conta exata (RPM × perímetro da roda). Com o TB6612 é
+    uma regra de três a partir de uma medição feita à mão — que é precisamente
+    a diferença entre os dois caminhos.
+    """
+    if _pelo_mbot2():
+        return mbot2.rpm_para_cms(float(config.obter("mbot2.rpm_max", 86.0)) * _v())
+    medido = float(config.obter("motores.cm_por_segundo", 18.0))
+    return medido * _v() / VELOCIDADE_DE_REFERENCIA
+
+
+def virar_graus(graus: float) -> float:
+    """Roda no lugar. Positivo = direita, negativo = esquerda.
+
+    Com o mBot2 usa o GIROSCÓPIO do CyberPi: mede o que o robô rodou mesmo, e
+    não o que devia ter rodado. O que escorrega deixa de contar.
+    """
     graus = max(-180.0, min(180.0, graus))
-    t90 = float(config.obter("motores.tempo_90_graus", 0.55))
-    duracao = abs(graus) / 90.0 * t90
+    if not _pelo_mbot2() or config.a_simular():
+        t90 = float(config.obter("motores.tempo_90_graus", 0.55))
+        duracao = abs(graus) / 90.0 * t90
+        direita() if graus > 0 else esquerda()
+        time.sleep(min(duracao, 3.0))
+        parar()
+        return graus
+
+    alvo = abs(graus)
+    mbot2.zerar()
     direita() if graus > 0 else esquerda()
-    time.sleep(min(duracao, 3.0))
+    limite = time.monotonic() + min(15.0, alvo / 90.0 * 3.0 + 2.0)
+    while time.monotonic() < limite:
+        if abs(mbot2.rodou_graus()) >= alvo:
+            break
+        time.sleep(0.02)
     parar()
+    rodou = abs(mbot2.rodou_graus())
+    return rodou if graus > 0 else -rodou
 
 
 def verificar_timeout() -> None:

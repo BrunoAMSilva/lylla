@@ -12,13 +12,51 @@ nome: "Lylla"
 # MOTORES
 # ----------------------------------------------------------------------------
 motores:
+  # COMO É QUE O PI MANDA NAS RODAS. Duas hipóteses:
+  #   mbot2   → o mBot2 fica INTEIRO e fala com o Pi por um cabo USB. O shield
+  #             conta os encoders em hardware e mantém a velocidade em malha
+  #             fechada, por isso o `andar_cm` MEDE em vez de cronometrar.
+  #   tb6612  → os motores canibalizados, ligados ao PCA9685. Sem encoders.
+  ligacao: mbot2
   velocidade: 0.5           # 0 a 1. Acima de 0.6 ele bate com força nos rodapés.
   velocidade_max: 0.6       # limite de segurança — o código nunca passa daqui
   compensacao_esq: 1.00     # se ele fugir para a direita, sobe este número
   compensacao_dir: 1.00     # se ele fugir para a esquerda, sobe este
-  tempo_90_graus: 0.55      # segundos para rodar 90°. Medir e ajustar.
-  cm_por_segundo: 18.0      # quanto anda em 1 segundo à velocidade acima
   timeout_s: 3.0            # nenhum comando dura mais que isto sem ser renovado
+
+  # ⚠️ Os três de baixo só valem com `ligacao: tb6612`. Com o mBot2 não são
+  #    usados: a velocidade é comandada em RPM e a distância é lida das rodas,
+  #    portanto não há nada para compensar nem para cronometrar.
+  compensacao_esq_tb6612: 1.00
+  compensacao_dir_tb6612: 1.00
+  tempo_90_graus: 0.55      # segundos para rodar 90°
+  cm_por_segundo: 18.0      # medido à velocidade 0.5
+
+# ----------------------------------------------------------------------------
+# O mBot2 POR USB — o robô inteiro, sem cortar cabos
+#
+# Medido em 01/09/2026 com scripts/spike_mbot2.py: pedir custa 51 ms (só ao
+# CyberPi) ou 102 ms (se atravessar o shield); subscrever custa ~0. Por isso o
+# driver subscreve os encoders, o giroscópio e os ultrassons no arranque.
+#
+# ⚠️ NADA que trave o robô passa por este cabo. Precipício, paragem de
+#    emergência e botão DPST são do lado do Pi, e continuam lá.
+# ----------------------------------------------------------------------------
+mbot2:
+  porta: ""                 # vazio = procura sozinho (prefere /dev/serial/by-id)
+                            # ⚠️ quando o ESP32 da cara chegar, os dois são CH340
+                            #    e disputam o /dev/ttyUSB0 — aí fixa-se aqui o by-id
+  diametro_roda_cm: 8.0     # rodas do mBot2. Muda a régua toda da odometria.
+  rpm_max: 86.0             # a que RPM corresponde velocidade 1.0
+                            # 86 RPM ≈ 36 cm/s, logo velocidade 0.5 ≈ 18 cm/s
+                            # (o shield aguenta 200, mas dentro de casa não)
+  inverter_direita: false   # os motores do mBot2 estão montados em espelho, MAS
+                            # a Makeblock diz que o `drive_speed` já sincroniza
+                            # os dois — por isso começamos por confiar nele.
+                            # ⚠️ Se ao mandar `andar(30)` ele rodar no sítio, ou
+                            #    se a Lylla avisar que as rodas contaram sentidos
+                            #    contrários, põe `true` aqui. É o único sítio.
+  espera_s: 20.0            # quanto esperar pelo CyberPi antes de desistir
 
 # ----------------------------------------------------------------------------
 # SEGURANÇA — não mexer sem falar com o pai
