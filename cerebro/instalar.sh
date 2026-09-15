@@ -58,7 +58,7 @@ except Exception as erro:
 " || true
 
 echo "→ modelos de voz"
-"$PY" scripts/download_models.py || echo "⚠️  falhou; corre à mão depois"
+"$PY" scripts/download_models.py --cerebro || echo "⚠️  falhou; corre à mão depois"
 
 # --- Ollama -----------------------------------------------------------------
 MODELO="$("$PY" -c 'from cerebro import config; print(config.obter("pensar.modelo"))' 2>/dev/null || echo gemma4:12b)"
@@ -68,7 +68,28 @@ if command -v ollama >/dev/null 2>&1; then
   # depois de uns minutos de silêncio paga o carregamento todo.
   launchctl setenv OLLAMA_HOST "0.0.0.0:11434"
   launchctl setenv OLLAMA_KEEP_ALIVE "-1"
-  ollama pull "$MODELO" || echo "⚠️  não consegui descarregar o $MODELO"
+
+  # ⚠️ O `ollama pull` é um CLIENTE. Sem servidor de pé dá
+  #    "could not connect to ollama server" e o modelo nunca chega.
+  # ⚠️ E o `launchctl setenv` só apanha processos lançados DEPOIS: se a app do
+  #    Ollama já estava aberta, ficou sem OLLAMA_HOST e o Pi não lhe chega.
+  if curl -fsS http://127.0.0.1:11434/api/tags >/dev/null 2>&1; then
+    echo "   ⚠️  o Ollama já estava a correr — fecha-o e volta a abrir, senão fica sem OLLAMA_HOST"
+  else
+    echo "   a arrancar o ollama serve…"
+    OLLAMA_HOST="0.0.0.0:11434" OLLAMA_KEEP_ALIVE="-1" ollama serve >/dev/null 2>&1 &
+    for _ in $(seq 1 30); do
+      curl -fsS http://127.0.0.1:11434/api/tags >/dev/null 2>&1 && break
+      sleep 1
+    done
+  fi
+
+  if curl -fsS http://127.0.0.1:11434/api/tags >/dev/null 2>&1; then
+    ollama pull "$MODELO" || echo "⚠️  não consegui descarregar o $MODELO"
+  else
+    echo "⚠️  o Ollama não atende em 127.0.0.1:11434"
+    echo "    corre:  ollama serve &   e depois:  ollama pull $MODELO"
+  fi
 else
   echo "⚠️  não há Ollama. Instala em https://ollama.com  e depois:  ollama pull $MODELO"
 fi

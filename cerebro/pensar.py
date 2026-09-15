@@ -342,13 +342,27 @@ class MotorOllama(_Motor):
             return []
 
     def aquecer(self) -> None:
-        """Carrega o modelo para a RAM sem gerar nada."""
+        """Carrega o modelo para a RAM sem gerar nada.
+
+        ⚠️ FALHA ALTO, DE PROPÓSITO. Isto engolia a exceção com um `pass`, e o
+           servidor imprimia "pensar: pronto em 0.0 s" com o Ollama desligado.
+           Um aquecimento que não aquece nunca pode dizer que aqueceu — é a
+           mesma regra do resto do projeto: um teste não pode depender da
+           resposta que ele próprio vai dar.
+        """
         try:
-            requests.post(f"{self.url}/api/chat", json={
+            resposta = requests.post(f"{self.url}/api/chat", json={
                 "model": self.modelo, "messages": [], "keep_alive": config.obter("pensar.keep_alive", -1),
             }, timeout=120)
-        except requests.RequestException:
-            pass
+        except requests.RequestException as erro:
+            raise CerebroIndisponivel(
+                f"o Ollama não atende em {self.url} — corre `ollama serve`"
+            ) from erro
+        if resposta.status_code == 404:
+            raise CerebroIndisponivel(
+                f"o Ollama não tem o modelo '{self.modelo}' — corre `ollama pull {self.modelo}`"
+            )
+        resposta.raise_for_status()
 
     def gerar(self, mensagens: list[dict], esquema: dict | None) -> Iterator[str]:
         corpo: dict[str, Any] = {

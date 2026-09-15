@@ -156,23 +156,47 @@ def descarregar(modelo: dict) -> bool:
         return False
 
 
+def vozes_necessarias(tambem_o_cerebro: bool) -> set[str]:
+    """Que vozes Piper é preciso ter em models/.
+
+    ⚠️ HÁ DOIS CONFIGS, E DISCORDAM. O `config/robot.yaml` diz que voz corre no
+       PI (`voz.modelo_tts`), e está vazio desde que a voz passou para o mini.
+       O `config/cerebro.yaml` diz que voz o MINI serve (`falar.voz: glados`).
+       Perguntar só ao primeiro fazia este script saltar a GLaDOS exatamente na
+       máquina que precisa dela — e dizer, muito convencido, que estava tudo bem.
+    """
+    vozes = set()
+    if v := (config.obter("voz.modelo_tts") or ""):
+        vozes.add(v)
+    if tambem_o_cerebro:
+        try:
+            from cerebro import config as cerebro_config
+            if str(cerebro_config.obter("falar.motor", "")) == "piper":
+                if v := (cerebro_config.obter("falar.voz") or ""):
+                    vozes.add(v)
+        except Exception as erro:  # noqa: BLE001
+            print(f"  ⚠️  não consegui ler o config do cérebro ({erro})")
+    return vozes
+
+
 def main() -> int:
     tudo = "--tudo" in sys.argv
-    voz_escolhida = config.obter("voz.modelo_tts") or ""
+    vozes = vozes_necessarias("--cerebro" in sys.argv)
 
     config.MODELS_DIR.mkdir(parents=True, exist_ok=True)
     print(f"\n📥 A descarregar para {config.MODELS_DIR}")
-    if voz_escolhida:
-        print(f"   O config/robot.yaml pede a voz '{voz_escolhida}'.\n")
+    if vozes:
+        print(f"   Vozes pedidas pela configuração: {', '.join(sorted(vozes))}.\n")
     else:
-        print("   Voz no mac mini. Só são necessários os modelos de visão no Pi.\n")
+        print("   Nenhuma voz local pedida. Só os modelos de visão.")
+        print("   (no mac mini usa --cerebro; para levar tudo, --tudo)\n")
 
     falhas = 0
     for modelo in MODELOS:
         grupo = modelo["grupo"]
-        preciso = grupo == "sempre" or tudo or grupo == voz_escolhida
+        preciso = grupo == "sempre" or tudo or grupo in vozes
         if not preciso:
-            print(f"  ⏭️  {modelo['ficheiro']}  (só com voz.modelo_tts: \"{grupo}\" ou --tudo)")
+            print(f"  ⏭️  {modelo['ficheiro']}  (só com a voz \"{grupo}\" pedida, --cerebro ou --tudo)")
             continue
         if not descarregar(modelo):
             falhas += 1
