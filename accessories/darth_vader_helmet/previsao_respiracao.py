@@ -1,156 +1,119 @@
-"""Rende a respiracao do capacete num WAV, para ouvir antes de gravar no Teensy.
+"""Renderiza o DSP do Teensy no computador. Requer Python 3 e clang++ ou g++.
 
-A respiracao e toda sintetica, por isso o que sai daqui e praticamente o que sai
-do Teensy: mesmos filtros, mesmos envelopes, mesmos ganhos, e os ganhos mudam de
-bloco em bloco como no loop(). A voz nao da para prever assim porque depende do
-microfone e de quem fala.
+    python3 previsao_respiracao.py
+    python3 previsao_respiracao.py --input voz.wav --mode full
+    python3 previsao_respiracao.py --test
 
-    python previsao_respiracao.py
-
-Escreve respiracao-nova.wav e imprime os picos de cada no. Se algum passar de
-1,0 e porque corta no Teensy. Os valores aqui em cima tem de acompanhar o .ino.
+O WAV de entrada deve ser PCM de 16 bits, mono, a 44100 Hz. O nível da gravação
+é ajustado para simular um microfone com RMS de fala igual a --mic-rms.
+Os filtros, a respiração e o pitch vêm de vader_dsp.h, sem uma cópia em Python.
 """
-import numpy as np
-from scipy import signal
-from scipy.io import wavfile
 
-FS = 44100.0
-BLOCO = 128
+import argparse
+import array
+import math
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+import tempfile
+import wave
 
-# ---- os mesmos valores do .ino ----
-CICLO_MS, EXPIRA_EM_MS = 4000, 2050
-VOL_INSPIRA, VOL_EXPIRA = 1.50, 1.00
-AMP_INSP, AMP_EXP = 0.45, 0.9
-
-INSP_DUR_MS, INSP_SUBIDA, INSP_DESCIDA = 1250, 0.18, 0.45
-INSP = [(300.0, 4.0, 2.6), (750.0, 3.0, 1.8), (1700.0, 2.0, 1.2)]
-INSP_TAMPA_HZ, INSP_CORTE_HZ = 2600.0, 130.0
-
-EXP_DUR_MS, EXP_SUBIDA, EXP_DESCIDA = 1150, 0.16, 0.50
-EXP = [(220.0, 3.0, 1.1), (520.0, 2.4, 0.8)]
-EXP_TAMPA_HZ = 1500.0
-
-TURB_HZ, TURB_INSP, TURB_EXP = 12.0, 0.22, 0.18
+ROOT = Path(__file__).resolve().parent
 
 
-def _biquad(b, a, x):
-    return signal.lfilter(b / a[0], a / a[0], x)
+def compile_cpp(source, output, sanitize=False):
+    compiler = shutil.which("clang++") or shutil.which("g++")
+    if not compiler:
+        raise RuntimeError("Instala clang++ ou g++ para renderizar o DSP.")
+    command = [compiler, "-std=c++17", "-O2", "-Wall", "-Wextra", "-Werror"]
+    if sanitize:
+        command.append("-fsanitize=address,undefined")
+    subprocess.run(command + [str(source), "-o", str(output)], check=True)
 
 
-def passa_banda(x, fc, q):
-    w = 2 * np.pi * fc / FS
-    al = np.sin(w) / (2 * q)
-    c = np.cos(w)
-    return _biquad(np.array([al, 0, -al]), np.array([1 + al, -2 * c, 1 - al]), x)
+def read_voice(path, mic_rms):
+    with wave.open(str(path), "rb") as wav:
+        if (wav.getnchannels(), wav.getsampwidth(), wav.getframerate()) != (1, 2, 44100):
+            raise ValueError("Exporta a voz como WAV PCM de 16 bits, mono, a 44100 Hz.")
+        pcm = array.array("h", wav.readframes(wav.getnframes()))
+    if sys.byteorder != "little":
+        pcm.byteswap()
+    if not pcm:
+        raise ValueError("O WAV está vazio.")
+    values = [sample / 32768.0 for sample in pcm]
+    windows = sorted(math.sqrt(sum(x * x for x in values[i:i + 882]) / len(values[i:i + 882]))
+                     for i in range(0, len(values), 882))
+    active = [rms for rms in windows if rms > windows[-1] * 0.1]
+    if not active:
+        raise ValueError("A gravação de voz só contém silêncio.")
+    reference = active[min(len(active) - 1, int(len(active) * 0.85))]
+    gain = mic_rms / max(reference, 1e-6)
+    peak = max(abs(x * gain) for x in values)
+    if peak > 1:
+        raise ValueError("O nível pedido satura a entrada. Reduz --mic-rms.")
+    samples = array.array("f", (x * gain for x in values))
+    samples.extend([0.0] * 22050)  # Escoar os atrasos sem cortar a última palavra.
+    return samples
 
 
-def passa_baixo(x, fc, q=0.707):
-    w = 2 * np.pi * fc / FS
-    al = np.sin(w) / (2 * q)
-    c = np.cos(w)
-    return _biquad(np.array([(1 - c) / 2, 1 - c, (1 - c) / 2]),
-                   np.array([1 + al, -2 * c, 1 - al]), x)
-
-
-def passa_alto(x, fc, q=0.707):
-    w = 2 * np.pi * fc / FS
-    al = np.sin(w) / (2 * q)
-    c = np.cos(w)
-    return _biquad(np.array([(1 + c) / 2, -(1 + c), (1 + c) / 2]),
-                   np.array([1 + al, -2 * c, 1 - al]), x)
-
-
-def suave(fase, subida, descida):
-    """A mesma do .ino: smoothstep, sem cantos nas juncoes."""
-    if fase <= 0.0 or fase >= 1.0:
-        return 0.0
-    if fase < subida:
-        x = fase / subida
-        return x * x * (3 - 2 * x)
-    if fase > 1 - descida:
-        x = (1 - fase) / descida
-        return x * x * (3 - 2 * x)
-    return 1.0
-
-
-def ganhos_por_bloco(n, dur_ms, subida, descida, turb_prof, rng, atraso_ms=0):
-    """Um valor por bloco de 128 amostras, como as chamadas a gain() no loop()."""
-    nb = n // BLOCO + 1
-    coef = 1 - np.exp(-(BLOCO / FS) * 2 * np.pi * TURB_HZ)
-    turb = 0.0
-    g = np.zeros(nb)
-    brilho = np.zeros(nb)
-    for k in range(nb):
-        t = k * BLOCO * 1000.0 / FS
-        fase = (t - atraso_ms) / dur_ms if t >= atraso_ms else 0.0
-        e = suave(fase, subida, descida)
-        turb += (rng.uniform(-1, 1) - turb) * coef
-        g[k] = max(0.0, e * (1.0 + turb_prof * turb * 3.0))
-        brilho[k] = e
-    return np.repeat(g, BLOCO)[:n], np.repeat(brilho, BLOCO)[:n]
-
-
-def ruido_branco(n, rng, amp):
-    """amplitude(A) no Teensy e ruido cheio escalado por A, ou seja uniforme em +-A."""
-    return rng.uniform(-amp, amp, n)
-
-
-def ruido_rosa(n, rng, amp):
-    y = signal.lfilter([0.049922035, -0.095993537, 0.050612699, -0.004408786],
-                       [1, -2.494956002, 2.017265875, -0.5221894],
-                       rng.standard_normal(n + 2000))[2000:]
-    return y / np.max(np.abs(y)) * amp
-
-
-def um_ciclo(rng, relatar=False):
-    passo = int(CICLO_MS * FS / 1000)
-    branco = ruido_branco(passo, rng, AMP_INSP)
-    rosa = ruido_rosa(passo, rng, AMP_EXP)
-
-    gI, briI = ganhos_por_bloco(passo, INSP_DUR_MS, INSP_SUBIDA, INSP_DESCIDA, TURB_INSP, rng)
-    mixI = np.zeros(passo)
-    for i, (fc, q, ganho) in enumerate(INSP):
-        mixI += ganho * gI * (briI ** i) * passa_banda(branco, fc, q)
-    inspira = passa_alto(passa_baixo(passa_baixo(mixI, INSP_TAMPA_HZ), INSP_TAMPA_HZ),
-                         INSP_CORTE_HZ)
-
-    gE, briE = ganhos_por_bloco(passo, EXP_DUR_MS, EXP_SUBIDA, EXP_DESCIDA, TURB_EXP,
-                                rng, atraso_ms=EXPIRA_EM_MS)
-    mixE = np.zeros(passo)
-    for i, (fc, q, ganho) in enumerate(EXP):
-        mixE += ganho * gE * (briE ** i) * passa_banda(rosa, fc, q)
-    expira = passa_baixo(mixE, EXP_TAMPA_HZ)
-
-    if relatar:
-        pico = lambda v: np.max(np.abs(v))
-        for nome, v in [("misturaInsp", mixI), ("inspiracao final", VOL_INSPIRA * inspira),
-                        ("misturaExp", mixE), ("expiracao final", VOL_EXPIRA * expira)]:
-            print(f"  {nome:20s} pico {pico(v):5.3f}  {'CORTA' if pico(v) >= 1.0 else 'ok'}")
-    return VOL_INSPIRA * inspira + VOL_EXPIRA * expira
-
-
-def centroide(y, fmax=12000):
-    j = int(0.06 * FS)
-    c = []
-    for i in range(0, len(y) - j, j):
-        s = y[i:i + j]
-        if np.sqrt(np.mean(s ** 2)) < 1e-4:
-            continue
-        S = np.abs(np.fft.rfft(s * np.hanning(j)))
-        fr = np.fft.rfftfreq(j, 1 / FS)
-        m = fr < fmax
-        c.append(np.sum(fr[m] * S[m]) / np.sum(S[m]))
-    return np.array(c)
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--input", type=Path, help="Gravação de voz limpa")
+    parser.add_argument("--output", type=Path)
+    parser.add_argument("--mode", choices=["breath", "voice", "full"])
+    parser.add_argument("--child", action="store_true")
+    parser.add_argument("--compare", action="store_true", help="Original e resultado, com RMS igual")
+    parser.add_argument("--mic-rms", type=float, default=0.020)
+    parser.add_argument("--test", action="store_true", help="Verifica o DSP com sanitizadores")
+    args = parser.parse_args()
+    if not 0 < args.mic_rms <= 1:
+        parser.error("--mic-rms deve estar entre 0 e 1.")
+    if args.compare and not args.input:
+        parser.error("--compare requer --input.")
+    with tempfile.TemporaryDirectory(prefix="vader-") as folder:
+        temporary = Path(folder)
+        executable = temporary / "render"
+        if args.test:
+            compile_cpp(ROOT / "tools/test_dsp.cpp", executable, sanitize=True)
+            subprocess.run([str(executable)], check=True)
+            return
+        compile_cpp(ROOT / "tools/render.cpp", executable)
+        input_path = "-"
+        if args.input:
+            input_path = str(temporary / "input.f32")
+            input_samples = read_voice(args.input, args.mic_rms)
+            Path(input_path).write_bytes(input_samples.tobytes())
+        raw = temporary / "output.f32"
+        mode = args.mode or ("voice" if args.input else "breath")
+        subprocess.run([str(executable), mode, "child" if args.child else "adult",
+                        input_path, str(raw)], check=True)
+        samples = array.array("f")
+        samples.frombytes(raw.read_bytes())
+        if args.compare:
+            dry_power = sum(x * x for x in input_samples)
+            wet_power = sum(x * x for x in samples)
+            gain = math.sqrt(wet_power / max(dry_power, 1e-12))
+            peak = max(max(abs(x) for x in samples),
+                       gain * max(abs(x) for x in input_samples))
+            level = min(1.0, 0.88 / max(peak, 1e-12))
+            comparison = array.array("f", (x * gain * level for x in input_samples))
+            comparison.extend([0.0] * 33075)
+            comparison.extend(x * level for x in samples)
+            samples = comparison
+            print("Comparação: original, pausa, voz processada. RMS igual nos dois trechos.")
+        pcm = array.array("h", (round(max(-1, min(1, x)) * 32767) for x in samples))
+        if sys.byteorder != "little":
+            pcm.byteswap()
+        output = args.output or ROOT / ("voz-vader.wav" if args.input else "respiracao-vader.wav")
+        with wave.open(str(output), "wb") as wav:
+            wav.setparams((1, 2, 44100, 0, "NONE", "not compressed"))
+            wav.writeframes(pcm.tobytes())
+        print(output.resolve())
 
 
 if __name__ == "__main__":
-    rng = np.random.default_rng(7)
-    print("picos em cada no:")
-    ciclos = [um_ciclo(rng, relatar=(k == 0)) for k in range(4)]
-    y = np.concatenate(ciclos)
-    wavfile.write("respiracao-nova.wav", int(FS), (np.clip(y, -1, 1) * 32767).astype(np.int16))
-    print(f"\npico total {np.max(np.abs(y)):.3f}   ciclo {CICLO_MS} ms")
-    c = centroide(y[:int(1.4 * FS)])
-    print(f"centroide da inspiracao: {' '.join(f'{v:.0f}' for v in c)} Hz")
-    ce = centroide(y[int(2.1 * FS):int(3.2 * FS)])
-    print(f"centroide da expiracao:  {' '.join(f'{v:.0f}' for v in ce)} Hz")
+    try:
+        main()
+    except (ValueError, RuntimeError, OSError, wave.Error, subprocess.CalledProcessError) as error:
+        sys.exit(str(error))
