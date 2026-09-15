@@ -13,6 +13,8 @@ Três camadas, por esta ordem:
 
 from __future__ import annotations
 
+import re
+
 from robot import config
 
 # MODO INGLÊS. A voz da GLaDOS é um modelo Piper com fonemizador `en-us`: texto
@@ -21,7 +23,7 @@ from robot import config
 # um robô que só responde em inglês é a melhor razão que há para a praticar.
 INSTRUCAO_INGLES = """
 
-ENGLISH MODE — this overrides the language rules above.
+ENGLISH MODE — this rule wins over everything that follows.
 Answer ONLY in English, never in Portuguese, even when you are spoken to in
 Portuguese. Lara is ten and is learning English: use short sentences, common
 words, and the present tense whenever you can. If she does not understand, say
@@ -41,9 +43,27 @@ def texto_base() -> str:
             "Falas português de Portugal.")
 
 
+# As linhas do personalidade.txt que MANDAM falar português. Em modo inglês não
+# basta acrescentar uma instrução no fim a dizer o contrário: o modelo tem 4 mil
+# milhões de parâmetros e a regra portuguesa está no princípio, em português, no
+# meio de uma parede de português. Já aconteceu — respondia sempre em português
+# com `lingua: "en"` bem posto. Contradizer não chega; tira-se a regra.
+_REGRA_DE_LINGUA = re.compile(r"portugu[eê]s|brasil", re.IGNORECASE)
+
+
+def _sem_regra_de_lingua(texto: str) -> str:
+    """O mesmo texto sem as linhas que mandam falar português."""
+    return "\n".join(
+        linha for linha in texto.splitlines()
+        if not _REGRA_DE_LINGUA.search(linha)
+    ).strip()
+
+
 def carregar(lingua: str | None = None) -> str:
     """A personalidade completa para a língua pedida (ou a do robot.yaml)."""
     texto = texto_base()
     if (lingua or config.obter("lingua", "pt")) == "en":
-        texto += INSTRUCAO_INGLES
+        # A instrução vai à FRENTE: é a primeira coisa que o modelo lê, e o que
+        # vem a seguir deixou de a contradizer.
+        return INSTRUCAO_INGLES.strip() + "\n\n" + _sem_regra_de_lingua(texto)
     return texto
