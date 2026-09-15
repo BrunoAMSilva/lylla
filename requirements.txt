@@ -37,15 +37,14 @@ opencv-python-headless>=4.10,<5
 # picamera2
 
 # --- Voz: falar -------------------------------------------------------------
-# A voz vem do mini (cerebro/falar.py). O Piper é o recurso opcional para
-# frases novas com o mini desligado (voz.modelo_tts no robot.yaml).
-piper-tts>=1.6.0
+# A síntese vem do mini. O Pi só reproduz o WAV e mantém frases em cache.
 
 # --- Voz: ouvir -------------------------------------------------------------
 # ⚠️ NÃO há Whisper no Pi. Quem transcreve é o mac mini — no Pi 5 o modelo que
 #    percebe bem português fica mais lento que o tempo real, e são 500 MB no
 #    cartão SD para um caso que a rede Tailscale torna raro. Sem mini, o robô
-#    não percebe o que lhe dizem: diz isso, e continua a andar e a ver.
+#    não percebe novas ordens faladas. Continua a reconhecer pessoas no Pi e
+#    pode tocar avisos já guardados. O watchdog independente entra na etapa 3.
 sounddevice>=0.4.7
 
 # O áudio vai para o mini em contínuo, pelo WebSocket, enquanto a Lara fala.
@@ -72,11 +71,13 @@ tqdm>=4.60
 # O gpiozero é puro Python; instalar pelo pip não faz mal em lado nenhum.
 gpiozero>=2.0
 
-# A cara: falamos com o ESP32 pela porta série.
-# O painel HUB75 é desenhado LÁ, não aqui — ver robot/hardware/eyes.py.
+# O mBot2 fica intacto. A biblioteca fala com o CyberPi e o shield por USB.
+makeblock==0.1.8
+
+# Porta série para o mBot2 e para o protótipo HUB75, se esse ecrã for escolhido.
 pyserial>=3.5
 
-# I2C — dois PCA9685 (motores 0x40, servos 0x41), VL53L1X (0x29), ADS1115 (0x48)
+# I2C para módulos adicionais, como servos ou monitorização de bateria.
 # Falamos com eles diretamente por smbus2: sem Blinka, sem CircuitPython,
 # sem nada que possa partir com a próxima atualização do Raspberry Pi OS.
 smbus2>=0.5

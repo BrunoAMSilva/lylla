@@ -1,19 +1,21 @@
-# 🤖 Robô da Lara
+# Robô da Lara
 
-Um robô grande, com rodas e braços, que reconhece caras, ouve mesmo enquanto
-fala, e pensa com um LLM que corre no Mac lá de casa.
+Lylla é um robô com rodas que Lara está a construir e programar. O mBot2 fica
+inteiro e é controlado pelo Raspberry Pi através de USB. O mac mini executa
+STT, LLM e TTS. A palavra-chave e o reconhecimento de pessoas ficam no Pi.
 
-> **O plano completo está em [`PLANO.md`](PLANO.md).** Este ficheiro é só para
-> pôr as coisas a andar.
+> **Começa pelas [`decisões atuais`](docs/decisoes-atuais.md).** O `PLANO.md`
+> contém o histórico de alternativas. Quando houver
+> conflito, as decisões atuais e a configuração executável têm precedência.
+>
+> **Para construir por ordem**, segue o [`roteiro ativo`](docs/roteiro.md).
 >
 > **A ligar a câmara pela primeira vez?**
 > [`docs/FASE9-visao.md`](docs/FASE9-visao.md) — do cabo CSI até «Olá, Lara!»,
 > passo a passo, com as duas armadilhas que fazem culpar o hardware sem razão.
 >
-> **Ainda à espera das peças?** [`ENQUANTO-ESPERAS.md`](ENQUANTO-ESPERAS.md) —
-> cinco das sete coisas que dá para fazer hoje não precisam do Raspberry Pi.
-> Começa pela voz: são 30 minutos e ela ouve o robô falar antes de ele existir.
-> Para ver o que já está pronto: `python scripts/check_mac.py`
+> `ENQUANTO-ESPERAS.md` conserva as atividades da fase anterior. Já não define
+> a ordem do projeto.
 
 ---
 
@@ -33,16 +35,16 @@ python scripts/check_health.py
 > python3-picamera2` — e um venv normal não a vê. A instalação completa do Pi
 > está no Apêndice B do `PLANO.md`. No Mac tanto faz: lá corre tudo em simulação.
 
-> 🔊 **A coluna liga-se ao reSpeaker, não ao Pi.** O reSpeaker XVF3800 é a placa
-> de som do robô (microfones **e** coluna, por USB) — é a única maneira de o
-> cancelamento de eco funcionar. Não há amplificador I2S nem `hifiberry` no
-> `config.txt`; há duas linhas em `/etc/asound.conf` (Apêndice B).
+> **O áudio físico ainda está em teste.** A entrega de três microfones, um
+> MAX98357A I2S e uma coluna de 3 W está prevista para 5 de setembro. Primeiro registamos os modelos e
+> as ligações. Depois escolhemos uma cadeia de entrada e saída. O cancelamento
+> durante a fala fica planeado, mas não bloqueia esta etapa.
 
 ## O cérebro, no mac mini
 
-Os modelos de IA — ouvir, pensar e falar — correm todos no mac mini, não no
-robô. O Pi manda o áudio **enquanto a Lara ainda está a falar**, e recebe de
-volta a resposta já em som, frase a frase.
+O mac mini executa a transcrição, o modelo de linguagem e a síntese de voz. O
+Pi executa a palavra-chave, a visão, o reconhecimento de pessoas e o controlo
+do corpo. Só o áudio da conversa precisa de fazer a viagem até ao mini.
 **A explicação toda está em [`docs/AI-config.md`](docs/AI-config.md).**
 
 ```bash
@@ -66,15 +68,17 @@ cerebro:
 (É o Tailscale que resolve o nome `mini`, portanto funciona em casa ou fora
 dela.)
 
-**Não há Whisper nem Ollama dentro do robô.** Com o mini desligado ele não
-percebe o que lhe dizem — e diz isso, com a voz que tem em cache — mas continua
-a andar, a ver, a reconhecer caras e a obedecer ao «pára».
+**Não há Whisper nem Ollama dentro do robô.** Com o mini desligado, Lylla não
+transcreve frases nem cria respostas novas. Continua a reconhecer pessoas no
+Pi. Uma ordem falada, incluindo `pára`, precisa da transcrição do mini. O
+timeout atual dos motores ainda não é um watchdog independente. A etapa 3 do
+roteiro corrige isso antes dos testes de movimento no chão.
 
-## Andar pela casa — «Lylla, vai à cozinha»
+## Autonomia avançada
 
-Desenha-se a planta da casa numa página, treina-se um cérebro a conduzir lá
-dentro **por evolução** (centenas de robôs por geração, os melhores têm
-filhos), e o ficheiro que sai daí é o que o Pi lê.
+Seguir pessoas, navegar entre divisões e jogar às escondidas só entram depois
+de os testes de bancada, obstáculos e bordas passarem. A simulação pode ser
+usada antes disso.
 
 ```bash
 open docs/escola-de-conducao.html          # planta + treino + campeã, sem instalar nada
@@ -85,8 +89,8 @@ O mapa dá a rota; as redes tratam do saco que hoje está no corredor, do gato e
 de quem passa. **A explicação toda — incluindo as três coisas que isto NÃO
 resolve — está em [`docs/navegacao.md`](docs/navegacao.md).**
 
-> ⚠️ Vem desligado no robô a sério (`navegacao.ativo: false`). Em
-> `ROBO_SIMULAR=1` anda sempre.
+> A navegação real vem desligada (`navegacao.ativo: false`). Ativá-la exige a
+> lista de segurança descrita em [`docs/navegacao.md`](docs/navegacao.md).
 
 ## Está tudo bem?
 
@@ -94,9 +98,9 @@ resolve — está em [`docs/navegacao.md`](docs/navegacao.md).**
 python scripts/check_health.py
 ```
 
-Mostra uma lista com ✅ e ❌ de cada peça: motores, olhos, câmara, microfone,
-coluna, sensores e o LLM no Mac. **Corre isto sempre que alguma coisa parecer
-estranha, antes de mexer em código.**
+Mostra o que já está instalado, o que está ausente e o que ainda pertence a uma
+etapa futura. **Corre isto sempre que alguma coisa parecer estranha, antes de
+mexer em código.**
 
 ## Testar cada peça sozinha
 
@@ -104,15 +108,16 @@ Quando alguma coisa falha, a primeira pergunta é sempre *"é o hardware ou é o
 código?"*. Estes scripts respondem em 30 segundos:
 
 ```bash
-python scripts/test_eyes.py       # mostra as 9 expressões, uma a uma
-python scripts/test_motors.py     # roda cada motor isoladamente
-python scripts/test_arms.py       # passa por todas as poses e gestos
+python scripts/spike_mbot2.py --sem-medir --luzes --sensores  # LEDs e sensores existentes
+python scripts/spike_mbot2.py --sem-medir --chao   # mede os 4 canais, sem mover
+python scripts/test_motors.py     # rodas, depois de o spike passar
+python scripts/test_eyes.py       # futuro ecrã, depois de ser escolhido
+python scripts/test_arms.py       # braços futuros
 python scripts/test_voz.py        # diz uma frase
 python scripts/test_camera.py     # tira uma foto e desenha as caras
 python scripts/medir_visao.py     # quanto custa ver, a cada resolução
 /usr/bin/python3 scripts/ver_camera.py   # ver pela câmara no browser (telemóvel incluído) — só precisa do apt
 python scripts/ver_visao.py       # o mesmo, mas com as caixas, os nomes e os tempos
-python scripts/test_sensores.py   # imprime as distâncias em tempo real
 python scripts/test_power.py      # tensão e percentagem da bateria
 python scripts/vigiar_energia.py --forcar 90   # a fonte aguenta o CPU em carga?
 python scripts/test_cerebro.py    # conversa com o mac mini, escrita
@@ -188,44 +193,22 @@ espera pelas encomendas.
 
 | Ficheiro | O que muda |
 |---|---|
-| `robot/expressions.py` | **As caras do robô.** Grelhas 8×8 de `#` e `.` |
+| `config/expressoes.yaml` | Parâmetros das caras usadas pelo protótipo HUB75 |
 | `robot/gestures.py` | **Os gestos dos braços.** Poses e sequências |
 | `config/personalidade.txt` | **Como o robô fala e pensa.** É o system prompt |
-| `config/robot.yaml` | Nome, velocidades, limites dos servos, segurança |
+| `meus_comandos.py` | Comandos pessoais que ficam disponíveis por voz |
 
-Mudar qualquer um destes quatro **não parte nada**. Se puseres um ângulo fora
-dos limites, o robô corrige-o sozinho e avisa-te. Experimenta à vontade.
+`config/robot.yaml` também pode ser alterado, mas contém limites de velocidade e
+segurança. Lara só o muda com um adulto.
 
-### Exemplo: inventar uma cara nova
+### Exemplo de trabalho nos olhos
 
-São **dois passos** — desenhar, e depois dizer ao robô que ela existe.
+Enquanto o ecrã final está por decidir, `olhos("feliz")` usa as animações do
+mBot2. O protótipo HUB75 lê as expressões de `config/expressoes.yaml`. O editor
+`bot-face` está em `/Users/brunosilva/Developer/bot-filter`.
 
-**1.** Abre `robot/expressions.py` e desenha:
-
-```python
-CONFUSO = [
-    "........",
-    "..#..#..",
-    ".#.##.#.",
-    "........",
-    "...##...",
-    "..#..#..",
-    "...##...",
-    "........",
-]
-```
-
-**2.** No mesmo ficheiro, mais abaixo, acrescenta uma linha ao dicionário
-`EXPRESSOES` (senão o robô não sabe que ela existe):
-
-```python
-EXPRESSOES = {
-    ...
-    "confuso": (CONFUSO, CONFUSO),   # ← esta linha
-}
-```
-
-Depois `python scripts/test_eyes.py confuso` e vê o resultado.
+Os parâmetros do browser e do firmware ainda usam escalas diferentes. Não
+ensinar a copiar números entre os dois até essa diferença ser corrigida.
 
 ---
 
@@ -241,14 +224,15 @@ cerebro/          O QUE CORRE NO MAC MINI (não no robô)
 
 robot/
 ├── hardware/
-│   ├── pca9685.py    driver partilhado de PWM por I2C
-│   ├── motors.py     as rodas (TB6612 via PCA9685 @0x40, 1 kHz)
+│   ├── mbot2.py      CyberPi, rodas e sensores por USB
+│   ├── motors.py     controlo das rodas através do mBot2
+│   ├── pca9685.py    PWM para braços futuros
 │   ├── arms.py       os braços (5 servos via PCA9685 @0x41, 50 Hz)
 │   ├── eyes.py       a matriz de LED
 │   ├── sensors.py    distância e precipício
 │   └── power.py      a bateria (ADS1115 @0x48)
-├── perception/   câmara, reconhecer caras        → os sentidos
-├── voice/        falar, ouvir, palavra-chave     → a boca e os ouvidos
+├── perception/   captura, deteção e reconhecimento de pessoas no Pi
+├── voice/        captura, reprodução e palavra-chave
 ├── brain/
 │   ├── acoes.py      O CONTRATO — lido também pelo mini
 │   ├── cerebro.py    o cliente do mini
@@ -260,7 +244,7 @@ robot/
 │   ├── pose.py       onde ela julga estar — e o quanto pode estar enganada
 │   ├── ir_para.py    conduzir, com os sensores por cima da rede
 │   └── procurar.py   às escondidas
-├── expressions.py                                → as caras (edita a Lara)
+├── expressions.py                                → adaptador das expressões
 ├── gestures.py                                   → os gestos (edita a Lara)
 └── main.py                                       → o ciclo principal
 ```
@@ -269,30 +253,32 @@ robot/
 
 | Chip | Endereço | Para quê |
 |---|---|---|
-| PCA9685 #1 | `0x40` | Motores, a 1 kHz |
-| PCA9685 #2 | `0x41` | Servos, a 50 Hz |
+| PCA9685 | por definir | Servos dos braços, se forem instalados |
 | VL53L1X | `0x29` | Distância a laser |
 | ADS1115 | `0x48` | Tensão da bateria |
 
-São **dois** PCA9685 porque o chip só tem uma frequência para os 16 canais:
-servos querem 50 Hz, motores a 50 Hz rosnam.
+Os motores não usam I2C. Ficam ligados ao mBot2 Shield e são comandados por
+USB. Não comprar um PCA9685 para as rodas.
 
 ## Regras da casa
 
 1. **Cada peça de hardware tem um script de teste isolado.** Sem exceções.
 2. **As funções que a Lara usa têm nomes em português** e fazem uma coisa só.
-3. **Nada rebenta.** Sem Wi-Fi, sem câmara, sem Mac — o robô continua a andar
-   e diz o que se passa. Um *stack trace* à frente de uma criança mata o
-   projeto.
+3. **Uma falha deve deixar o robô parado.** O watchdog dos motores tem de correr
+   fora do ciclo que espera pelo mini. Essa separação ainda é trabalho da etapa
+   3. Uma ordem falada depende da transcrição do mini. Um erro explicado ensina
+   mais do que um *stack trace*.
 
 ---
 
 ## Emergência
 
 ```bash
-sudo systemctl stop robo     # PARA TUDO
-i2cdetect -y 1               # 0x40 motores · 0x41 servos · 0x29 ToF · 0x48 bateria
-aplay -l                     # o reSpeaker aparece? (é a coluna E os microfones)
+sudo systemctl stop robo     # pede ao mBot2 para parar
+python scripts/spike_mbot2.py --sem-medir   # o mBot2 responde por USB?
+i2cdetect -y 1               # módulos adicionais ligados ao Pi
+arecord -l                    # que entradas de áudio existem?
+aplay -l                      # que saídas de áudio existem?
 rpicam-hello --list-cameras  # a câmara aparece? (imx708)
 vcgencmd get_throttled       # 0x0 = alimentação está bem
 python scripts/test_power.py # quanta bateria resta
@@ -301,6 +287,8 @@ curl http://mini:8420/v1/saude         # o cérebro está de pé?
 curl http://mini:11434/api/tags        # e o Ollama por baixo dele?
 ```
 
-**E o botão vermelho.** Corta a corrente aos servos e aos motores sem desligar
-o Pi — o robô para de se mexer instantaneamente e continua a explicar o que
-aconteceu.
+O corte físico de movimento com o mBot2 intacto ainda não está resolvido. O
+rocker e o botão que chegam em 5 de setembro só entram nesse circuito depois de
+confirmarmos os contactos e os valores nominais. Até lá, cada teste de movimento
+é feito com um adulto junto ao robô e com acesso imediato à alimentação do
+mBot2. `systemctl stop` não substitui um corte físico se a ligação USB falhar.

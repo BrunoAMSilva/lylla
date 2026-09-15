@@ -113,13 +113,21 @@ def main() -> int:
               "Alguma grelha não tem 8×8. A mensagem de erro diz qual.")
 
     if not config.a_simular():
-        verificar("SPI ativo", lambda: Path("/dev/spidev0.0").exists(),
-                  "sudo raspi-config → Interface Options → SPI")
+        print(f"  {AVISO}o ecrã final ainda está por decidir; os LEDs temporários são do mBot2")
 
     # ---------------------------------------------------- motores
     print("\n🛞 MOTORES")
+    ligacao_motores = str(config.obter("motores.ligacao", "mbot2")).lower()
     if config.a_simular():
         print(f"  {AVISO}saltado (simulação)")
+    elif ligacao_motores == "mbot2":
+        from robot.hardware import mbot2
+
+        verificar(
+            "mBot2 por USB",
+            lambda: "CyberPi e shield" if mbot2.disponivel() else False,
+            "Liga o mBot2 ao Pi por USB e corre scripts/spike_mbot2.py",
+        )
     else:
         def _i2c():
             r = subprocess.run(["i2cdetect", "-y", "1"], capture_output=True, text=True)
@@ -137,7 +145,9 @@ def main() -> int:
 
     verificar("poses e gestos", _gestos,
               "Alguma pose usa uma junta que não existe. A mensagem diz qual.")
-    if config.a_simular():
+    if not config.obter("bracos.ativo", False):
+        print(f"  {AVISO}hardware ainda não instalado")
+    elif config.a_simular():
         print(f"  {AVISO}servos saltados (simulação)")
     else:
         def _servos():
@@ -149,7 +159,9 @@ def main() -> int:
     # ---------------------------------------------------- bateria
     print("\n🔋 BATERIA")
     from robot.hardware import power
-    if config.a_simular():
+    if not config.obter("energia.ativa", False):
+        print(f"  {AVISO}monitorização ainda não instalada")
+    elif config.a_simular():
         print(f"  {AVISO}saltado (simulação)")
     else:
         def _bat():
@@ -162,6 +174,20 @@ def main() -> int:
     print("\n📏 SENSORES")
     if config.a_simular():
         print(f"  {AVISO}saltado (simulação)")
+    elif ligacao_motores == "mbot2":
+        from robot.hardware import mbot2
+
+        def _ultrassons_mbot2():
+            if not mbot2.disponivel():
+                return False
+            return f"{mbot2.distancia_cm():.0f} cm"
+
+        verificar(
+            "ultrassons do mBot2",
+            _ultrassons_mbot2,
+            "Confirma o cabo USB e o sensor ligado ao mBot2 Shield",
+        )
+        print(f"  {AVISO}sensor RGB de chão ainda só tem o ensaio --chao")
     else:
         from robot.hardware import sensors
         verificar("ultrassons", lambda: f"{sensors.distancia_cm():.0f} cm",
@@ -234,7 +260,7 @@ def main() -> int:
                   lambda: _speak.frases_em_cache() or "nenhuma ainda")
     elif not modelo_voz:
         verificar("alguma voz configurada", lambda: False,
-                  "põe voz.modelo_tts (local) ou cerebro.url (no mini) no robot.yaml")
+                  "define cerebro.url para o serviço do mac mini no robot.yaml")
     if not config.a_simular():
         verificar("microfone", lambda: _comando("arecord", "-l"),
                   "arecord -l não encontra nada. O microfone USB está ligado?")

@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
 """DESCARREGAR OS MODELOS DE IA.
 
-    python scripts/download_models.py            # o que a configuração pedir
-    python scripts/download_models.py --tudo     # todos, incluindo os opcionais
+    python scripts/download_models.py            # YuNet e SFace para o Pi
+    python scripts/download_models.py --tudo     # inclui vozes locais antigas
 
 Só é preciso correr uma vez (e sempre que se apagar a pasta models/, que está
 no .gitignore por serem ficheiros grandes).
 
-O que vem sempre:
+O que a arquitetura atual usa:
   · YuNet   —  deteção de caras          (~350 KB)
   · SFace   —  reconhecimento de caras   (~40 MB)
 
-E depois **o que o config/robot.yaml pedir**. Se lá estiver
-`voz.modelo_tts: "glados"`, vem a voz da GLaDOS; se estiver a `tugão`, vem essa.
-Não é preciso lembrar-se de flags nenhumas: muda-se a configuração e corre-se
-isto outra vez.
+Ambos correm no Raspberry Pi. A transcrição, o modelo de linguagem e a síntese
+de voz correm no mac mini. Os modelos de voz locais permanecem disponíveis
+para repetir experiências antigas, mas não fazem parte da montagem atual. Só
+são descarregados com `--tudo` ou quando `voz.modelo_tts` os pede de propósito.
 
 A voz da GLaDOS vem da release do projeto dnhkng/GLaDOS (MIT), não da pasta do
 lado. É essa a diferença entre "funciona no meu Mac" e "funciona no Pi": o robô
@@ -24,8 +24,8 @@ repositório.
 ⚠️ A voz da GLaDOS é derivada do Portal 2. Uso pessoal em casa, como a fan art
    do Astro Bot. Não redistribuir o modelo nem áudio gerado com ele.
 
-O modelo do Whisper descarrega-se sozinho na primeira vez que o robô ouvir.
-O modelo da palavra-chave é treinado por vocês na fase 7.
+O modelo de transcrição é instalado no mac mini. O modelo da palavra-chave é
+treinado no Pi na etapa própria.
 """
 
 from __future__ import annotations
@@ -165,7 +165,7 @@ def main() -> int:
     if voz_escolhida:
         print(f"   O config/robot.yaml pede a voz '{voz_escolhida}'.\n")
     else:
-        print("   Nenhuma voz local configurada (voz.modelo_tts está vazio).\n")
+        print("   Voz no mac mini. Só são necessários os modelos de visão no Pi.\n")
 
     falhas = 0
     for modelo in MODELOS:

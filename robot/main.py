@@ -19,13 +19,15 @@ o mini transcreve enquanto ela fala, e escreve a segunda frase enquanto o
 robô diz a primeira. É essa sobreposição que faz a diferença entre uma
 conversa e um formulário.
 
-Com o mini desligado o robô não percebe o que lhe dizem — e diz isso, com a
-voz que tem em cache. Continua a andar, a ver e a obedecer aos comandos
-diretos. Nada rebenta; é a regra da casa nº 3.
+Com o mini desligado o robô não percebe o que lhe dizem. Diz isso com a voz
+que tem em cache e continua a reconhecer pessoas. Nenhuma ordem falada pode ser
+transcrita. O timeout atual dos motores partilha este ciclo e ainda precisa de
+ser separado para funcionar como watchdog durante uma espera de rede.
 """
 
 from __future__ import annotations
 
+import importlib
 import signal
 import sys
 import time
@@ -44,7 +46,18 @@ _a_correr = True
 # O que ele diz quando o mini não responde. É uma frase FIXA de propósito:
 # fica na cache de voz depois de ser dita uma vez, e a partir daí sai mesmo
 # sem rede nenhuma. Uma frase diferente de cada vez nunca estaria em cache.
-FRASE_SEM_CEREBRO = "O meu cérebro grande está a dormir. Mas ainda te vejo e ando!"
+FRASE_SEM_CEREBRO = (
+    "O meu cérebro grande está a dormir. Ainda te vejo, mas não consigo "
+    "perceber novas ordens faladas."
+)
+
+
+def _carregar_comandos_da_lara() -> None:
+    """Carrega os comandos pessoais sem impedir o arranque se houver um erro."""
+    try:
+        importlib.import_module("meus_comandos")
+    except Exception as erro:  # noqa: BLE001
+        print(f"⚠️  Não consegui carregar meus_comandos.py ({erro})")
 
 
 def _parar_tudo(*_args) -> None:
@@ -65,6 +78,7 @@ def _parar_tudo(*_args) -> None:
 def arrancar() -> Maquina:
     nome = config.nome_do_robo()
     print(f"\n🤖 {nome} a arrancar…")
+    _carregar_comandos_da_lara()
     if config.a_simular():
         print("   ⚠️  MODO SIMULAÇÃO — não há hardware. Tudo sai no terminal.\n")
 
@@ -89,8 +103,8 @@ def arrancar() -> Maquina:
               f"  (ouvir: {saude['ouvir']['modelo']} · falar: {saude['falar']['voz']})")
     else:
         print(f"   cérebro: ❌ {cerebro.base_url()} não responde")
-        print("      (sem ele o robô não percebe o que lhe dizem — mas anda,")
-        print("       vê, e diz as frases que tem em cache)")
+        print("      (sem ele o robô não percebe o que lhe dizem, mas continua")
+        print("       a ver e pode dizer as frases que tem em cache)")
     pct = power.percentagem()
     print(f"   bateria: {f'{pct}%' if pct is not None else '(sem leitura)'}")
     print("\n   Diz «Olá robô» para começar. Ctrl+C para parar.\n")
@@ -161,8 +175,8 @@ def _consumir_turno(maquina: Maquina, eventos) -> bool:
             elif tipo == "ouvido":
                 ouvido = evento.get("texto", "")
                 print(f"   👤 «{ouvido}»" + " " * 20)
-                # Um comando de segurança nunca depende do modelo — nem
-                # sequer de a rede estar boa. Ver comandos_diretos.py.
+                # Um comando direto não depende do LLM. Ainda depende desta
+                # transcrição, que vem do mini. Ver comandos_diretos.py.
                 directa = comandos_diretos.tentar(ouvido)
                 if directa is not None:
                     print(f"   ⚡ comando direto → {directa}")

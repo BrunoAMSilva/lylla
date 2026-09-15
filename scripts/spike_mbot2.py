@@ -2,14 +2,15 @@
 """SPIKE — falar com o mBot2 pelo cabo USB, sem cortar nada.
 
     python scripts/spike_mbot2.py                  # só mede, nada se mexe
+    python scripts/spike_mbot2.py --sensores       # leituras sem mover rodas
+    python scripts/spike_mbot2.py --chao           # mede os quatro sensores RGB
     python scripts/spike_mbot2.py --com-motores    # ⚠️ as rodas rodam
     python scripts/spike_mbot2.py --servo S1       # varre um servo na porta S1
     python scripts/spike_mbot2.py --porta /dev/serial/by-id/usb-...
 
-Isto NÃO é código do robô: é uma experiência para responder a uma pergunta.
-Vale a pena manter o mBot2 INTEIRO — shield + CyberPi ligados ao Pi por um cabo
-USB — em vez de o canibalizar? A resposta depende de números que não estão na
-documentação (a latência de cada tipo de chamada), e é isso que isto mede.
+Isto NÃO é código do robô. Começou como a experiência que decidiu manter o
+mBot2 inteiro, com o shield e o CyberPi ligados ao Pi por USB. Agora serve para
+repetir as medições e testar cada parte sem alterar o mBot2.
 
 O que se ganha, se as contas derem: os encoders contados EM HARDWARE pelo
 shield (o `EM_get_angle` devolve graus), que é o ponto (1) da lista do
@@ -37,9 +38,9 @@ Três detalhes do pacote que explicam o chão da latência (lidos no código del
 
 ⚠️  QUATRO ARMADILHAS DO PACOTE, todas verificadas a correr o código dele
   1. `import makeblock` PODE ABRIR UMA PORTA SÉRIE SOZINHO: procura a primeira
-     porta com chip CH340 e liga-se-lhe. O ESP32 da cara costuma ser CH340
-     também. **Faz este teste com o ESP32 desligado do Pi**, senão arriscas que
-     a biblioteca fique agarrada à porta da cara.
+     porta com chip CH340 e liga-se-lhe. Algumas placas ESP32 antigas também
+     usam CH340. O conversor desta ainda não foi identificado. **Faz este teste
+     com o ESP32 desligado do Pi** até sabermos que porta lhe pertence.
   2. E se NÃO houver nenhuma porta CH340, o próprio `import makeblock` REBENTA
      com um `AttributeError: '__CyberPi' object has no attribute '_protocol'`.
      Não é o teu código: é a biblioteca a tentar falar por uma porta que não
@@ -49,9 +50,9 @@ Três detalhes do pacote que explicam o chão da latência (lidos no código del
      (espera pelo `protocol.ready` num ciclo sem saída). Por isso a ligação é
      feita com despertador — um script que não volta é pior do que um erro.
   4. O pacote instala o SEU PRÓPRIO handler de Ctrl+C, que fecha as portas e
-     sai — deixando os motores a rodar. Este script volta a instalar o dele
-     DEPOIS do import e manda parar antes de sair. Mesmo assim: a paragem de
-     emergência nunca é a série, é o botão DPST.
+     pode deixar os motores a rodar. Este script volta a instalar o dele
+     DEPOIS do import e manda parar antes de sair. O corte físico de movimento
+     com o mBot2 intacto ainda precisa de ser resolvido.
 """
 
 from __future__ import annotations
@@ -196,8 +197,8 @@ def escolher_porta(pedida: str | None) -> str | None:
 
     if cara and len(lista) == 1:
         print("\n  (o robot.yaml aponta a cara para este mesmo nome. Enquanto o")
-        print("   ESP32 não existir, quem apanha o /dev/ttyUSB0 é o CyberPi —")
-        print("   quando a cara chegar, os dois vão disputá-lo: usar sempre by-id.)")
+        print("   ESP32 estiver desligado, quem apanha o /dev/ttyUSB0 é o CyberPi.")
+        print("   Quando os dois forem ligados, usar sempre os nomes by-id.)")
 
     escolhida = lista[0]
     if len(lista) > 1:
@@ -861,8 +862,10 @@ def ver_sensores(cyber) -> None:
     print("  Por isso lê-se duas vezes, com meio segundo pelo meio.")
     for nome, chamada in (
         ("ultrassons (cm)", lambda: cyber.ultrasonic2.get()),
+        ("RGB quádruplo l2", lambda: cyber.quad_rgb_sensor.get_gray("l2")),
         ("RGB quádruplo l1", lambda: cyber.quad_rgb_sensor.get_gray("l1")),
         ("RGB quádruplo r1", lambda: cyber.quad_rgb_sensor.get_gray("r1")),
+        ("RGB quádruplo r2", lambda: cyber.quad_rgb_sensor.get_gray("r2")),
         ("guinada do CyberPi", lambda: cyber.get_yaw()),
         ("volume do microfone", lambda: cyber.get_loudness()),
     ):
@@ -874,6 +877,77 @@ def ver_sensores(cyber) -> None:
             print(f"    {nome:<22} {segunda}{extra}")
         except Exception as erro:  # noqa: BLE001
             print(f"    {nome:<22} — ({erro})")
+
+
+def testar_chao(cyber) -> None:
+    """Mede os quatro leitores do chão sem mover o robô."""
+    titulo("SENSOR RGB QUÁDRUPLO: CHÃO E BORDA")
+    print("  Os motores não são usados neste teste.")
+    print("  Um adulto segura o robô quando a barra fica sobre espaço vazio.")
+    print("  Não usar uma mesa nem uma escada. Uma caixa baixa com uma almofada")
+    print("  à frente chega para medir o vazio. Escreve 's' para saltar um piso.")
+
+    canais = ("l2", "l1", "r1", "r2")
+    cenarios = (
+        ("chão habitual", "Põe a barra sobre o chão onde a Lylla vai andar"),
+        ("chão escuro", "Põe a barra sobre o piso mais escuro disponível"),
+        ("tapete", "Põe a barra sobre um tapete"),
+        ("sombra", "Põe a barra no chão habitual, mas à sombra"),
+        ("luz do dia", "Põe a barra no chão habitual, perto de uma janela"),
+        ("vazio", "Segura a Lylla com a barra para lá da borda baixa"),
+    )
+    resultados: dict[str, dict[str, float]] = {}
+
+    for nome, instrucao in cenarios:
+        resposta = input(f"\n  {instrucao}. Enter para medir, 's' para saltar: ").strip().lower()
+        if resposta == "s":
+            continue
+        medidas: dict[str, float] = {}
+        for canal in canais:
+            try:
+                cyber.quad_rgb_sensor.get_gray(canal)
+                time.sleep(0.35)
+                leituras = []
+                for _ in range(5):
+                    valor = cyber.quad_rgb_sensor.get_gray(canal)
+                    if isinstance(valor, (int, float)):
+                        leituras.append(float(valor))
+                    time.sleep(0.08)
+                if leituras:
+                    medidas[canal] = statistics.median(leituras)
+            except Exception as erro:  # noqa: BLE001
+                aviso(f"{canal} não respondeu ({erro})")
+        resultados[nome] = medidas
+
+    print("\n  | condição | L2 | L1 | R1 | R2 |")
+    print("  |---|---:|---:|---:|---:|")
+    for nome, medidas in resultados.items():
+        valores = [f"{medidas[c]:.1f}" if c in medidas else "erro" for c in canais]
+        print(f"  | {nome} | " + " | ".join(valores) + " |")
+
+    vazio = resultados.get("vazio", {})
+    pisos = [v for nome, v in resultados.items() if nome != "vazio"]
+    if not vazio or not pisos:
+        aviso("faltam leituras de piso ou de vazio. Ainda não há limiar para avaliar.")
+        return
+
+    print("\n  Limiares candidatos, ainda sem ligar aos motores:")
+    for canal in canais:
+        chao = [p[canal] for p in pisos if canal in p]
+        if canal not in vazio or not chao:
+            aviso(f"{canal}: faltam leituras")
+            continue
+        minimo_chao = min(chao)
+        valor_vazio = vazio[canal]
+        if valor_vazio >= minimo_chao:
+            aviso(f"{canal}: vazio={valor_vazio:.1f} não fica abaixo de todo o chão")
+            continue
+        limiar = (minimo_chao + valor_vazio) / 2
+        print(f"    {canal.upper()}: parar abaixo de ~{limiar:.1f} "
+              f"(chão mínimo {minimo_chao:.1f}, vazio {valor_vazio:.1f})")
+
+    print("\n  Estes números só valem para a altura, luz e pisos medidos.")
+    print("  Uma leitura ausente ou antiga deve contar como perigo.")
 
 
 def testar_servo(cyber, porta: str) -> None:
@@ -944,7 +1018,8 @@ def veredicto(r: dict[str, float]) -> None:
         print("  distância nenhuma — a que ele andou pelo meio está lá dentro.")
         print("  O que a cadência limita é a rapidez a CORRIGIR o rumo, não a")
         print("  exatidão da odometria. Para um robô a 18 cm/s são ~4 cm por")
-        print("  atualização; a segurança não depende disto (é dos sensores do Pi).")
+        print("  atualização. A etapa 3 tem de incluir isto no orçamento de paragem")
+        print("  e recusar leituras de segurança que estejam antigas.")
         print("  E quando fizer falta um valor fresco num instante exato, um")
         print(f"  pedido direto dá-o em {ler:.0f} ms.")
 
@@ -953,10 +1028,9 @@ def veredicto(r: dict[str, float]) -> None:
     print("    10-20 Hz → dá para navegar, mas o desvio corrige-se mais devagar.")
     print("    < 10 Hz  → só serve para comandos de alto nível («anda 30 cm»),")
     print("               com o ciclo rápido a viver DENTRO do CyberPi.")
-    print("\n  ⚠️ Seja qual for o número: precipício, paragem de emergência e o")
-    print("     botão DPST NÃO passam por este cabo. Nunca.")
-    print("\n  Mete os números em docs/ ou pede-me para os pôr na memória do")
-    print("  projeto — a decisão de canibalizar ou não o mBot2 depende deles.\n")
+    print("\n  ⚠️ Uma paragem por USB não substitui um corte físico de movimento.")
+    print("     Esse corte ainda precisa de ser desenhado para o mBot2 intacto.")
+    print("\n  Guarda os números no registo da experiência para os podermos comparar.\n")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -968,9 +1042,13 @@ def main() -> int:
     parser.add_argument("--servo", help="porta de servo a testar (S1…S4)")
     parser.add_argument("--luzes", action="store_true",
                         help="⚠️ acende as luzes do CyberPi, ultrassons e sensor RGB")
+    parser.add_argument("--sensores", action="store_true",
+                        help="lê ultrassons, RGB, guinada e som sem mover o robô")
+    parser.add_argument("--chao", action="store_true",
+                        help="mede os 4 canais de chão, sem mover o robô")
     parser.add_argument("--sem-cpu", action="store_true", help="salta a medição de CPU")
     parser.add_argument("--sem-medir", action="store_true",
-                        help="salta as medições e vai direto aos testes (--com-motores, --luzes)")
+                        help="salta as medições e vai direto aos testes pedidos")
     parser.add_argument("--diametro-roda", type=float, default=8.0,
                         help="diâmetro da roda em cm (mBot2: 8)")
     parser.add_argument("--empurrar-cm", type=float, default=100.0,
@@ -1014,6 +1092,10 @@ def main() -> int:
             mexer_motores(cyber, args.diametro_roda)
         if args.luzes:
             testar_luzes(cyber)
+        if args.sensores:
+            ver_sensores(cyber)
+        if args.chao:
+            testar_chao(cyber)
         if args.servo:
             testar_servo(cyber, args.servo)
         if resultados:

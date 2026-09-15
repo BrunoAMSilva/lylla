@@ -12,11 +12,11 @@ nome: "Lylla"
 # MOTORES
 # ----------------------------------------------------------------------------
 motores:
-  # COMO É QUE O PI MANDA NAS RODAS. Duas hipóteses:
+  # COMO É QUE O PI MANDA NAS RODAS:
   #   mbot2   → o mBot2 fica INTEIRO e fala com o Pi por um cabo USB. O shield
   #             conta os encoders em hardware e mantém a velocidade em malha
   #             fechada, por isso o `andar_cm` MEDE em vez de cronometrar.
-  #   tb6612  → os motores canibalizados, ligados ao PCA9685. Sem encoders.
+  #   tb6612  → caminho antigo guardado para referência. Não o montar.
   ligacao: mbot2
   velocidade: 0.5           # 0 a 1. Acima de 0.6 ele bate com força nos rodapés.
   velocidade_max: 0.6       # limite de segurança — o código nunca passa daqui
@@ -39,13 +39,14 @@ motores:
 # CyberPi) ou 102 ms (se atravessar o shield); subscrever custa ~0. Por isso o
 # driver subscreve os encoders, o giroscópio e os ultrassons no arranque.
 #
-# ⚠️ NADA que trave o robô passa por este cabo. Precipício, paragem de
-#    emergência e botão DPST são do lado do Pi, e continuam lá.
+# ⚠️ A paragem atual passa por este cabo. O corte físico de movimento com o
+#    mBot2 intacto ainda precisa de ser desenhado e testado.
 # ----------------------------------------------------------------------------
 mbot2:
   porta: ""                 # vazio = procura sozinho (prefere /dev/serial/by-id)
-                            # ⚠️ quando o ESP32 da cara chegar, os dois são CH340
-                            #    e disputam o /dev/ttyUSB0 — aí fixa-se aqui o by-id
+                            # A placa ESP32 antiga já foi encontrada. O conversor
+                            # USB-série ainda não foi identificado. Se também criar
+                            # /dev/ttyUSB*, fixa aqui o by-id do CyberPi.
   diametro_roda_cm: 8.0     # rodas do mBot2. Muda a régua toda da odometria.
   rpm_max: 86.0             # a que RPM corresponde velocidade 1.0
                             # 86 RPM ≈ 36 cm/s, logo velocidade 0.5 ≈ 18 cm/s
@@ -64,12 +65,14 @@ mbot2:
 seguranca:
   distancia_min_cm: 25      # abaixo disto, para
   distancia_aviso_cm: 40    # abaixo disto, abranda
-  verificar_precipicio: true
+  verificar_precipicio: false  # só ligar depois de integrar e validar o sensor RGB
 
 # ----------------------------------------------------------------------------
-# A CARA — painel HUB75 64x32 comandado pelo ESP32
+# PROTÓTIPO HUB75
 #
-# As expressões em si vivem em config/expressoes.yaml. Aqui só está a ligação.
+# A escolha final continua aberta entre HUB75 e OLED. Estes valores só servem
+# para testar o protótipo com ESP32. As expressões vivem em
+# config/expressoes.yaml.
 # ----------------------------------------------------------------------------
 cara:
   porta: "/dev/ttyUSB0"     # onde está o ESP32. Confirmar com:
@@ -94,8 +97,7 @@ cara:
 # ----------------------------------------------------------------------------
 secretaria:
   ativa: true
-  andar: true               # pode dar voltinhas na mesa? (só roda, nunca anda
-                            # em frente sozinho — ver companion.py)
+  andar: false              # só ligar depois de validar a proteção contra bordas
   velocidade_max: 0.25      # ⚠️ TETO ABSOLUTO na secretária. Aplica-se a TUDO,
                             # incluindo ao que o LLM mandar fazer.
   duracao_voltinha_s: 0.35
@@ -254,30 +256,26 @@ faces:
 # inglês vale a pena pôr voz.idioma em "auto" — assim a Lara pode falar-lhe em
 # português e ela responde à mesma em inglês.
 #
-# Para o modo inglês com a voz da GLaDOS:
-#   lingua: "en"  ·  voz.motor: "piper"  ·  voz.modelo_tts: "glados"
-#   voz.idioma: "auto"
+# As experiências antigas com vozes locais continuam nos scripts, mas a
+# montagem atual usa a voz produzida pelo mac mini.
 lingua: "en"          # a Lara está a aprender inglês e gosta da GLaDOS
 
 voz:
-  # Que motor manda: "mac" (a Joana, pela rede) ou "piper" (no próprio Pi).
-  motor: "piper"
+  # A síntese corre no mini. O Pi só reproduz o WAV recebido ou guardado em cache.
+  motor: "mac"
 
   # A VOZ VEM DO MINI. Vazio = usa o `cerebro.url` acima (+ /v1/falar), que é
   # o que se quer. Só se preenche isto para apontar a voz a OUTRA máquina que
   # não a do cérebro. O Pi guarda cada WAV em data/voz/ e volta a usá-lo sem
   # rede nenhuma — é isso que o faz falar com o mini desligado.
-  servidor: "mini:8000"
+  servidor: ""
   voz_mac: "Joana"                   # Joana | Catarina | Joaquim
   tempo_limite_s: 5                  # a partir daqui desiste e usa o recurso
   velocidade_fala: 1.0               # 0.8 fala mais devagar; 1.2 mais depressa
 
-  # Recurso para frases NOVAS com o Mac desligado. Vazio = não usar o Piper.
-  # A `tugão` percebe-se mal (foi afinada de uma voz inglesa, 1,5 h de áudio).
-  modelo_tts: "glados"               # "" para desligar · "pt_PT-tugão-medium" para a antiga
-  modelo_stt: "base"                 # tiny | base | small
-                                     # tiny = rápido mas erra · small = lento demais
-  idioma: "auto"                     # "auto" = o Whisper deteta a língua
+  # Não há modelos de fala nem de transcrição no Pi.
+  modelo_tts: ""
+  idioma: "auto"
   palavra_chave: "ola_robo"
   limiar_palavra_chave: 0.6          # subir se ele acordar sozinho
   silencio_para_parar_s: 1.0         # quanto silêncio marca o fim da frase
@@ -285,7 +283,7 @@ voz:
 # ----------------------------------------------------------------------------
 # O CÉREBRO — o mac mini que ouve, pensa e fala
 #
-# É UM endereço só. O que corre lá dentro (que Whisper, que LLM, que voz)
+# É UM endereço só. O que corre lá dentro (transcrição, LLM e voz)
 # decide-se no config/cerebro.yaml, no próprio mini — o robô não precisa de
 # saber. Trocar de modelo não obriga a mexer em nada aqui.
 #
@@ -320,9 +318,9 @@ cerebro:
 # O QUE O ROBÔ *NÃO* TEM
 #
 # Não há aqui nem Whisper nem Ollama. Quem ouve e quem pensa é o mini, e mais
-# ninguém. Com o mini desligado o robô não percebe o que lhe dizem — e diz
-# isso, com a voz que tem em cache — mas continua a andar, a ver, a reconhecer
-# caras e a obedecer aos comandos diretos.
+# ninguém. Com o mini desligado o robô não percebe o que lhe dizem. Pode tocar
+# um aviso que já esteja em cache. A visão e o reconhecimento de pessoas
+# continuam no Pi, mas nenhuma nova ordem falada pode ser transcrita.
 #
 # É uma escolha, não um esquecimento: um Whisper que perceba português no Pi 5
 # fica mais lento que o tempo real, e são 500 MB no cartão SD para um caso que
@@ -336,6 +334,7 @@ cerebro:
 # destes números, mesmo que o código peça — é o que impede a mecânica de partir.
 # ----------------------------------------------------------------------------
 bracos:
+  ativo: false              # só ligar depois de instalar e limitar os servos
   i2c: 0x41                 # (o endereço vive SÓ aqui — ver nota na secção i2c)
   us_min: 500               # microssegundos para 0°
   us_max: 2500              # microssegundos para 180°
@@ -354,11 +353,11 @@ bracos:
                             #    suficiente para magoar um dedo pequeno
 
 # ----------------------------------------------------------------------------
-# BRILHO — os LEDs azuis de acento da sonda
+# BRILHO FUTURO
 #
-# Vão nos canais que SOBRAM do PCA9685 dos motores (0x40), que corre a 1 kHz.
-# ⚠️ Não podiam ir no dos servos: a 50 Hz os LEDs tremeriam de forma visível.
-# ⚠️ Cada grupo precisa da SUA resistência em série (120 Ω para LEDs azuis a 5 V).
+# Este desenho usava os canais livres do PCA9685 dos motores. Esse controlador
+# não faz parte da construção com o mBot2 intacto. Não ligar estes canais sem
+# escolher um controlador novo.
 # ----------------------------------------------------------------------------
 brilho:
   canais:
@@ -370,6 +369,7 @@ brilho:
 # ENERGIA — leitura da bateria pelo ADS1115
 # ----------------------------------------------------------------------------
 energia:
+  ativa: false              # o ADS1115 ainda não faz parte do POC atual
   canal_adc: 0
   divisor: 5.545            # (R1+R2)/R2 com R1=100k e R2=22k
                             # ⚠️ CALIBRAR na fase 7: mede com o multímetro e
@@ -381,21 +381,21 @@ energia:
                             # os servos arrancam, e isso não é bateria fraca.
 
 # ----------------------------------------------------------------------------
-# PINOS (não mexer — está tudo explicado no PLANO.md, secção 6)
+# PINOS DO DESENHO ANTIGO
+#
+# Estes pinos pertencem aos sensores externos e ao caminho TB6612. Não estão
+# instalados na construção atual. O mBot2 usa USB.
 # ----------------------------------------------------------------------------
 pinos:
-  pca_oe: 25                # ⚠️ Output Enable dos DOIS PCA9685, activo-baixo,
-                            # com pull-up de 10k para 3,3 V.
-                            # Se o Pi morrer, o pull-up desliga as saídas e os
-                            # motores param sozinhos. É a rede de segurança
-                            # mais importante do robô — não a tirem.
+  pca_oe: 25                # só vale para o caminho TB6612 antigo
+                            # não corta o movimento do mBot2
   ultrassons_trigger: 23
   ultrassons_echo: 24
   precipicio_esq: 17
   precipicio_centro: 27
   precipicio_dir: 22
 i2c:
-  motores: 0x40             # PCA9685 #1 → TB6612 → motores (1 kHz)
+  motores: 0x40             # caminho TB6612 antigo, inativo
   tof: 0x29                 # VL53L1X
   ads1115: 0x48             # tensão da bateria
   # NOTA: o endereço dos servos NÃO está aqui — vive em bracos.i2c, que é

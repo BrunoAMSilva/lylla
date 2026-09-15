@@ -30,9 +30,9 @@ cortar um único cabo.
 ║  passo, só quando há correção a fazer.                                  ║
 ╚══════════════════════════════════════════════════════════════════════════╝
 
-⚠️ SEGURANÇA: nada que trave o robô depende deste cabo. O precipício, a
-   paragem de emergência e o botão DPST são do lado do Pi, e continuam lá.
-   Uma paragem por USB é conforto, não é uma rede de segurança.
+⚠️ SEGURANÇA: a paragem atual usa este cabo USB. O corte físico de movimento
+   com o mBot2 intacto ainda precisa de ser desenhado e testado. Até lá, os
+   ensaios de movimento exigem um adulto junto ao robô e acesso à alimentação.
 
 ⚠️ Armadilhas da biblioteca `makeblock`, todas verificadas no hardware:
    1. `import makeblock` abre sozinho a primeira porta CH340 que encontrar e
@@ -100,9 +100,9 @@ def _com_prazo(segundos: float, funcao, *args):
 def _porta() -> str:
     """A porta do CyberPi. Por omissão, a primeira `by-id` que apareça.
 
-    O by-id não troca de nome entre arranques. Isso deixa de ser um pormenor
-    no dia em que o ESP32 da cara estiver ligado ao lado: é CH340 como o
-    CyberPi, e os dois disputam o /dev/ttyUSB0.
+    O by-id não troca de nome entre arranques. A placa ESP32 antiga pode também
+    aparecer como ttyUSB. O conversor USB-série ainda precisa de ser
+    identificado antes de a ligar ao lado do CyberPi.
     """
     escolhida = config.obter("mbot2.porta", "")
     if escolhida:

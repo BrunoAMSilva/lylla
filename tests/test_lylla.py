@@ -190,6 +190,34 @@ def test_um_comando_que_rebenta_nao_mata_o_robo(lylla):
     lylla.comandos.esquecer_todos()
 
 
+def test_o_arranque_carrega_os_comandos_da_lara(lylla, monkeypatch):
+    import sys
+
+    from robot import main
+
+    lylla.comandos.esquecer_todos()
+    monkeypatch.delitem(sys.modules, "meus_comandos", raising=False)
+
+    main._carregar_comandos_da_lara()
+
+    assert "adicionar face" in lylla.comandos.conhecidos()
+    assert "da uma volta" in lylla.comandos.conhecidos()
+    lylla.comandos.esquecer_todos()
+
+
+def test_um_erro_nos_comandos_da_lara_nao_impede_o_arranque(lylla, monkeypatch, capsys):
+    from robot import main
+
+    def falhar(_nome):
+        raise SyntaxError("parêntesis em falta")
+
+    monkeypatch.setattr(main.importlib, "import_module", falhar)
+
+    main._carregar_comandos_da_lara()
+
+    assert "Não consegui carregar meus_comandos.py" in capsys.readouterr().out
+
+
 def test_guardar_face_diz_a_privacidade_antes_de_qualquer_pose(lylla):
     """A frase sobre o que fica guardado vem SEMPRE em primeiro lugar."""
     ditas = []

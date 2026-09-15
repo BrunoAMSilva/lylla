@@ -17,9 +17,9 @@
 ║  um formulário.                                                          ║
 ╚══════════════════════════════════════════════════════════════════════════╝
 
-⚠️ NADA AQUI PODE REBENTAR. Se o mini estiver desligado, `turno()` levanta
-   `SemCerebro` e quem chama trata disso — o robô continua a andar, a ver e
-   a dizer as frases que tem em cache. É a regra da casa nº 3.
+Se o mini estiver desligado, `turno()` levanta `SemCerebro` e quem chama trata
+disso. O robô continua a reconhecer pessoas no Pi e pode tocar frases que já
+estejam em cache. Não entende novas ordens faladas.
 """
 
 from __future__ import annotations

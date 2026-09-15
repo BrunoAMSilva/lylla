@@ -1,22 +1,11 @@
 """COMANDOS QUE NÃO PASSAM PELO LLM.
 
-╔══════════════════════════════════════════════════════════════════════════╗
-║  PORQUE É QUE ISTO EXISTE                                                ║
-║                                                                          ║
-║  Há três ou quatro coisas que o robô tem de fazer SEMPRE, e à primeira:  ║
-║  parar, e deixar de olhar. São a travagem de emergência e o interruptor  ║
-║  da câmara.                                                              ║
-║                                                                          ║
-║  Um LLM acerta na ferramenta certa talvez 90% das vezes. Para "conta-me  ║
-║  uma piada" isso é ótimo. Para "PÁRA" é inaceitável: uma em cada dez     ║
-║  vezes o robô continuaria a andar, ou continuaria a olhar depois de a    ║
-║  Lara lhe ter pedido para não olhar.                                     ║
-║                                                                          ║
-║  Regra: controlos de SEGURANÇA e de PRIVACIDADE nunca dependem do        ║
-║  modelo. São comparações de texto, aqui, antes de o LLM sequer ver a     ║
-║  frase. É a mesma ideia do pino OE dos PCA9685 — a rede de segurança     ║
-║  tem de funcionar mesmo quando a parte inteligente falha.                ║
-╚══════════════════════════════════════════════════════════════════════════╝
+O mac mini ainda transcreve a fala. Depois, o Pi compara o texto com esta
+lista antes de o enviar ao modelo de linguagem. Isso evita uma decisão
+probabilística do LLM, mas não elimina a dependência da rede nem do STT.
+
+Uma ordem falada de paragem não substitui um controlo físico. Se o mini estiver
+indisponível, o Pi não recebe texto para comparar.
 """
 
 from __future__ import annotations
@@ -33,7 +22,7 @@ from robot.navigation import ir_para, procurar
 # Desde que o áudio vai para o mini em contínuo, o que chega aqui já não é
 # «pára» — é «olá robô pára», porque o pré-rolo (ver wakeword.py) contém
 # sempre a palavra mágica que acabou de ser dita. Com a comparação exata, o
-# travão de emergência e o interruptor da câmara deixaram de funcionar: as
+# comando de paragem e o pedido de privacidade deixaram de funcionar: as
 # duas coisas que este ficheiro existe para garantir.
 #
 # Por isso, antes de comparar, tira-se o que vier ANTES da palavra-chave.
@@ -123,9 +112,9 @@ def tentar(texto: str) -> str | None:
             return funcao()
 
     # ⚠️ SÓ DEPOIS os comandos que a Lara ensinou (o `@comando` do lylla).
-    # A ordem não é um pormenor: nenhuma função dela pode tapar o «pára» nem o
-    # «não olhes». Segurança e privacidade primeiro, sempre — mesmo contra
-    # código nosso, não só contra o LLM.
+    # A ordem não é um pormenor. Nenhuma função dela pode tapar o «pára» nem o
+    # «não olhes». Estes comandos continuam a depender do texto transcrito no
+    # mini, mas nunca da decisão do LLM.
     from lylla import comandos as comandos_da_lara
 
     for frase in (sem_chave, limpo):
