@@ -1,10 +1,10 @@
-# FASE 9 · O robô vê — arranque da câmara
+# Visão no Raspberry Pi
 
-Guia de arranque da visão, do cabo até «Olá, Lara!».
-Pressupõe o Pi 5 já instalado, com o projeto e o venv, e acesso por **SSH sem monitor**.
+Guia de arranque da visão, do cabo até "Olá, Lara!".
 
-O código todo já está escrito — `robot/perception/camera.py`, `faces.py`,
-`attention.py`. Isto aqui é **ligar e provar que funciona**, não programar.
+Este guia pressupõe o Pi 5 já instalado, com o projeto e o venv, e acesso por
+SSH sem monitor. A captura, YuNet e SFace correm no Pi. O código está em
+`robot/perception/camera.py`, `faces.py` e `attention.py`.
 
 ---
 
@@ -327,8 +327,8 @@ python scripts/test_camera.py --continuo
 Passa à frente, afasta-te, vira-te de lado, põe as duas pessoas juntas, e vê
 o nome e a **semelhança** ao vivo.
 
-**Critério de pronto (FASE 9):** reconhece 4 pessoas em 5 tentativas cada, e
-diz «não te conheço» a um estranho.
+**Critério de pronto:** reconhece 4 pessoas em 5 tentativas cada e diz "não te
+conheço" a um estranho. O teste continua a passar com o mini desligado.
 
 **Como se afina o limiar** (`faces.limiar`, agora `0.45`):
 
@@ -394,20 +394,18 @@ done
 Depois **sai da sessão e volta a entrar** — alterações de grupo não se aplicam a
 uma sessão que já estava aberta. Confirma com `groups`.
 
-Vale a pena fazer isto todo de uma vez, e não só o `video`, porque cada um dos
-outros ia falhar mais à frente **disfarçado de avaria de hardware**:
+Para este guia bastam os grupos necessários à câmara:
 
 | Grupo | O que desbloqueia | Onde ia falhar |
 |---|---|---|
-| `video`, `render` | `/dev/dma_heap`, GPU, câmara | aqui, fase 9 |
-| `dialout` | `/dev/ttyUSB0` — o ESP32 da cara | fase 3 |
-| `i2c` | os dois PCA9685, o VL53L1X, o ADS1115 | fases 5 a 8 |
-| `gpio` | pino OE, precipício, ultrassons | fases 6 e 7 |
-| `audio` | o reSpeaker (microfones e coluna) | fase 10 |
+| `video`, `render` | `/dev/dma_heap`, GPU, câmara | neste guia |
 
 ---
 
-## A experiência da Lara (FASE 9, sessão A)
+## A experiência da Lara
+
+Esta medição mostra o custo da visão no Pi e ajuda a escolher uma resolução que
+reconheça pessoas sem atrasar o resto do robô.
 
 ```bash
 python scripts/medir_visao.py

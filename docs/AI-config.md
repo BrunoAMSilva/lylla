@@ -1,13 +1,13 @@
-# Configuração de Inteligência Artificial
+# Configuração de inteligência artificial
 
-> **Estado:** a API está montada e a correr, com o áudio a ir para o mini
-> **em contínuo** enquanto a Lara fala. Os modelos são agora uma escolha
-> fundamentada mas **por medir na máquina** — `python -m cerebro.medir`.
-> Ver [Modelos](#modelos) e [As perguntas de agosto](#as-perguntas-de-agosto).
+> **Estado atual:** STT, LLM e TTS pertencem ao mac mini. A palavra-chave,
+> YuNet e SFace correm no Raspberry Pi. As decisões atuais estão em
+> [`decisoes-atuais.md`](decisoes-atuais.md) e [`roteiro.md`](roteiro.md).
 
 ## O que ficou decidido
 
-1. **Os modelos todos correm no mac mini.** O Pi não pensa: ouve, vê e mexe-se.
+1. **STT, LLM e TTS correm no mac mini.** A palavra-chave, YuNet e SFace correm
+   no Pi, junto da câmara e do corpo.
 2. **Nada de contentores.** Venv com o `uv`, e um serviço do launchd. Porquê: [abaixo](#porque-é-que-não-há-docker).
 3. **Uma API só, um endereço só.** O robô sabe `http://mini:8420` e mais nada.
 4. **As respostas trazem ações.** Um pedido devolve a cara, a fala *e* o que fazer.
@@ -21,8 +21,10 @@
 graph LR
     subgraph PI["Lylla — Raspberry Pi 5"]
         MIC[Microfone<br>palavra-chave<br>+ pré-rolo]
-        CAM[Câmara<br>+ caras]
-        MOT[Motores<br>Braços<br>Olhos]
+        CAM[Câmara]
+        VIS[reconhecer pessoas<br>YuNet + SFace]
+        CTRL[Comandos locais<br>+ encaminhamento]
+        MOT[mBot2<br>Braços<br>Olhos]
         COL[Coluna]
     end
 
@@ -30,15 +32,20 @@ graph LR
         API["FastAPI :8420"]
         STT["ouvir<br>Parakeet TDT"]
         LLM["pensar<br>Ollama"]
-        TTS["falar<br>Piper"]
+        TTS["falar<br>motor escolhido"]
         API --> STT --> LLM --> TTS
     end
 
     MIC -->|"PCM, 80 ms de cada vez,<br>ENQUANTO ela fala"| API
     API -->|"frases + áudio,<br>uma a uma"| COL
-    API -->|"expressão"| MOT
-    CAM -->|"quem está à frente<br>(contexto)"| API
+    CAM --> VIS
+    VIS -->|"nome ou desconhecido"| CTRL
+    API -->|"expressão + ações"| CTRL
+    CTRL --> MOT
 ```
+
+As imagens e assinaturas de rosto permanecem no Pi. O mini recebe apenas o
+contexto de conversa que for necessário, como o nome reconhecido.
 
 Uma ligação por turno, e as duas pontas a trabalhar ao mesmo tempo:
 
@@ -54,22 +61,24 @@ Uma ligação por turno, e as duas pontas a trabalhar ao mesmo tempo:
 Antes, transcrever só **começava** quando ela se calava, e esse tempo todo
 ficava à frente da resposta. Tudo em Tailscale, cifrado ponta a ponta.
 
-### O que fica no Pi, e porquê
+### O que fica no Pi e porquê
 
 | Fica no Pi | Porquê |
 |---|---|
 | Palavra-chave (`openWakeWord`) | Corre sempre, tem de ser instantânea e não pode depender da rede |
-| **Decidir que a frase acabou** | É uma decisão que não pode depender da rede — e é aqui que está o microfone |
-| **O pré-rolo** | 1,6 s em buffer circular: o princípio da frase não se perde no tempo que leva a abrir a gravação |
-| «Pára», «não olhes para mim» | Segurança e privacidade **nunca** dependem de um modelo — nem da rede |
+| Captura de áudio e decisão de fim de frase | O microfone está no robô. Falhar a rede não pode prender a captura |
+| Captura, YuNet e SFace | A câmara e os dados de rosto ficam no Pi |
+| **O pré-rolo** | Um buffer circular conserva o princípio da frase enquanto o turno abre |
+| Comparação de «pára» e «não olhes para mim» | Não passa pelo LLM. Ainda depende do texto transcrito no mini |
 | Cache de voz em disco | É o que o faz continuar a falar com o mini desligado |
-| Sensores, motores, braços, olhos | É o corpo |
+| Reprodução, sensores, mBot2, braços e olhos | São I/O e controlo do corpo |
 
-E o que **não** fica no Pi, de propósito: não há Whisper nem Ollama nenhum lá
-dentro. Com o mini desligado o robô não percebe o que lhe dizem — e diz isso,
-com a voz que tem em cache. Um Whisper que perceba português no Pi 5 fica mais
-lento que o tempo real, e são 500 MB no cartão SD para um caso que o Tailscale
-torna raro.
+O Pi não deve executar STT, LLM nem TTS. Com o mini desligado, o robô não
+transcreve nem produz respostas novas. Continua a reconhecer pessoas e a
+reproduzir frases em cache. Não consegue entender uma nova ordem falada, mesmo
+que essa ordem seja comparada no Pi sem passar pelo LLM. O timeout atual dos
+motores partilha o ciclo principal. A etapa 3 do roteiro separa esse watchdog
+antes de o considerar proteção contra uma espera de rede.
 
 ## Limitações
 
@@ -84,10 +93,10 @@ torna raro.
 - WiFi (pode ser uma das nossas limitações)
 - Parte de uma rede tailscale junto com a Lylla.
 
-⚠️ **16 GB é o número que manda.** Um LLM de 12B em 4 bits ocupa ~7–8 GB, e o
-Whisper e o macOS querem o resto. Os modelos ficam *residentes* (`keep_alive: -1`)
-— sem isso, a primeira frase depois de uns minutos de silêncio paga o
-carregamento todo. Ou seja: **um LLM, um Whisper, e mais nada.**
+**16 GB é o limite que manda.** Um LLM de 12B em 4 bits ocupa cerca de 7 a
+8 GB. O Parakeet, o TTS e o macOS partilham o restante. Manter um LLM
+residente evita pagar o carregamento na primeira frase. A combinação completa
+tem de ser medida no mini antes de fixar o tamanho do LLM.
 
 ## As perguntas de agosto
 
@@ -305,8 +314,10 @@ WS /v1/escutar
   ← {"tipo": "ouvido", ...} e o resto igual ao /v1/turno
 ```
 
-`{"cancelar": true}` interrompe o turno a meio — é assim que um «pára» não
-fica à espera de uma resposta que já não interessa.
+`{"cancelar": true}` já pode terminar o trabalho pendente no servidor. Isso
+não completa a interrupção durante a fala. Ainda falta validar captura enquanto
+a coluna toca, eco e paragem imediata do áudio que o Pi já começou a reproduzir.
+Essa capacidade permanece no plano, mas não faz parte da fase atual.
 
 **Um motor que não saiba transcrever à medida continua a servir**: o
 `SessaoAcumulada` junta tudo e transcreve no fim. O robô só perde a vantagem,
@@ -591,8 +602,8 @@ pytest tests/test_cerebro.py tests/test_cerebro_cliente.py tests/test_acoes.py
 
 Nada rebenta — é a regra da casa nº 3. Por esta ordem:
 
-1. **Frases já ditas** saem da cache em `data/voz/`. A saudação, o «não percebi», o «tenho fome» — o robô continua a falar.
-2. Sem nada disso, o robô diz que o cérebro grande está a dormir — e continua a andar, a ver e a obedecer aos comandos diretos.
+1. **Frases já ditas** saem da cache em `data/voz/`. A saudação, o «não percebi» e o «tenho fome» continuam disponíveis.
+2. Sem isso, o robô continua a reconhecer pessoas. Não entende comandos falados enquanto o mini estiver indisponível. Usa o controlo físico até o watchdog independente estar concluído.
 
 ## Ficheiros
 
