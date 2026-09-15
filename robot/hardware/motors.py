@@ -70,6 +70,12 @@ def _iniciar() -> bool:
     global _ligado
     if _ligado:
         return True
+    # ⚠️ Com o mBot2 não há PCA9685 nenhum em 0x40 — as rodas são comandadas
+    #    pelo shield, por USB. Tentar iniciá-lo despejava "Remote I/O error"
+    #    a cada chamada, e o `i2c.motores` do robot.yaml já está marcado como
+    #    "caminho TB6612 antigo, inativo".
+    if _pelo_mbot2():
+        return False
     _ligado = pca9685.iniciar(_endereco(), FREQ_HZ)
     return _ligado
 
