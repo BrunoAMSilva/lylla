@@ -97,6 +97,10 @@ def tensao(amostras: int = 5) -> float | None:
     """
     if config.a_simular():
         return 13.2
+    if not config.obter("energia.ativa", False):
+        # ⚠️ O flag existia e era decorativo: o ADS1115 era lido à mesma e
+        #    despejava cinco "Remote I/O error" por cada contexto montado.
+        return None
     canal = int(config.obter("energia.canal_adc", 0))
     divisor = float(config.obter("energia.divisor", 5.545))
     leituras = []

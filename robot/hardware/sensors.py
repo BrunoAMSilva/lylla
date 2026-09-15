@@ -25,6 +25,18 @@ def _iniciar() -> None:
         _iniciado = True
         return
     _iniciado = True
+
+    # ⚠️ COM O mBot2 ESTES SENSORES NÃO EXISTEM NO PI.
+    #    O ultrassónico e o sensor de chão vivem no mBot2 e chegam por USB
+    #    (robot/hardware/mbot2.py). Criar aqui um DistanceSensor em pinos onde
+    #    não há nada ligado não dá erro — dá PIOR: o `.distance` do gpiozero
+    #    espera pela fila de ecos e, sem eco, BLOQUEIA PARA SEMPRE. Foi isso
+    #    que prendeu o `contexto.montar()` e impediu o cérebro de responder.
+    if str(config.obter("motores.ligacao", "mbot2")) == "mbot2":
+        _ultrassons = None
+        _precipicio = []
+        return
+
     try:
         from gpiozero import DigitalInputDevice, DistanceSensor
 
