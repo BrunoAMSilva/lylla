@@ -61,7 +61,7 @@ echo "→ modelos de voz"
 "$PY" scripts/download_models.py --cerebro || echo "⚠️  falhou; corre à mão depois"
 
 # --- Ollama -----------------------------------------------------------------
-MODELO="$("$PY" -c 'from cerebro import config; print(config.obter("pensar.modelo"))' 2>/dev/null || echo gemma4:12b)"
+MODELO="$("$PY" -c 'from cerebro import config; print(config.obter("pensar.modelo"))' 2>/dev/null || echo gemma4:e4b)"
 if command -v ollama >/dev/null 2>&1; then
   echo "→ Ollama: a preparar o $MODELO"
   # Visível na rede E o modelo sempre em RAM: sem isto, a primeira frase

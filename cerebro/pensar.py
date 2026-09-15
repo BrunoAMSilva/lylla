@@ -325,7 +325,7 @@ class MotorOllama(_Motor):
     def __init__(self) -> None:
         super().__init__()
         self.url = str(config.obter("pensar.url", "http://127.0.0.1:11434")).rstrip("/")
-        self.modelo = str(config.obter("pensar.modelo", "gemma4:12b"))
+        self.modelo = str(config.obter("pensar.modelo", "gemma4:e4b"))
         self.timeout = float(config.obter("pensar.timeout_s", 60))
 
     def esta_ligado(self) -> bool:

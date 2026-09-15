@@ -76,7 +76,12 @@ ouvir:
 pensar:
   motor: "ollama"
   url: "http://127.0.0.1:11434"
-  modelo: "gemma4:12b"
+  # Medido a 15/09/2026 (python -m cerebro.medir), 8 perguntas × 3:
+  #   e4b   1ª frase 1058 ms · 29 tok/s · formato 24/24 · ações 12/12  ✅
+  #   e2b   1ª frase  522 ms · 51 tok/s · formato 24/24 · ações  9/12  ⚠️
+  #   12b   1ª frase ~6 s no mini (16 GB) — limite de largura de banda
+  # Meio segundo a mais paga-se; errar a ação não.
+  modelo: "gemma4:e4b"
   temperatura: 0.7
   max_tokens: 300
   max_frases: 3          # o robô FALA — ninguém quer ouvir um parágrafo

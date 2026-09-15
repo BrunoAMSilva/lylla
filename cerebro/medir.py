@@ -1,7 +1,7 @@
 """MEDIR — qual dos modelos serve, com números em vez de opiniões.
 
     python -m cerebro.medir                       mede o que está configurado
-    python -m cerebro.medir --pensar gemma4:4b,gemma4:12b,qwen3:8b
+    python -m cerebro.medir --pensar gemma4:e2b,gemma4:e4b,gemma4:12b
     python -m cerebro.medir --ouvir mlx-community/whisper-base-mlx,…-small-mlx
     python -m cerebro.medir --so-falar
 

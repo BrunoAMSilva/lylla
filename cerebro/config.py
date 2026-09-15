@@ -29,7 +29,7 @@ OMISSAO: dict[str, Any] = {
     "pensar": {
         "motor": "ollama",
         "url": "http://127.0.0.1:11434",
-        "modelo": "gemma4:12b",
+        "modelo": "gemma4:e4b",
         "temperatura": 0.7,
         "max_tokens": 300,
         "max_historico": 12,
