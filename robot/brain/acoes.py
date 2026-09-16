@@ -164,6 +164,35 @@ ACOES: dict[str, dict[str, Any]] = {
         },
         "obrigatorios": ["acao"],
     },
+    "ver_caras": {
+        "descricao": (
+            "Olha AGORA e diz quem vês ('vês alguma cara?', 'conheces quem está "
+            "aí?'). Usa isto quando te perguntam pelo que estás a ver neste "
+            "momento; o que vem entre parênteses retos no início da mensagem "
+            "pode ter segundos e não serve para responder a uma pergunta direta."
+        ),
+        "parametros": {
+            "so_conhecidas": {
+                "type": "boolean",
+                "description": (
+                    "true quando perguntam por uma cara CONHECIDA; false quando "
+                    "perguntam se vês alguma cara, seja de quem for."
+                ),
+            },
+        },
+        "obrigatorios": [],
+    },
+    "registar_cara": {
+        "descricao": (
+            "Aprende a cara de alguém, guiando a pessoa pelas poses em voz alta "
+            "('aprende a minha cara', 'guarda a cara da Lara'). PERGUNTA O NOME "
+            "primeiro se não to disserem — sem nome não dá."
+        ),
+        "parametros": {
+            "nome": {"type": "string", "description": "O nome da pessoa a aprender."},
+        },
+        "obrigatorios": ["nome"],
+    },
 }
 
 

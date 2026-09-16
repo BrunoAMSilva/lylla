@@ -41,8 +41,17 @@ def test_os_gestos_e_as_caras_do_catalogo_existem_mesmo():
 
 def test_o_catalogo_e_pequeno():
     """Acima de 6-8 ferramentas os modelos pequenos começam a escolher mal.
-    Se este teste falhar, a pergunta certa é o que se pode TIRAR."""
-    assert len(acoes.ACOES) <= 8, f"{len(acoes.ACOES)} ações é demasiado para um modelo pequeno"
+    Se este teste falhar, a pergunta certa é o que se pode TIRAR.
+
+    Subiu de 8 para 10 com o `ver_caras` e o `registar_cara`. Tudo o que era
+    frase fixa — volume, piscar as luzes, as horas, o diagnóstico — ficou nos
+    comandos diretos, que não passam pelo LLM: uma ordem com uma resposta
+    única e certa não tem nada para o modelo decidir.
+
+    ⚠️ Cada subida deste número obriga a repetir o `cerebro/medir.py`: é lá
+       que se vê o acerto nas ações (o gemma4:e4b fazia 12/12 com oito).
+    """
+    assert len(acoes.ACOES) <= 10, f"{len(acoes.ACOES)} ações é demasiado para um modelo pequeno"
 
 
 # ---------------------------------------------------------------------------

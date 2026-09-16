@@ -228,6 +228,100 @@ def _ir_para(sitio: str = "", estou_aqui: bool = False, **_) -> str:
     return mensagem
 
 
+def _ver_caras(so_conhecidas: bool = False, **_) -> str:
+    """Olha AGORA. Não usa o contexto: a pergunta é sobre este instante."""
+    from robot.perception import faces
+
+    if not faces.disponivel():
+        return Recusa("Não tenho os olhos a funcionar — não consigo ver nada.")
+    try:
+        from robot.perception import camera
+
+        imagem = camera.tirar_foto()
+    except Exception as erro:  # noqa: BLE001
+        return Recusa(f"Não consegui tirar a foto: {erro}")
+    if imagem is None:
+        return Recusa("A câmara não me deu imagem nenhuma.")
+
+    caras = faces.detetar(imagem)
+    if not caras:
+        return "Não vejo cara nenhuma."
+
+    nome = faces.quem_esta_a_ver(imagem)
+    if so_conhecidas:
+        return f"Sim, é {nome}." if nome else "Vejo uma cara, mas não sei de quem é."
+    quantas = ("uma cara" if len(caras) == 1 else f"{len(caras)} caras")
+    return f"Vejo {quantas}" + (f", e uma é a da {nome}." if nome else ", mas não conheço ninguém.")
+
+
+def _registar_cara(nome: str = "", **_) -> str:
+    from robot.perception import registo
+    from robot.voice import speak
+
+    # `esperar=True`: cada pose tem de ser OUVIDA antes de a foto sair. Com a
+    # fila assíncrona o robô tirava as oito fotos enquanto ainda dizia a
+    # primeira instrução.
+    return registo.registar_pela_voz(nome, lambda t: speak.falar(t, esperar=True))
+
+
+def _volume(percentagem: int = 70, **_) -> str:
+    from robot.voice import speak
+
+    ficou = speak.definir_volume(int(percentagem) / 100.0)
+    if ficou == 0:
+        return "Fiquei em silêncio. Diz-me para voltar a falar."
+    return f"Volume nos {round(ficou * 100)} por cento."
+
+
+def _piscar_luzes(vezes: int = 3, **_) -> str:
+    import time
+
+    if not glow.disponivel():
+        return Recusa("Não tenho luzes ligadas.")
+    antes = glow.nivel_atual().get("base", 0.0)
+    glow.parar_animacao()
+    for _i in range(int(vezes)):
+        glow.tudo(1.0)
+        time.sleep(0.12)
+        glow.tudo(0.0)
+        time.sleep(0.12)
+    glow.tudo(antes)
+    return f"Pisquei {int(vezes)} vezes."
+
+
+def _diagnostico(**_) -> str:
+    """O que está mesmo ligado. Sem isto, «não consigo» pode ser qualquer coisa."""
+    from robot.hardware import mbot2
+    from robot.perception import camera, faces
+
+    tenho, faltam = [], []
+    for etiqueta, presente in (
+        ("o chassis do mBot2", mbot2.disponivel()),
+        ("a câmara", camera.disponivel()),
+        ("os olhos que reconhecem caras", faces.disponivel()),
+        ("os braços", arms.disponivel()),
+        ("as luzes", glow.disponivel()),
+    ):
+        (tenho if presente else faltam).append(etiqueta)
+
+    partes = []
+    if tenho:
+        partes.append("Tenho " + ", ".join(tenho) + ".")
+    if faltam:
+        partes.append("Falta-me " + ", ".join(faltam) + ".")
+    return " ".join(partes) or "Não consigo verificar nada."
+
+
+def _olhar(direcao: str = "frente", **_) -> str:
+    destinos = {
+        "frente": (0.0, 0.0), "esquerda": (-0.8, 0.0), "direita": (0.8, 0.0),
+        "cima": (0.0, -0.7), "baixo": (0.0, 0.6),
+    }
+    x, y = destinos.get(direcao, (0.0, 0.0))
+    eyes.olhar_para(x, y)
+    return f"A olhar para {'a ' + direcao if direcao != 'frente' else 'a frente'}."
+
+
 IMPLEMENTACOES = {
     "mover": _mover,
     "virar": _virar,
@@ -241,6 +335,12 @@ IMPLEMENTACOES = {
     "dancar": _dancar,
     "seguir": _seguir,
     "ir_para": _ir_para,
+    "ver_caras": _ver_caras,
+    "registar_cara": _registar_cara,
+    "volume": _volume,
+    "piscar_luzes": _piscar_luzes,
+    "diagnostico": _diagnostico,
+    "olhar": _olhar,
 }
 
 

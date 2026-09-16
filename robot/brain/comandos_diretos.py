@@ -10,6 +10,8 @@ indisponível, o Pi não recebe texto para comparar.
 
 from __future__ import annotations
 
+import re
+import time
 import unicodedata
 
 from robot.brain import companion, follow
@@ -54,6 +56,41 @@ def _parar_tudo() -> str:
     return "Parei."
 
 
+def _horas() -> str:
+    agora = time.localtime()
+    return f"São {agora.tm_hour} e {agora.tm_min:02d}." if agora.tm_min else \
+        f"São {agora.tm_hour} horas."
+
+
+def _piscar() -> str:
+    from robot.brain import tools
+
+    return str(tools.executar("piscar_luzes", {"vezes": 3}))
+
+
+def _diagnostico() -> str:
+    from robot.brain import tools
+
+    return str(tools.executar("diagnostico", {}))
+
+
+# ⚠️ O volume é o único com NÚMERO, e por isso não cabe na lista de frases
+#    exatas. Fica aqui em vez de ir para o catálogo do LLM pela mesma razão
+#    que o «pára»: é uma ordem de utilidade, com uma resposta única e certa —
+#    não há nada para o modelo decidir, e cada ação que lá não está é uma a
+#    menos para ele escolher mal.
+_VOLUME = re.compile(r"\bvolume\b.*?(\d{1,3})")
+
+
+def _tentar_volume(frase: str) -> str | None:
+    achou = _VOLUME.search(frase)
+    if achou is None:
+        return None
+    from robot.brain import tools
+
+    return str(tools.executar("volume", {"percentagem": min(100, int(achou.group(1)))}))
+
+
 # Ordem importa: a primeira que casar é a que ganha.
 COMANDOS: tuple[tuple[tuple[str, ...], object], ...] = (
     (
@@ -74,6 +111,21 @@ COMANDOS: tuple[tuple[tuple[str, ...], object], ...] = (
     (
         ("para", "parar", "pare", "stop", "quieto", "para quieto"),
         _parar_tudo,
+    ),
+    (
+        ("que horas sao", "quais sao as horas", "diz me as horas", "horas"),
+        _horas,
+    ),
+    (
+        ("pisca as luzes", "piscar as luzes", "pisca", "pisca os olhos",
+         "acende as luzes"),
+        _piscar,
+    ),
+    (
+        ("consegues detetar o chassis", "detetas o chassis", "tens chassis",
+         "o que tens ligado", "o que e que tens ligado", "estas toda",
+         "diagnostico", "faz um diagnostico"),
+        _diagnostico,
     ),
 )
 
@@ -110,6 +162,11 @@ def tentar(texto: str) -> str | None:
     for frases, funcao in COMANDOS:
         if limpo in frases or sem_chave in frases:
             return funcao()
+
+    for frase in (sem_chave, limpo):
+        resposta = _tentar_volume(frase)
+        if resposta is not None:
+            return resposta
 
     # ⚠️ SÓ DEPOIS os comandos que a Lara ensinou (o `@comando` do lylla).
     # A ordem não é um pormenor. Nenhuma função dela pode tapar o «pára» nem o

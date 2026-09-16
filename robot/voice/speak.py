@@ -198,7 +198,60 @@ def _iniciar():
 LEITORES = (["aplay", "-q"], ["afplay"], ["ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet"])
 
 
+_volume: float | None = None
+
+
+def volume() -> float:
+    """O volume atual, de 0.0 a 1.0."""
+    global _volume
+    if _volume is None:
+        _volume = max(0.0, min(1.0, float(config.obter("voz.volume", 1.0) or 1.0)))
+    return _volume
+
+
+def definir_volume(fracao: float) -> float:
+    """Muda o volume desta execução. Devolve o valor que ficou."""
+    global _volume
+    _volume = max(0.0, min(1.0, float(fracao)))
+    return _volume
+
+
+def _com_volume(caminho: str | Path) -> str | Path:
+    """O mesmo WAV com as amostras escaladas, se o volume não for 100%.
+
+    ⚠️ Em SOFTWARE e não pelo `amixer`, de propósito. A placa I2S do overlay
+       `googlevoicehat` não expõe controlo de volume nenhum — o `amixer` não
+       tem lá o que mexer. Escalar as amostras funciona em qualquer saída,
+       incluindo a USB do reSpeaker quando ele chegar.
+
+    O ficheiro em cache nunca é tocado: escreve-se uma cópia temporária. Senão,
+    baixar o volume uma vez gravava a frase baixa para sempre.
+    """
+    v = volume()
+    if v >= 0.999:
+        return caminho
+    try:
+        import array
+
+        with wave.open(str(caminho), "rb") as origem:
+            parametros = origem.getparams()
+            if origem.getsampwidth() != 2:
+                return caminho
+            amostras = array.array("h", origem.readframes(origem.getnframes()))
+        for i, amostra in enumerate(amostras):
+            amostras[i] = int(amostra * v)
+        destino = "/tmp/robo_fala_volume.wav"
+        with wave.open(destino, "wb") as saida:
+            saida.setparams(parametros)
+            saida.writeframes(amostras.tobytes())
+        return destino
+    except Exception as erro:  # noqa: BLE001
+        print(f"⚠️  Não consegui mudar o volume ({erro}); toco como está.")
+        return caminho
+
+
 def _reproduzir_wav(caminho: str | Path) -> None:
+    caminho = _com_volume(caminho)
     for comando in LEITORES:
         if shutil.which(comando[0]) is None:
             continue

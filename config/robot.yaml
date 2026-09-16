@@ -240,7 +240,9 @@ faces:
                             # O valor oficial do OpenCV é 0.363. Subimos porque
                             # é muito pior chamar "Lara" a uma visita do que
                             # dizer "não te conheço" à Lara.
-  fotos_por_pessoa: 8       # quantas fotos tirar ao registar alguém
+  fotos_por_pessoa: 8
+  segundos_por_pose: 2.0    # tempo entre o robô DIZER a pose e tirar a foto
+                            # (o registo pela voz — ver perception/registo.py)       # quantas fotos tirar ao registar alguém
   resolucao: [640, 480]     # maior = mais lento, não necessariamente melhor
 
 # ----------------------------------------------------------------------------
@@ -276,6 +278,9 @@ voz:
                                      # ele instalado, fica mudo.
   tempo_limite_s: 5                  # a partir daqui desiste e usa o recurso
   velocidade_fala: 1.0               # 0.8 fala mais devagar; 1.2 mais depressa
+  volume: 1.0                        # 0.0 a 1.0. Aplicado às amostras, não ao
+                                     # amixer: a placa I2S do googlevoicehat não
+                                     # expõe controlo de volume nenhum.
 
   # Não há modelos de fala nem de transcrição no Pi.
   modelo_tts: ""
