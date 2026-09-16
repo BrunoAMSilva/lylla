@@ -280,6 +280,14 @@ voz:
   limiar_palavra_chave: 0.6          # subir se ele acordar sozinho
   silencio_para_parar_s: 1.0         # quanto silêncio marca o fim da frase
 
+  # O MICROFONE I2S OCUPA UM SLOT DOS DOIS. O `L/R` do MEMS escolhe qual; o
+  # outro fica vazio. Pedir um canal só à ALSA mistura os dois e o sinal cai
+  # para um décimo (medido: 0,0085 contra 0,0893). Lê-se estéreo e escolhe-se.
+  #   L/R à massa  → canal 0     ·  L/R a 3V3 → canal 1
+  # Com uma placa USB mono (o reSpeaker), voltar a 1 e 0.
+  canais_microfone: 2
+  canal_microfone: 0
+
 # ----------------------------------------------------------------------------
 # O CÉREBRO — o mac mini que ouve, pensa e fala
 #

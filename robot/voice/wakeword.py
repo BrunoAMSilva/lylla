@@ -19,6 +19,8 @@ from __future__ import annotations
 
 from collections import deque
 
+import time
+
 import numpy as np
 
 from robot import config
@@ -89,6 +91,36 @@ def _iniciar():
     return _modelo
 
 
+class _SomAlto:
+    """O substituto do modelo: som alto em relação ao SILÊNCIO DA SALA.
+
+    ⚠️ Era um limiar fixo (rms > 2000) e disparava uma vez por segundo assim
+       que o microfone passou a dar sinal a sério — um número absoluto não
+       sobrevive a uma mudança de ganho. Agora aprende o chão de ruído e exige
+       que o som se aguente: um estalido não acorda ninguém.
+    """
+
+    ARRANQUE_S = 1.0      # tempo a aprender o silêncio antes de decidir
+    VEZES = 4.0           # quantas vezes acima do chão conta como voz
+    BLOCOS = 3            # ~240 ms seguidos, não um pico isolado
+
+    def __init__(self) -> None:
+        self.chao = float("inf")
+        self.seguidos = 0
+        self._inicio = time.monotonic()
+
+    def acordou(self, amostra: np.ndarray) -> bool:
+        energia = float(np.sqrt(np.mean(amostra.astype(np.float32) ** 2)))
+        self.chao = min(self.chao, energia)
+        if time.monotonic() - self._inicio < self.ARRANQUE_S:
+            return False
+        if energia > max(300.0, self.chao * self.VEZES):
+            self.seguidos += 1
+            return self.seguidos >= self.BLOCOS
+        self.seguidos = 0
+        return False
+
+
 def esperar_pela_palavra(timeout: float | None = None) -> bool:
     """Fica à espera de ouvir a palavra mágica. True quando a ouvir.
 
@@ -110,22 +142,22 @@ def esperar_pela_palavra(timeout: float | None = None) -> bool:
 
     modelo = _iniciar()
     limiar = float(config.obter("voz.limiar_palavra_chave", 0.6))
-    import time
+    som_alto = _SomAlto() if modelo is None else None
 
     inicio = time.monotonic()
 
     try:
-        with sd.InputStream(
-            samplerate=TAXA, channels=1, dtype="int16", blocksize=BLOCO
-        ) as stream:
+        # O mesmo microfone e os mesmos canais do `listen` — uma regra só.
+        from robot.voice.listen import abrir_microfone, canal_util
+
+        with abrir_microfone(sd, "int16") as stream:
             while timeout is None or time.monotonic() - inicio < timeout:
                 dados, _ = stream.read(BLOCO)
-                amostra = dados[:, 0]
+                amostra = canal_util(dados)
                 _pre_rolo.append(amostra.copy())
 
                 if modelo is None:
-                    # Substituto: qualquer som claramente alto serve.
-                    if float(np.sqrt(np.mean(amostra.astype(np.float32) ** 2))) > 2000:
+                    if som_alto.acordou(amostra):
                         return True
                     continue
 

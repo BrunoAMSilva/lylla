@@ -49,6 +49,29 @@ BLOCO = 1280      # 80 ms, o mesmo da palavra-chave
 CHAO_ABSOLUTO = 0.012
 
 
+def abrir_microfone(sd, dtype: str):
+    """O `InputStream` com o número de canais que o microfone REALMENTE tem.
+
+    ⚠️ Um MEMS I2S ocupa UM dos dois slots do barramento (o `L/R` escolhe
+       qual); o outro slot fica vazio. Pedir `channels=1` não dá o slot bom —
+       dá uma mistura dele com o vazio, e o resultado media rms 0,0085 contra
+       0,0893 do canal sozinho. Com esse sinal o detetor de silêncio nunca
+       adormecia e a transcrição saía noutra língua.
+    """
+    return sd.InputStream(
+        samplerate=TAXA,
+        channels=int(config.obter("voz.canais_microfone", 1)),
+        dtype=dtype,
+        blocksize=BLOCO,
+    )
+
+
+def canal_util(dados: np.ndarray) -> np.ndarray:
+    """A coluna onde o microfone está mesmo (ver `abrir_microfone`)."""
+    coluna = int(config.obter("voz.canal_microfone", 0))
+    return dados[:, min(coluna, dados.shape[1] - 1)]
+
+
 class _Silencio:
     """Decide quando a frase acabou. Vive à parte para os dois caminhos de
     gravação usarem exatamente a mesma regra."""
@@ -126,11 +149,10 @@ class Escuta:
         detetor = _Silencio(self.silencio_s)
         inicio = time.monotonic()
         try:
-            with sd.InputStream(samplerate=TAXA, channels=1, dtype="int16",
-                                blocksize=BLOCO) as stream:
+            with abrir_microfone(sd, "int16") as stream:
                 while time.monotonic() - inicio < self.max_segundos:
                     dados, _ = stream.read(BLOCO)
-                    amostra = dados[:, 0]
+                    amostra = canal_util(dados)
                     self.segundos += BLOCO / TAXA
                     yield amostra.astype("<i2").tobytes()
                     if detetor.acabou(amostra.astype(np.float32) / 32768.0):
@@ -168,12 +190,10 @@ def gravar_ate_silencio(
     blocos: list[np.ndarray] = []
     inicio = time.monotonic()
     try:
-        with sd.InputStream(
-            samplerate=TAXA, channels=1, dtype="float32", blocksize=BLOCO
-        ) as stream:
+        with abrir_microfone(sd, "float32") as stream:
             while time.monotonic() - inicio < max_segundos:
                 dados, _ = stream.read(BLOCO)
-                amostra = dados[:, 0]
+                amostra = canal_util(dados)
                 blocos.append(amostra.copy())
                 if detetor.acabou(amostra):
                     break
