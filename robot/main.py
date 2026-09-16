@@ -27,9 +27,12 @@ ser separado para funcionar como watchdog durante uma espera de rede.
 
 from __future__ import annotations
 
+import argparse
 import importlib
+import queue
 import signal
 import sys
+import threading
 import time
 
 from robot import config
@@ -42,6 +45,77 @@ from robot.perception import faces
 from robot.voice import listen, speak, wakeword
 
 _a_correr = True
+
+
+class Opcoes:
+    """O que esta execução liga. Por omissão, o mínimo que funciona hoje.
+
+    O robô tem muito mais escrito do que aquilo que está provado no hardware
+    (seguir, escondidas, atravessar a casa). Tudo isso precisa do mBot2 e de
+    sensores, e ligá-lo por omissão só dá erros a passear pelo terminal.
+    Fica atrás do `--mbot`, que é também o interruptor dos motores.
+    """
+
+    mbot = False
+    acordar = "tecla"
+
+
+OPCOES = Opcoes()
+
+
+def _ler_argumentos(argv: list[str] | None = None) -> Opcoes:
+    p = argparse.ArgumentParser(prog="robot.main", description="O ciclo da Lylla.")
+    p.add_argument("--mbot", action="store_true",
+                   help="ligar o mBot2 (motores, seguir, escondidas, navegar)")
+    p.add_argument("--acordar", choices=("tecla", "som"), default="tecla",
+                   help="tecla: carregar no Enter para falar (por omissão) · "
+                        "som: qualquer som alto acorda")
+    args = p.parse_args(argv)
+    OPCOES.mbot = args.mbot
+    OPCOES.acordar = args.acordar
+    return OPCOES
+
+
+class _Enter:
+    """O Enter como palavra-chave, sem bloquear o ciclo.
+
+    ⚠️ Solução DE BANCADA, até o modelo da palavra-chave estar treinado. O
+       substituto por som alto tem um problema que não se resolve com
+       limiares: o robô ouve-se a si próprio pela coluna e volta a acordar —
+       o AEC do reSpeaker é que fecha esse buraco. Com o Enter não há
+       realimentação nenhuma e dá para trabalhar no resto.
+    """
+
+    def __init__(self) -> None:
+        self._fila: queue.Queue[bool] = queue.Queue()
+        fio = threading.Thread(target=self._ler, daemon=True)
+        fio.start()
+
+    def _ler(self) -> None:
+        for _ in sys.stdin:
+            self._fila.put(True)
+
+    def carregou(self, timeout: float) -> bool:
+        try:
+            self._fila.get(timeout=timeout)
+        except queue.Empty:
+            return False
+        while not self._fila.empty():   # vários Enters seguidos são um só
+            self._fila.get_nowait()
+        return True
+
+
+_enter: _Enter | None = None
+
+
+def _acordou(timeout: float) -> bool:
+    """Chegou a vez de ouvir uma frase?"""
+    if OPCOES.acordar == "tecla":
+        global _enter
+        if _enter is None:
+            _enter = _Enter()
+        return _enter.carregou(timeout)
+    return wakeword.esperar_pela_palavra(timeout=timeout)
 
 # O que ele diz quando o mini não responde. É uma frase FIXA de propósito:
 # fica na cache de voz depois de ser dita uma vez, e a partir daí sai mesmo
@@ -90,7 +164,7 @@ def arrancar() -> Maquina:
     # ⚠️ O modo é definido ANTES de qualquer movimento poder acontecer. Se
     #    fosse definido mais tarde, havia uma janela em que um comando à
     #    velocidade do chão podia atirar o robô da secretária abaixo.
-    if companion.ligada():
+    if OPCOES.mbot and companion.ligada():
         motors.modo("secretaria")
 
     conhecidos = faces.pessoas_conhecidas()
@@ -107,7 +181,12 @@ def arrancar() -> Maquina:
         print("       a ver e pode dizer as frases que tem em cache)")
     pct = power.percentagem()
     print(f"   bateria: {f'{pct}%' if pct is not None else '(sem leitura)'}")
-    print("\n   Diz «Olá robô» para começar. Ctrl+C para parar.\n")
+    if not OPCOES.mbot:
+        print("   mBot2: desligado (usa --mbot para ligar os motores)")
+    if OPCOES.acordar == "tecla":
+        print("\n   Carrega no ENTER e fala. Ctrl+C para parar.\n")
+    else:
+        print("\n   Faz um som para começar. Ctrl+C para parar.\n")
 
     maquina = Maquina()
     maquina.mudar(Estado.ATENTO)
@@ -350,7 +429,8 @@ def _verificar_bateria(maquina: Maquina) -> None:
         speak.falar(f"Estou com fome. Tenho só {power.percentagem()} por cento de bateria.")
 
 
-def principal() -> None:
+def principal(argv: list[str] | None = None) -> None:
+    _ler_argumentos(argv)
     signal.signal(signal.SIGINT, _parar_tudo)
     signal.signal(signal.SIGTERM, _parar_tudo)
 
@@ -372,14 +452,14 @@ def principal() -> None:
 
             # Modo secretária: reparar em quem chega, seguir com os olhos,
             # entreter-se sozinho. Nunca fala — para isso é a palavra-chave.
-            obs = companion.tick(maquina)
+            obs = companion.tick(maquina, mexer=OPCOES.mbot)
             if obs.presente:
                 maquina.registar_presenca()
 
             # Modo seguir: andar atrás de quem o robô está a ver. Ligado pela
             # ação `seguir` do cérebro; desligado pelo "pára" e pelo veto dos
             # sensores, que estão dentro do um_passo(). Ver D17.
-            if follow.a_seguir():
+            if OPCOES.mbot and follow.a_seguir():
                 comando = follow.um_passo(obs)
                 if comando.parado and not obs.presente:
                     follow.parar()
@@ -391,7 +471,7 @@ def principal() -> None:
             #
             # Os dois FALAM SEMPRE no fim: chegar em silêncio e desistir em
             # silêncio parecem a mesma coisa a quem está a ver.
-            if procurar.a_procurar():
+            if OPCOES.mbot and procurar.a_procurar():
                 jogada = procurar.um_passo(obs)
                 if jogada.terminou:
                     speak.falar(_fim_do_jogo(jogada), esperar=False)
@@ -400,7 +480,7 @@ def principal() -> None:
                     #    digam onde está (ação ir_para com estou_aqui=true).
                     if jogada.razao != "onde estou":
                         procurar.parar()
-            elif navegar.a_navegar():
+            elif OPCOES.mbot and navegar.a_navegar():
                 passo = navegar.um_passo()
                 if passo.terminou:
                     speak.falar(_fim_da_viagem(passo.razao), esperar=False)
@@ -408,7 +488,7 @@ def principal() -> None:
             # ⚠️ Timeout curto de propósito: o motors.verificar_timeout() só
             #    corre entre chamadas desta função. Com timeout=30 a rede de
             #    segurança de 3 s dos motores seria, na prática, de 30 s.
-            if wakeword.esperar_pela_palavra(timeout=0.5):
+            if _acordou(0.5):
                 maquina.mudar(Estado.ATENTO)
                 uma_interacao(maquina, obs)
             else:

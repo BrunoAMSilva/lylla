@@ -265,4 +265,14 @@ def test_modo_ingles_muda_o_system_prompt(monkeypatch):
     definicoes["lingua"] = "en"
     em_ingles = personalidade.carregar()
     assert "ENGLISH MODE" in em_ingles
-    assert em_ingles.startswith(em_portugues), "a personalidade da Lara não se perde"
+
+    # ⚠️ A instrução vai À FRENTE, e a regra de língua sai. Acrescentá-la no
+    #    fim não chegava: o gemma4:e4b lia a parede de português primeiro e
+    #    respondia em português com `lingua: "en"` bem posto.
+    assert em_ingles.startswith("ENGLISH MODE")
+    assert "Falas português de Portugal" not in em_ingles
+
+    # O resto da personalidade que a Lara escreveu mantém-se toda.
+    for linha in em_portugues.splitlines():
+        if linha.strip() and "portugu" not in linha.lower():
+            assert linha in em_ingles, f"perdeu-se: {linha!r}"

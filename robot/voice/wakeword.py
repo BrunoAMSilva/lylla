@@ -91,6 +91,9 @@ def _iniciar():
     return _modelo
 
 
+_som_alto: "_SomAlto | None" = None
+
+
 class _SomAlto:
     """O substituto do modelo: som alto em relação ao SILÊNCIO DA SALA.
 
@@ -108,6 +111,19 @@ class _SomAlto:
         self.chao = float("inf")
         self.seguidos = 0
         self._inicio = time.monotonic()
+
+    @classmethod
+    def unico(cls) -> "_SomAlto":
+        """⚠️ UM por processo, não um por chamada.
+
+        O ciclo principal chama `esperar_pela_palavra(timeout=0.5)` a cada
+        volta. Com um detetor novo de cada vez, o tempo de arranque (1 s a
+        aprender o silêncio) nunca acabava e ele ficava surdo para sempre.
+        """
+        global _som_alto
+        if _som_alto is None:
+            _som_alto = cls()
+        return _som_alto
 
     def acordou(self, amostra: np.ndarray) -> bool:
         energia = float(np.sqrt(np.mean(amostra.astype(np.float32) ** 2)))
@@ -142,7 +158,7 @@ def esperar_pela_palavra(timeout: float | None = None) -> bool:
 
     modelo = _iniciar()
     limiar = float(config.obter("voz.limiar_palavra_chave", 0.6))
-    som_alto = _SomAlto() if modelo is None else None
+    som_alto = _SomAlto.unico() if modelo is None else None
 
     inicio = time.monotonic()
 
@@ -158,6 +174,7 @@ def esperar_pela_palavra(timeout: float | None = None) -> bool:
 
                 if modelo is None:
                     if som_alto.acordou(amostra):
+                        som_alto.seguidos = 0   # não disparar outra vez no mesmo som
                         return True
                     continue
 

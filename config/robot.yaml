@@ -269,7 +269,11 @@ voz:
   # não a do cérebro. O Pi guarda cada WAV em data/voz/ e volta a usá-lo sem
   # rede nenhuma — é isso que o faz falar com o mini desligado.
   servidor: ""
-  voz_mac: "Joana"                   # Joana | Catarina | Joaquim
+  voz_mac: "glados"                  # o nome da voz NO MINI (lá corre o Piper)
+                                     # ⚠️ "Joana" é uma voz do `say` do macOS e
+                                     # o mini já não usa o `say` — pedir-lha dá
+                                     # erro, o Pi cai para o espeak-ng e, sem
+                                     # ele instalado, fica mudo.
   tempo_limite_s: 5                  # a partir daqui desiste e usa o recurso
   velocidade_fala: 1.0               # 0.8 fala mais devagar; 1.2 mais depressa
 

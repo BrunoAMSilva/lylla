@@ -159,11 +159,14 @@ def _entreter_se() -> str | None:
 # O CICLO
 # ---------------------------------------------------------------------------
 
-def tick(maquina=None) -> attention.Observacao:
+def tick(maquina=None, mexer: bool = True) -> attention.Observacao:
     """Uma volta do comportamento de secretária.
 
     Chamado do ciclo principal ~10x por segundo. Não bloqueia, não fala, e
     devolve o que viu para quem quiser usar.
+
+    Com `mexer=False` continua a VER e a olhar — só não se entretém sozinho,
+    que é a única parte que precisa de motores e braços.
     """
     global _ultima_presenca
 
@@ -185,7 +188,7 @@ def tick(maquina=None) -> attention.Observacao:
         eyes.expressao("neutro", olhar=(0.0, 0.0))
     else:
         sozinho_ha = agora - _ultima_presenca
-        if sozinho_ha > float(_cfg("segundos_ate_atividade", 90.0)):
+        if mexer and sozinho_ha > float(_cfg("segundos_ate_atividade", 90.0)):
             _entreter_se()
 
     return obs
