@@ -503,6 +503,29 @@ CORES = {
 }
 
 
+def luz_rgb(r: int, g: int, b: int) -> bool:
+    """Os 5 LEDs RGB do CyberPi, com a cor exata. 0-255 em cada componente.
+
+    É o que o `glow` usa para as animações: o brilho é a mesma cor com os
+    componentes escalados, e não há `led.brightness` nesta API.
+    """
+    r, g, b = (max(0, min(255, int(v))) for v in (r, g, b))
+    if config.a_simular():
+        config.sim(f"mBot2 → luz rgb({r},{g},{b})")
+        return True
+    if not disponivel():
+        return False
+    with _lock:
+        try:
+            if (r, g, b) == (0, 0, 0):
+                _api.led.off("all")
+            else:
+                _api.led.on(r, g, b, "all")
+            return True
+        except Exception:  # noqa: BLE001
+            return False
+
+
 def luz(cor: str = "ciano") -> bool:
     """Os 5 LEDs RGB do CyberPi. `luz("apagar")` desliga-os."""
     if cor in ("apagar", "apagado", "nenhuma"):

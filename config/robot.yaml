@@ -365,13 +365,18 @@ bracos:
                             #    suficiente para magoar um dedo pequeno
 
 # ----------------------------------------------------------------------------
-# BRILHO FUTURO
+# BRILHO
 #
-# Este desenho usava os canais livres do PCA9685 dos motores. Esse controlador
-# não faz parte da construção com o mBot2 intacto. Não ligar estes canais sem
-# escolher um controlador novo.
+# O desenho original usava os canais livres do PCA9685 dos motores (0x40). Esse
+# controlador saiu da construção quando o mBot2 ficou inteiro, e pedir-lhe
+# brilho dava erro de I2C a cada volta do ciclo principal.
+#
+# Agora o brilho sai pelos 5 LEDs RGB do CyberPi, que já estão lá e já falam
+# connosco por USB. São uma tira só: os grupos "base" e "peito" partilham-na,
+# e o mais aceso manda. Voltar ao desenho antigo é pôr motor: pca9685.
 # ----------------------------------------------------------------------------
 brilho:
+  motor: "mbot2"            # mbot2 | pca9685
   canais:
     base: 6                 # anel na base — onde o Astro teria os pés
     peito: 7                # o painel do peito

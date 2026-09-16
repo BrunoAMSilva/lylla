@@ -39,9 +39,51 @@ _animacao: threading.Thread | None = None
 _parar = threading.Event()
 _nivel: dict[str, float] = {}
 
+# O azul do Astro. É o mesmo "ciano" do catálogo do mBot2.
+COR = (54, 224, 255)
+
+# ⚠️ O mBot2 fala por SÉRIE, e as animações escrevem 25 vezes por segundo.
+#    Mandar tudo satura a ligação que também leva os comandos das rodas. Só
+#    se escreve quando o brilho muda de verdade, e no máximo 10 vezes por
+#    segundo — a olho não se distingue.
+_PASSO = 0.04
+_INTERVALO_S = 0.1
+_ultimo_envio = 0.0
+_ultimo_nivel = -1.0
+
+
+def _motor() -> str:
+    """Quem acende os LEDs: "mbot2" (o shield) ou "pca9685" (o desenho antigo).
+
+    O PCA9685 em 0x40 era o dos motores TB6612, que saiu da construção quando
+    o mBot2 ficou inteiro. Os LEDs viviam nos canais que sobravam dele; sem
+    essa placa, pedir-lhe brilho dá erro de I2C a cada volta do ciclo.
+    """
+    return str(config.obter("brilho.motor", "mbot2"))
+
 
 def _endereco() -> int:
     return int(config.obter("i2c.motores", 0x40))
+
+
+def _acender_no_mbot2() -> None:
+    """Os 5 LEDs do CyberPi seguem o grupo mais aceso.
+
+    São uma tira só — não há "base" e "peito" separados no shield. Enquanto
+    não houver LEDs próprios, o mais aceso manda: uma pulsação de atenção no
+    peito sobrepõe-se à respiração lenta da base, que é a leitura certa.
+    """
+    global _ultimo_envio, _ultimo_nivel
+    from robot.hardware import mbot2
+
+    nivel = max(_nivel.values(), default=0.0)
+    agora = time.monotonic()
+    if abs(nivel - _ultimo_nivel) < _PASSO and nivel not in (0.0, 1.0):
+        return
+    if agora - _ultimo_envio < _INTERVALO_S:
+        return
+    _ultimo_envio, _ultimo_nivel = agora, nivel
+    mbot2.luz_rgb(*(int(c * nivel) for c in COR))
 
 
 def _canais() -> dict:
@@ -67,6 +109,9 @@ def brilho(grupo: str, valor: float) -> None:
 
     if config.a_simular():
         config.sim(f"brilho {grupo} → {valor * 100:.0f}%")
+        return
+    if _motor() == "mbot2":
+        _acender_no_mbot2()
         return
     if pca9685.iniciar(_endereco(), FREQ_HZ):
         pca9685.duty(_endereco(), int(canais[grupo]), valor)

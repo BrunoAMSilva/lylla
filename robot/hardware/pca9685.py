@@ -34,6 +34,13 @@ _LED0_ON_L = 0x06
 
 _bus = None
 _iniciados: dict[int, bool] = {}
+
+# ⚠️ Um endereço que não responde NÃO se volta a tentar. O `iniciar()` é
+#    chamado do ciclo principal (~10x por segundo) e, com a placa fora, o
+#    aviso saía dez vezes por segundo e enterrava tudo o resto no terminal.
+#    Uma placa I2C não aparece sozinha a meio de uma execução: ou está ligada
+#    no arranque, ou fica para a próxima.
+_ausentes: set[int] = set()
 _oe = None
 _oe_tentado = False
 
@@ -108,6 +115,8 @@ def iniciar(endereco: int, frequencia_hz: float) -> bool:
         return True
     if _iniciados.get(endereco):
         return True
+    if endereco in _ausentes:
+        return False
 
     bus = _abrir_bus()
     if bus is None:
@@ -129,15 +138,19 @@ def iniciar(endereco: int, frequencia_hz: float) -> bool:
         _iniciados[endereco] = True
         return True
     except Exception as erro:  # noqa: BLE001
+        _ausentes.add(endereco)
         print(
             f"⚠️  PCA9685 em 0x{endereco:02x} não responde ({erro}).\n"
-            f"    Confirma com:  i2cdetect -y 1"
+            f"    Confirma com:  i2cdetect -y 1\n"
+            f"    Desisti deste endereço até reiniciares."
         )
         return False
 
 
 def escrever_bruto(endereco: int, canal: int, ligado: int, desligado: int) -> None:
     """Escreve os contadores ON/OFF de um canal (0-4095, ou o bit 0x1000)."""
+    if endereco in _ausentes:
+        return
     bus = _abrir_bus()
     if bus is None:
         return
@@ -148,6 +161,7 @@ def escrever_bruto(endereco: int, canal: int, ligado: int, desligado: int) -> No
         bus.write_byte_data(endereco, base + 2, desligado & 0xFF)
         bus.write_byte_data(endereco, base + 3, desligado >> 8)
     except Exception as erro:  # noqa: BLE001
+        _ausentes.add(endereco)
         print(f"⚠️  Falha a escrever no PCA9685 0x{endereco:02x} canal {canal}: {erro}")
 
 
