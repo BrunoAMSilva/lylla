@@ -56,6 +56,7 @@ import io
 import threading
 import time
 import wave
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import numpy as np
@@ -63,6 +64,23 @@ import numpy as np
 from cerebro import config
 
 TAXA = 16_000
+
+# ⚠️ O MLX tem STREAMS POR FIO. O modelo é criado num fio e as suas operações
+#    só podem ser avaliadas nesse mesmo fio — noutro qualquer rebenta com
+#    "There is no Stream(cpu, 1) in current thread". O servidor é FastAPI: cada
+#    pedido cai num fio diferente da pool do anyio, portanto o /v1/ouvir
+#    rebentava sempre (500) enquanto o `medir.py`, que corre no fio principal,
+#    passava. Não é um erro de áudio nem do Parakeet: é de onde se chama.
+#
+#    Um único fio para TUDO o que é MLX resolve as duas coisas de uma vez —
+#    a stream é sempre a mesma, e as transcrições ficam serializadas, que é o
+#    que já queríamos (o `transcribe_stream` mexe no modelo partilhado).
+_FIO_MLX = ThreadPoolExecutor(max_workers=1, thread_name_prefix="mlx")
+
+
+def no_fio_mlx(funcao, *args, **kwargs):
+    """Corre `funcao` no fio do MLX e espera pelo resultado."""
+    return _FIO_MLX.submit(funcao, *args, **kwargs).result()
 
 
 class AudioInvalido(ValueError):
@@ -261,7 +279,7 @@ class SessaoParakeet(Sessao):
             raise RuntimeError("já estou a ouvir outra pessoa — só sei ouvir uma de cada vez")
         try:
             self._gestor = modelo.transcribe_stream(context_size=contexto, depth=depth)
-            self._transcritor = self._gestor.__enter__()
+            self._transcritor = no_fio_mlx(self._gestor.__enter__)
         except Exception:
             self._largar()
             raise
@@ -284,13 +302,18 @@ class SessaoParakeet(Sessao):
             return audio.astype(np.float32)
 
     def adicionar(self, audio: np.ndarray) -> str:
-        self._transcritor.add_audio(self._mx(audio))
-        self._ultimo = (self._transcritor.result.text or "").strip()
+        # O `mx.array` também é MLX: tem de nascer no mesmo fio que o usa.
+        def _passo() -> str:
+            self._transcritor.add_audio(self._mx(audio))
+            return (self._transcritor.result.text or "").strip()
+
+        self._ultimo = no_fio_mlx(_passo)
         return self._ultimo
 
     def terminar(self) -> str:
         try:
-            self._ultimo = (self._transcritor.result.text or "").strip()
+            self._ultimo = no_fio_mlx(
+                lambda: (self._transcritor.result.text or "").strip())
         finally:
             self.fechar()
         return self._ultimo
@@ -298,7 +321,7 @@ class SessaoParakeet(Sessao):
     def fechar(self) -> None:
         if self._gestor is not None:
             try:
-                self._gestor.__exit__(None, None, None)
+                no_fio_mlx(self._gestor.__exit__, None, None, None)
             except Exception:  # noqa: BLE001
                 pass
             self._gestor = None
@@ -329,7 +352,9 @@ class MotorParakeet(_Base):
         if self._modelo is None:
             from parakeet_mlx import from_pretrained  # só existe em Apple Silicon
 
-            self._modelo = from_pretrained(self.modelo)
+            # O modelo NASCE no fio do MLX — se nascer noutro, nenhuma das
+            # operações dele funciona a partir dos fios do servidor.
+            self._modelo = no_fio_mlx(from_pretrained, self.modelo)
 
     def transcrever(self, audio: np.ndarray, lingua: str | None) -> dict:
         """⚠️ O `transcribe()` do parakeet-mlx recebe um CAMINHO de ficheiro,
@@ -355,7 +380,7 @@ class MotorParakeet(_Base):
                 w.setframerate(TAXA)
                 w.writeframes(pcm)
             with self._lock:
-                resultado = self._modelo.transcribe(caminho)
+                resultado = no_fio_mlx(self._modelo.transcribe, caminho)
         finally:
             Path(caminho).unlink(missing_ok=True)
         return {"texto": (resultado.text or "").strip(), "lingua": "auto"}
