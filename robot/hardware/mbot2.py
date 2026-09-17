@@ -199,7 +199,14 @@ def ligar() -> bool:
             _api = _com_prazo(float(config.obter("mbot2.espera_s", 20.0)),
                               cyberpi.connect, _dev)
         except Prazo:
-            print(f"⚠️  mBot2: {porta} não respondeu. Está aceso e no menu?")
+            # ⚠️ ACONTECE E TEM CURA: o CyberPi fica nesta guerra quando uma
+            #    ligação anterior não fechou bem — a porta abre, o `connect()`
+            #    espera pelo `protocol.ready` e ele nunca responde. Não é do
+            #    cabo nem do código: desliga e volta a ligar o CyberPi.
+            print(f"⚠️  mBot2: {porta} abriu mas não respondeu em "
+                  f"{float(config.obter('mbot2.espera_s', 20.0)):.0f} s.")
+            print("    Desliga e volta a ligar o CyberPi (o botão de trás), "
+                  "espera pelo menu, e corre outra vez.")
             return False
         except Exception as erro:  # noqa: BLE001
             print(f"⚠️  mBot2: não deu para ligar ({erro})")
