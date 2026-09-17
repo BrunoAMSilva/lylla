@@ -159,6 +159,16 @@ def arrancar() -> Maquina:
     eyes.expressao("a_dormir")
     eyes.comecar_a_piscar_sozinho()
     arms.bracos_ao_lado()
+
+    # ⚠️ O mBot2 liga-se AQUI, antes das luzes. A ligação só pode ser aberta na
+    #    thread principal (ver mbot2.ligar()), e as luzes saem por ele: se a
+    #    animação arrancasse primeiro, era ela a tentar abri-la, numa thread
+    #    onde o prazo não funciona.
+    if OPCOES.mbot:
+        from robot.hardware import mbot2
+
+        print(f"   mBot2: {'✅ ligado' if mbot2.ligar() else '❌ não respondeu'}")
+
     glow.respirar("base")   # a base pulsa devagar — lê-se como "vivo em repouso"
 
     # ⚠️ O modo é definido ANTES de qualquer movimento poder acontecer. Se

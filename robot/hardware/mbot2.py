@@ -137,6 +137,15 @@ def _ja_ligado(porta: str):
     return api, dev
 
 
+def ja_ligado() -> bool:
+    """Já estamos ligados? NÃO tenta ligar — ao contrário do `disponivel()`.
+
+    É para quem corre fora da thread principal (as animações das luzes, por
+    exemplo) e só quer usar a ligação se ela já existir.
+    """
+    return _ligado
+
+
 def ligar() -> bool:
     """Liga-se ao mBot2 e subscreve o que é preciso ler muitas vezes.
 
@@ -147,6 +156,17 @@ def ligar() -> bool:
         return True
     if _tentou_ligar and not _ligado:
         return False
+
+    # ⚠️ A PRIMEIRA LIGAÇÃO É SÓ NA THREAD PRINCIPAL.
+    #    O `connect()` da biblioteca espera pelo `protocol.ready` num ciclo sem
+    #    saída, e o despertador do `_com_prazo` é SIGALRM — que só funciona na
+    #    thread principal. Fora dela não há prazo nenhum: o programa fica
+    #    pendurado para sempre, sem erro e sem linha nenhuma no terminal.
+    #    Aconteceu: a animação das luzes tocou aqui no arranque e o robô
+    #    congelou logo a seguir aos braços.
+    if threading.current_thread() is not threading.main_thread():
+        return False
+
     _tentou_ligar = True
 
     if config.a_simular():

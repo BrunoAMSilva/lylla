@@ -74,7 +74,14 @@ def _acender_no_mbot2() -> None:
     peito sobrepõe-se à respiração lenta da base, que é a leitura certa.
     """
     global _ultimo_envio, _ultimo_nivel
+    from robot import config
     from robot.hardware import mbot2
+
+    # ⚠️ Só ESCREVE numa ligação que já exista; nunca a abre. Isto corre na
+    #    thread da animação, e abrir a ligação ao mBot2 fora da principal fica
+    #    pendurado sem prazo — ver mbot2.ligar().
+    if not (config.a_simular() or mbot2.ja_ligado()):
+        return
 
     nivel = max(_nivel.values(), default=0.0)
     agora = time.monotonic()
