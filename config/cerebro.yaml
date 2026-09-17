@@ -90,7 +90,12 @@ pensar:
   keep_alive: -1         # ⚠️ -1 = o modelo fica SEMPRE em RAM.
                          # Sem isto, a primeira frase depois de uns minutos
                          # de silêncio custa os segundos todos do carregamento.
-  extra: {}              # o que aqui estiver vai direito ao corpo do pedido
+  # ⚠️ `think: false` NÃO É AFINAÇÃO, é o que faz o modelo responder.
+  #    O gemma4 é um modelo de raciocínio: sem isto gasta o `max_tokens` todo
+  #    no campo `thinking` e devolve a fala VAZIA. Sintoma inconfundível —
+  #    10 a 30 segundos e a frase de recurso («Okay.»). Já aconteceu três
+  #    vezes, e das três foi por o valor estar só no mini e um sync o apagar.
+  extra: {think: false}  # o que aqui estiver vai direito ao corpo do pedido
 
 # ----------------------------------------------------------------------------
 # FALAR — a voz
