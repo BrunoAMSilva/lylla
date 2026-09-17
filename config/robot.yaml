@@ -322,7 +322,18 @@ cerebro:
   # vai transcrevendo. Poupa o tempo todo de transcrever, que antes só
   # começava depois de ela se calar. Ver docs/AI-config.md.
   # A false, volta ao /v1/turno (grava tudo, envia no fim).
-  escutar_em_directo: true
+  #
+  # ⚠️ DESLIGADO A 17/09/2026, com medição. O MESMO ficheiro de 10 s:
+  #      lote       → «Olá! 1, 2, 3, 4, 5, 6 Agora estou a falar para a
+  #                   Glaila.»   em 297 ms
+  #      contínuo   → «Yeah.» · «I'm not sure.» · vazio   em 35 861 ms
+  #    Não é o microfone nem o modelo — é o caminho incremental. A suspeita é
+  #    o tamanho dos bocados: mandamos 80 ms (o que o microfone dá) e o
+  #    descodificador TDT com contexto (256, 256) precisa de mais. Juntar os
+  #    bocados até ~1 s antes do add_audio é o que há para experimentar.
+  #    Enquanto não estiver medido, fica em false: perde-se a sobreposição
+  #    (ela só começa a pensar quando tu te calas), ganha-se a transcrição.
+  escutar_em_directo: false
 
   # Os tempos de espera. Passado isto, o robô desiste e diz alguma coisa em
   # vez de ficar parado — nunca há um silêncio sem explicação.
