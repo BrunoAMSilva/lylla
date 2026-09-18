@@ -261,14 +261,77 @@ def _com_volume(caminho: str | Path) -> str | Path:
         return caminho
 
 
+def taxa_de_saida() -> int:
+    """A taxa a que a placa de som toca MESMO. 0 = tocar o WAV como vem."""
+    return int(config.obter("voz.taxa_saida", 0) or 0)
+
+
+def _na_taxa_da_placa(caminho: str | Path) -> str | Path:
+    """O mesmo WAV reamostrado para `voz.taxa_saida`, se for diferente.
+
+    ⚠️ A VOZ LENTA E GROSSA. A GLaDOS sai do mini a 22 050 Hz. Se a placa só
+       tocar a 16 000 (o microfone e o amplificador partilham o relógio do
+       barramento I2S, e o microfone grava a 16 kHz), o `aplay` avisa «rate is
+       not accurate» — o `-q` escondia o aviso — e toca as amostras à taxa
+       errada: 22 050 → 16 000 é 27% mais devagar e mais grave. Reamostrar
+       aqui, antes de tocar, põe a voz à velocidade certa em qualquer placa.
+       A cache em data/voz/ fica como veio: só a cópia temporária muda.
+    """
+    alvo = taxa_de_saida()
+    if not alvo:
+        return caminho
+    try:
+        import numpy as np
+
+        with wave.open(str(caminho), "rb") as origem:
+            taxa, canais, largura = origem.getframerate(), origem.getnchannels(), origem.getsampwidth()
+            if taxa == alvo or largura != 2:
+                return caminho
+            amostras = np.frombuffer(origem.readframes(origem.getnframes()), dtype="<i2")
+        amostras = amostras.reshape(-1, canais).astype(np.float32)
+        try:
+            from math import gcd
+
+            from scipy.signal import resample_poly  # melhor, se houver
+
+            g = gcd(alvo, taxa)
+            novas = resample_poly(amostras, alvo // g, taxa // g, axis=0)
+        except ImportError:
+            n = int(round(len(amostras) * alvo / taxa))
+            t_novo = np.linspace(0, len(amostras) - 1, n)
+            novas = np.stack([np.interp(t_novo, np.arange(len(amostras)), amostras[:, c])
+                              for c in range(canais)], axis=1)
+        destino = "/tmp/robo_fala_taxa.wav"
+        with wave.open(destino, "wb") as saida:
+            saida.setnchannels(canais)
+            saida.setsampwidth(2)
+            saida.setframerate(alvo)
+            saida.writeframes(np.clip(novas, -32768, 32767).astype("<i2").tobytes())
+        return destino
+    except Exception as erro:  # noqa: BLE001
+        print(f"⚠️  Não consegui reamostrar para {alvo} Hz ({erro}); toco como está.")
+        return caminho
+
+
+_avisou_taxa = False
+
+
 def _reproduzir_wav(caminho: str | Path) -> None:
-    caminho = _com_volume(caminho)
+    global _avisou_taxa
+    caminho = _na_taxa_da_placa(_com_volume(caminho))
     for comando in LEITORES:
         if shutil.which(comando[0]) is None:
             continue
         try:
-            subprocess.run([*comando, str(caminho)], check=False, timeout=30,
-                           stderr=subprocess.DEVNULL)
+            feito = subprocess.run([*comando, str(caminho)], check=False, timeout=30,
+                                   stderr=subprocess.PIPE, text=True)
+            # O aviso que explica uma voz lenta ou esganiçada — dito UMA vez,
+            # com o número que é para pôr no robot.yaml.
+            erro = feito.stderr or ""
+            if "rate is not accurate" in erro and not _avisou_taxa:
+                _avisou_taxa = True
+                print(f"⚠️  A placa de som não toca a esta taxa: {erro.strip()}")
+                print("    Põe o valor de «got» em voz.taxa_saida no config/robot.yaml.")
             return
         except Exception as erro:  # noqa: BLE001
             print(f"⚠️  O {comando[0]} falhou: {erro}")

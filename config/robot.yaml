@@ -281,6 +281,12 @@ voz:
                                      # ele instalado, fica mudo.
   tempo_limite_s: 5                  # a partir daqui desiste e usa o recurso
   velocidade_fala: 1.0               # 0.8 fala mais devagar; 1.2 mais depressa
+  # ⚠️ VOZ LENTA E GROSSA = taxa errada. A GLaDOS vem a 22 050 Hz; o
+  #    amplificador partilha o relógio I2S com o microfone, que grava a
+  #    16 kHz. Tocar 22 050 a 16 000 é 27% mais devagar e mais grave. O Pi
+  #    reamostra para isto antes de tocar. 0 = tocar como vem. Se o terminal
+  #    avisar «rate is not accurate … got = N», põe aqui esse N.
+  taxa_saida: 16000
   volume: 1.0                        # 0.0 a 1.0. Aplicado às amostras, não ao
                                      # amixer: a placa I2S do googlevoicehat não
                                      # expõe controlo de volume nenhum.
