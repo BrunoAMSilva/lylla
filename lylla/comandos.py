@@ -4,9 +4,9 @@
 
     @comando("adicionar face", "aprende a minha cara")
     def adicionar_face():
-        voz.dizer("Como te chamas?")
+        voz.dizer("What's your name?")
         ...
-        return "Já está!"
+        return "Done!"
 
 A partir daí, dizer «Olá Lylla, adicionar face» chama a função. O que ela
 devolver (se devolver alguma coisa) é o que o robô responde.
@@ -69,8 +69,8 @@ def executar(frase_simplificada: str) -> str | None:
         resposta = funcao()
     except Exception as erro:  # noqa: BLE001
         print(f"⚠️  o comando '{frase}' deu erro: {erro}")
-        return "Enganei-me a fazer isso. Vê o que apareceu no ecrã."
-    return str(resposta) if resposta is not None else "Feito!"
+        return "Oops, I made a mistake doing that. Check the screen."
+    return str(resposta) if resposta is not None else "Done!"
 
 
 def conhecidos() -> list[str]:

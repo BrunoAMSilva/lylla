@@ -1,0 +1,13 @@
+{
+  "partilhado": [
+    "Bruno is Lara's father."
+  ],
+  "pessoas": {
+    "Lara": [
+      "Lara is in 5th grade.",
+      "Lara loves robots and cats.",
+      "Lara is working on a school project about Sweden."
+    ],
+    "Bruno": []
+  }
+}

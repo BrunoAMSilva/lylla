@@ -17,6 +17,8 @@ import json
 
 import pytest
 
+from robot.voice import frases
+
 from cerebro import pensar
 from robot.brain import acoes, tools
 
@@ -189,7 +191,7 @@ def test_se_mesmo_assim_nao_falar_o_robo_admite_que_nao_percebeu(monkeypatch):
         yield {"tipo": "fim", "tempo_ms": {}}
 
     main._consumir_turno(Maquina(), sem_fala())
-    assert dito == ["Não percebi. Podes repetir?"]
+    assert dito == [frases.dizer("nao_percebi")]
 
 
 # ---------------------------------------------------------------------------

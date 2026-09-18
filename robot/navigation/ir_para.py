@@ -114,15 +114,15 @@ def carregar(forcar: bool = False) -> str | None:
     fc = _caminho("casa", "data/casa.json")
     fp = _caminho("piloto", "data/piloto.json")
     if not fc.exists():
-        return f"Não tenho a planta da casa ({fc.name}). Desenha-a em docs/escola-de-conducao.html."
+        return f"I don't have the house plan ({fc.name}). Draw it in the driving school page."
     if not fp.exists():
-        return f"Não tenho piloto treinado ({fp.name}). Treina-o em docs/escola-de-conducao.html."
+        return f"I don't have a trained pilot ({fp.name}). Train it in the driving school page."
     try:
         _casa = mod_casa.Casa.de_ficheiro(fc)
         _piloto = mod_piloto.Piloto.de_ficheiro(fp)
     except Exception as erro:  # noqa: BLE001
         _casa = _piloto = None
-        return f"A planta ou o piloto estão estragados: {erro}"
+        return f"The house plan or the pilot is broken: {erro}"
     if _piloto.n_feixes > 1 and _cfg("feixes_reais", 1) < _piloto.n_feixes:
         print(f"⚠️  O piloto foi treinado com {_piloto.n_feixes} feixes e o robô só tem "
               f"{_cfg('feixes_reais', 1)}. Vai conduzir às cegas para os lados — "
@@ -231,23 +231,23 @@ def comecar(nome_divisao: str) -> tuple[str, str]:
         return ("recusa", erro)
     assert _casa is not None and _piloto is not None
     if not permitido():
-        return ("recusa", "Ainda não me deixam andar pela casa sozinha.")
+        return ("recusa", "I'm not allowed to walk around the house on my own yet.")
 
     idx = _casa.indice_divisao(nome_divisao)
     if idx < 0:
-        return ("recusa", f"Não conheço nenhum sítio chamado «{nome_divisao}». "
+        return ("recusa", f"I don't know any place called {nome_divisao}. "
                           f"Conheço: {', '.join(_casa.nomes())}.")
 
     perdida_de_todo = _pose.deriva_cm > mod_varrimento.BUSCA_CM * 1.5
     if perdida_de_todo:
         # Para lá do que o varrimento consegue procurar, emparelhar é adivinhar
         # com confiança — e isso é pior do que perguntar.
-        return ("recusa", "Já não sei bem onde estou. Leva-me a um sítio que eu conheça e diz-me qual é.")
+        return ("recusa", PERDIDA)
 
     global _ponto_destino
     celula = _casa.ponto_da_divisao(idx)
     if celula is None:
-        return ("recusa", f"A divisão {_casa.divisoes[idx].nome} não tem chão na planta.")
+        return ("recusa", f"The room {_casa.divisoes[idx].nome} has no floor on the plan.")
     _ponto_destino = _casa.centro(*celula)
     campo = _casa.campo_de_celula(*celula)
     distancia = _casa.distancia_em(campo, _pose.x, _pose.y)
@@ -262,10 +262,10 @@ def comecar(nome_divisao: str) -> tuple[str, str]:
         campo = _casa.campo_de_celula(*celula)
         distancia = _casa.distancia_em(campo, _pose.x, _pose.y)
     if not math.isfinite(distancia):
-        return ("recusa", f"Não sei chegar a {_casa.divisoes[idx].nome} daqui — falta uma porta na planta.")
+        return ("recusa", f"I don't know how to get to the {_casa.divisoes[idx].nome} from here. A door is missing on the plan.")
     if _chegou(_pose.x, _pose.y):
         parar()
-        return ("ja_estou", f"Já estou {com_artigo(_casa.divisoes[idx].nome)}!")
+        return ("ja_estou", f"I'm already {em_ingles(_casa.divisoes[idx].nome, 'em')}!")
 
     _destino, _campo, _activo = idx, campo, True
     _inicio = _ultimo_passo = time.monotonic()
@@ -280,8 +280,8 @@ def comecar(nome_divisao: str) -> tuple[str, str]:
     _aplicar_mapa(forcar=True)
     if _pose.deriva_cm > float(_cfg("deriva_para_varrer", 30)):
         _comecar_varrimento()
-        return ("a_ir", f"Vou até {com_artigo(_casa.divisoes[idx].nome)} — deixa-me só ver onde estou.")
-    return ("a_ir", f"Vou até {com_artigo(_casa.divisoes[idx].nome)}.")
+        return ("a_ir", f"I'm going {em_ingles(_casa.divisoes[idx].nome)}. Let me just check where I am.")
+    return ("a_ir", f"I'm going {em_ingles(_casa.divisoes[idx].nome)}.")
 
 
 def parar() -> None:
@@ -309,10 +309,10 @@ def assumir(nome_divisao: str) -> str | None:
     assert _casa is not None
     idx = _casa.indice_divisao(nome_divisao)
     if idx < 0:
-        return f"Não conheço nenhum sítio chamado «{nome_divisao}»."
+        return f"I don't know any place called {nome_divisao}."
     celulas = [i for i, z in enumerate(_casa.zona) if z == idx and not _casa.parede[i]]
     if not celulas:
-        return f"A divisão {_casa.divisoes[idx].nome} não tem chão na planta."
+        return f"The room {_casa.divisoes[idx].nome} has no floor on the plan."
     sx = sum((i % _casa.cols) + 0.5 for i in celulas) / len(celulas)
     sy = sum((i // _casa.cols) + 0.5 for i in celulas) / len(celulas)
     # A deriva não fica a zero: sabe-se a DIVISÃO, não o ponto exato dela.
@@ -590,6 +590,20 @@ ARTIGOS = {
     "por": ("pela ", "pelo "),    # começo PELA sala · PELO corredor
     "em":  ("na ",   "no "),      # estou NA sala · NO corredor
 }
+
+
+# O que ela diz quando já não sabe onde está. É uma constante porque o
+# procurar.py a reconhece: é uma PERGUNTA («em que divisão estou?»), não o fim.
+PERDIDA = "I'm not sure where I am. Take me somewhere I know and tell me which room it is."
+
+
+def em_ingles(nome: str, preposicao: str = "a") -> str:
+    """«sala» + «a» → «to the sala» · + «em» → «in the sala».
+
+    A voz é inglesa (o fonemizador da GLaDOS é en-us): tudo o que o robô DIZ
+    vai em inglês. O nome da divisão fica como está na planta.
+    """
+    return {"a": "to the ", "por": "in the ", "em": "in the "}.get(preposicao, "to the ") + nome
 
 
 def com_artigo(nome: str, preposicao: str = "a") -> str:

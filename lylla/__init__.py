@@ -17,7 +17,7 @@ São duas maneiras de usar isto, e são as duas boas:
 
          @comando("adicionar face")
          def adicionar_face():
-             voz.dizer("Como te chamas?")
+             voz.dizer("What's your name?")
              nome = voz.ouvir()
              ver.guardar_face(nome, aviso=voz.dizer)
 
@@ -96,7 +96,7 @@ def ajuda() -> None:
                        branco · ciano · laranja · rosa · apagar
 
   FALAR E OUVIR
-    dizer("olá Lara")
+    dizer("hello Lara")
     ouvir()            ouve uma frase e devolve o texto
     esperar(2)         espera 2 segundos
 
@@ -115,7 +115,7 @@ def ajuda() -> None:
 
     @comando("adicionar face")
     def adicionar_face():
-        voz.dizer("Como te chamas?")
+        voz.dizer("What's your name?")
         nome = voz.ouvir()
         ver.guardar_face(nome, aviso=voz.dizer)
         return f"Já conheço a {nome}!"

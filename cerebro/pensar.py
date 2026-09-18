@@ -35,6 +35,7 @@ from typing import Any, Iterator
 import requests
 
 from cerebro import config
+from cerebro.memoria import Memoria
 from robot import config as config_robo
 from robot.brain import acoes, personalidade
 
@@ -260,13 +261,26 @@ Example: {"expressao": "feliz", "fala": "Sure! I will follow you.", "acoes": [{"
 
 The part in square brackets at the start of each message is what your sensors see RIGHT NOW (who is in front of you, battery, distance to the nearest obstacle). Use it instead of asking what you already know. If you see nobody, do not make someone up."""
 
+LEMBRAR_EN = """
+  "lembrar": facts worth remembering about the person talking to you, in English, max 2. Only LASTING things they tell you about themselves (what they like, their school, their projects, their family). Not what happened today, not what you said. Usually empty: []."""
 
-def montar_sistema(lingua: str, expressoes: list[str] | None = None) -> str:
-    """personalidade.txt + (modo inglês) + o formato e o catálogo de ações."""
+LEMBRAR_PT = """
+  "lembrar": factos a guardar sobre quem está a falar contigo, no máximo 2. Só coisas que DURAM e que a pessoa te contou sobre si (do que gosta, a escola, os projetos, a família). Não o que aconteceu hoje, nem o que tu disseste. Quase sempre vazio: []."""
+
+
+def montar_sistema(lingua: str, expressoes: list[str] | None = None,
+                   memoria: str = "", com_lembrar: bool = False) -> str:
+    """personalidade.txt + (modo inglês) + o formato e o catálogo de ações
+    + (se houver) o que ela sabe de quem está a falar."""
     catalogo = acoes.descricao_para_prompt(expressoes)
-    formato = FORMATO_EN if lingua == "en" else FORMATO_PT
+    en = lingua == "en"
+    formato = FORMATO_EN if en else FORMATO_PT
+    if com_lembrar:
+        # A linha do `lembrar` entra logo a seguir à do `acoes`.
+        marca = "Empty if you do nothing." if en else "Vazia se não fizeres nada."
+        formato = formato.replace(marca, marca + (LEMBRAR_EN if en else LEMBRAR_PT), 1)
     # .replace e não .format: o texto está cheio de chavetas de JSON
-    return personalidade.carregar(lingua) + formato.replace("{catalogo}", catalogo)
+    return personalidade.carregar(lingua) + formato.replace("{catalogo}", catalogo) + memoria
 
 
 def _com_contexto(texto: str, contexto: dict | None, lingua: str) -> str:
@@ -293,9 +307,64 @@ def _com_contexto(texto: str, contexto: dict | None, lingua: str) -> str:
         partes.append(f"time {contexto['hora']}" if en else f"são {contexto['hora']}")
     if contexto.get("nota"):
         partes.append(str(contexto["nota"]))
+    if contexto.get("explicar"):
+        partes.append(
+            "they want an explanation: up to 5 short sentences, one everyday example, "
+            "then a tiny question to check they got it" if en else
+            "querem uma explicação: até 5 frases curtas, um exemplo do dia a dia, "
+            "e no fim uma pergunta pequenina para ver se percebeu")
     if not partes:
         return texto
     return f"[{' · '.join(partes)}]\n{texto}"
+
+
+# ------------------------------------------------- perguntas que pedem mais
+
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║  O MEIO-TERMO DO RACIOCÍNIO                                              ║
+# ║                                                                          ║
+# ║  Com `think: false` o gemma4 responde depressa, mas a «o que são         ║
+# ║  classes?» dá uma resposta rasa ou um «não percebi». Com `think: true`   ║
+# ║  em TUDO, um «olá» custa segundos. Por isso: só se pensa quando a        ║
+# ║  pergunta pede uma explicação — e aí também se deixam mais frases.       ║
+# ║  O Pi tapa a espera com um «hmm, deixa-me pensar» (evento `a_pensar`).   ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+_NAO_E_SOBRE_MIM = r"(?!\s*(?:you|your|yours|my|u|we|our|up|going\s+on|the\s+time)\b)"
+_PEDE_EXPLICACAO = re.compile(
+    r"\b(?:"
+    r"(?:what\s+(?:is|are|was|were|does|do)|what's|whats)" + _NAO_E_SOBRE_MIM +
+    r"|why|how\s+(?:does|do|did|can|could|would)(?!\s+you\s+(?:feel|do)\b)"
+    r"|explain|tell\s+me\s+(?:about|how|why)|what\s+means|meaning\s+of|difference\s+between"
+    r"|o\s+que\s+(?:é|e|são|sao|quer\s+dizer|significa)(?!\s+(?:isto|tu|que)\b)"
+    r"|porquê|^\s*porque|porque\s+é\s+que|como\s+(?:é\s+que|funciona|funcionam|se\s+faz)"
+    r"|explica|diferença\s+entre"
+    r")\b",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+
+def pede_explicacao(texto: str) -> bool:
+    """«What are classes?» → True · «dança!» → False. Só olha para a frase dela."""
+    if not config.obter("pensar.explicar.ativo", True):
+        return False
+    return bool(_PEDE_EXPLICACAO.search(texto or ""))
+
+
+def esquema_da_resposta(expressoes: list[str], com_memoria: bool) -> dict:
+    """O contrato do Pi (acoes.esquema_json) + o campo `lembrar`, que é só do mini.
+
+    `lembrar` vai em ÚLTIMO: o modelo gera por ordem, e assim a memória nunca
+    atrasa a primeira palavra. Obrigatório de propósito — um `[]` custa três
+    tokens e obriga o modelo a considerar a pergunta em cada resposta.
+    """
+    esquema = acoes.esquema_json(expressoes)
+    if com_memoria:
+        esquema["properties"]["lembrar"] = {
+            "type": "array", "maxItems": 2,
+            "items": {"type": "string", "maxLength": 140},
+        }
+        esquema["required"] = [*esquema["required"], "lembrar"]
+    return esquema
 
 
 # -------------------------------------------------------------- os motores
@@ -309,7 +378,9 @@ class _Motor:
         self.estatisticas: dict[str, Any] = {}
         self.usou_esquema = False
 
-    def gerar(self, mensagens: list[dict], esquema: dict | None) -> Iterator[str]:
+    def gerar(self, mensagens: list[dict], esquema: dict | None,
+              opcoes: dict | None = None) -> Iterator[str]:
+        """`opcoes` muda este pedido e só este: {"max_tokens", "extra", "timeout_s"}."""
         raise NotImplementedError
 
     def esta_ligado(self) -> bool:
@@ -364,7 +435,9 @@ class MotorOllama(_Motor):
             )
         resposta.raise_for_status()
 
-    def gerar(self, mensagens: list[dict], esquema: dict | None) -> Iterator[str]:
+    def gerar(self, mensagens: list[dict], esquema: dict | None,
+              opcoes: dict | None = None) -> Iterator[str]:
+        opcoes = opcoes or {}
         corpo: dict[str, Any] = {
             "model": self.modelo,
             "messages": mensagens,
@@ -372,17 +445,19 @@ class MotorOllama(_Motor):
             "keep_alive": config.obter("pensar.keep_alive", -1),
             "options": {
                 "temperature": float(config.obter("pensar.temperatura", 0.7)),
-                "num_predict": int(config.obter("pensar.max_tokens", 300)),
+                "num_predict": int(opcoes.get("max_tokens") or config.obter("pensar.max_tokens", 300)),
             },
         }
         corpo.update(config.obter("pensar.extra", {}) or {})
+        corpo.update(opcoes.get("extra") or {})
+        timeout = float(opcoes.get("timeout_s") or self.timeout)
         if esquema is not None:
             corpo["format"] = esquema
         self.usou_esquema = esquema is not None
         self.estatisticas = {}
 
         try:
-            r = requests.post(f"{self.url}/api/chat", json=corpo, stream=True, timeout=(5, self.timeout))
+            r = requests.post(f"{self.url}/api/chat", json=corpo, stream=True, timeout=(5, timeout))
         except requests.RequestException as erro:
             raise CerebroIndisponivel(f"o Ollama não responde em {self.url} ({erro})") from erro
 
@@ -390,7 +465,7 @@ class MotorOllama(_Motor):
             # O esquema foi recusado (versão antiga do Ollama, modelo sem suporte).
             # Melhor uma resposta em texto do que nenhuma: repetir sem esquema.
             print(f"⚠️  O Ollama recusou o esquema JSON ({r.text[:120]}). A repetir sem ele.")
-            yield from self.gerar(mensagens, None)
+            yield from self.gerar(mensagens, None, opcoes)
             return
         if r.status_code != 200:
             raise CerebroIndisponivel(f"o Ollama respondeu {r.status_code}: {r.text[:200]}")
@@ -460,15 +535,18 @@ class MotorOpenAI(_Motor):
         except requests.RequestException:
             return False
 
-    def gerar(self, mensagens: list[dict], esquema: dict | None) -> Iterator[str]:
+    def gerar(self, mensagens: list[dict], esquema: dict | None,
+              opcoes: dict | None = None) -> Iterator[str]:
+        opcoes = opcoes or {}
         corpo: dict[str, Any] = {
             "model": self.modelo,
             "messages": mensagens,
             "stream": True,
             "temperature": float(config.obter("pensar.temperatura", 0.7)),
-            "max_tokens": int(config.obter("pensar.max_tokens", 300)),
+            "max_tokens": int(opcoes.get("max_tokens") or config.obter("pensar.max_tokens", 300)),
         }
         corpo.update(config.obter("pensar.extra", {}) or {})
+        corpo.update(opcoes.get("extra") or {})
         if esquema is not None:
             corpo["response_format"] = {
                 "type": "json_schema",
@@ -483,7 +561,7 @@ class MotorOpenAI(_Motor):
         except requests.RequestException as erro:
             raise CerebroIndisponivel(f"o servidor não responde em {self.url} ({erro})") from erro
         if r.status_code == 400 and esquema is not None:
-            yield from self.gerar(mensagens, None)
+            yield from self.gerar(mensagens, None, opcoes)
             return
         if r.status_code != 200:
             raise CerebroIndisponivel(f"o servidor respondeu {r.status_code}: {r.text[:200]}")
@@ -526,8 +604,11 @@ class MotorTeste(_Motor):
     modelo = "nenhum"
     atraso_s = 0.0
 
-    def gerar(self, mensagens: list[dict], esquema: dict | None) -> Iterator[str]:
+    def gerar(self, mensagens: list[dict], esquema: dict | None,
+              opcoes: dict | None = None) -> Iterator[str]:
         self.usou_esquema = esquema is not None
+        self.ultimas_opcoes = dict(opcoes or {})
+        self.ultimas_mensagens = list(mensagens)
         ultimo = mensagens[-1]["content"] if mensagens else ""
         texto = ultimo.split("\n")[-1].lower()   # tirar a linha de contexto
         en = "ENGLISH MODE" in (mensagens[0]["content"] if mensagens else "")
@@ -558,6 +639,11 @@ class MotorTeste(_Motor):
                     if en else f"(cérebro de teste) Ouvi: {texto}. Não tenho um modelo a sério aqui.")
             resposta = {"expressao": "a_pensar", "fala": fala, "acoes": []}
 
+        if esquema is not None and "lembrar" in esquema.get("properties", {}):
+            # «remember that I love cats» → guarda «I love cats». Chega para
+            # exercitar o caminho todo nos testes.
+            m = re.search(r"(?:remember that|lembra-te que)\s+(.+)", texto)
+            resposta["lembrar"] = [m.group(1).strip()] if m else []
         self.estatisticas = {"tokens_resposta": 0}
         conteudo = json.dumps(resposta, ensure_ascii=False)
         for i in range(0, len(conteudo), 6):
@@ -621,20 +707,37 @@ def interpretar(conteudo: str, extrator: ExtratorDeFala | None, expressoes: list
 
     lista, razoes = acoes.normalizar(dados.get("acoes") or [])
     recusadas += razoes
-    return {"expressao": expressao, "fala": fala, "acoes": lista, "recusadas": recusadas}
+    lembrar = [f for f in (dados.get("lembrar") or []) if isinstance(f, str) and f.strip()]
+    return {"expressao": expressao, "fala": fala, "acoes": lista, "recusadas": recusadas,
+            "lembrar": lembrar[:2]}
 
 
 # ------------------------------------------------------------------ o cérebro
 
 
+def chave_de_sessao(sessao: str, pessoa: str | None) -> str:
+    """Uma conversa por PESSOA: «lylla:Lara», «lylla:Bruno», «lylla:?».
+
+    ⚠️ É isto que impede a Lylla de perguntar à Lara pelas auditorias do pai.
+       O histórico do Bruno nunca entra no prompt quando é a Lara que está à
+       frente da câmara — mesmo que falem os dois no mesmo minuto.
+    """
+    return f"{sessao}:{(pessoa or '?').strip().lower() or '?'}"
+
+
 class Cerebro:
-    def __init__(self, motor: str | None = None) -> None:
+    def __init__(self, motor: str | None = None, memoria: Memoria | None = None) -> None:
         nome = motor or str(config.obter("pensar.motor", "ollama"))
         if nome not in MOTORES:
             raise ValueError(f"motor de LLM desconhecido: {nome} (há {sorted(MOTORES)})")
         self.motor = MOTORES[nome]()
+        self.memoria = memoria if memoria is not None else Memoria()
         self._sessoes: dict[str, list[dict]] = {}
+        self._ultima_vez: dict[str, float] = {}
         self._lock = threading.Lock()
+
+    def _segundos_ate_nova_conversa(self) -> float:
+        return float(config.obter("pensar.minutos_ate_nova_conversa", 15)) * 60
 
     def aquecer(self) -> None:
         self.motor.aquecer()
@@ -643,8 +746,13 @@ class Cerebro:
         with self._lock:
             if sessao is None:
                 self._sessoes.clear()
+                self._ultima_vez.clear()
             else:
-                self._sessoes.pop(sessao, None)
+                # «lylla» apaga as conversas de toda a gente nessa sessão;
+                # «lylla:lara» só a dela.
+                for chave in [c for c in self._sessoes if c == sessao or c.startswith(sessao + ":")]:
+                    self._sessoes.pop(chave, None)
+                    self._ultima_vez.pop(chave, None)
 
     def sessoes(self) -> dict[str, int]:
         # Com o lock: o /v1/saude e o /v1/turno correm em threads diferentes
@@ -672,13 +780,39 @@ class Cerebro:
         inicio = time.perf_counter()
         lingua = self.lingua(lingua)
         expressoes = acoes.expressoes_disponiveis()
-        max_frases = int(config.obter("pensar.max_frases", 3))
         max_historico = int(config.obter("pensar.max_historico", 12))
+        contexto = dict(contexto or {})
+        pessoa = contexto.get("pessoa") or None
+        chave = chave_de_sessao(sessao, pessoa)
+        com_memoria = bool(config.obter("memoria.ativa", True)) and bool(pessoa)
 
+        explicar = pede_explicacao(texto)
+        opcoes: dict[str, Any] = {}
+        max_frases = int(config.obter("pensar.max_frases", 3))
+        if explicar:
+            contexto["explicar"] = True
+            max_frases = int(config.obter("pensar.explicar.max_frases", 5))
+            opcoes = {
+                "max_tokens": config.obter("pensar.explicar.max_tokens", 1500),
+                "extra": config.obter("pensar.explicar.extra", {"think": True}),
+                "timeout_s": config.obter("pensar.explicar.timeout_s", 60),
+            }
+        # O Pi escolhe o «hmm» (curto) ou o «deixa-me pensar» (longo) com isto.
+        # Sai ANTES do modelo arrancar: é o que torna a reação instantânea.
+        yield {"tipo": "a_pensar", "explicar": explicar, "pessoa": pessoa}
+
+        agora = time.time()
+        nova_conversa = False
         with self._lock:
-            historico = list(self._sessoes.get(sessao, []))[-max_historico:]
+            ultima = self._ultima_vez.get(chave)
+            if ultima is not None and agora - ultima > self._segundos_ate_nova_conversa():
+                # Passou tempo de mais: conversa nova, só com a memória.
+                self._sessoes.pop(chave, None)
+                nova_conversa = True
+            historico = list(self._sessoes.get(chave, []))[-max_historico:]
+        memoria = self.memoria.para_prompt(pessoa, lingua) if config.obter("memoria.ativa", True) else ""
         mensagens = (
-            [{"role": "system", "content": montar_sistema(lingua, expressoes)}]
+            [{"role": "system", "content": montar_sistema(lingua, expressoes, memoria, com_memoria)}]
             + historico
             + [{"role": "user", "content": _com_contexto(texto, contexto, lingua)}]
         )
@@ -703,7 +837,12 @@ class Cerebro:
                     expressao_emitida = True
                     yield evento
 
-        for delta in self.motor.gerar(mensagens, acoes.esquema_json(expressoes)):
+        esquema = esquema_da_resposta(expressoes, com_memoria)
+        # Sem opções chama-se com dois argumentos: há motores (nos testes, e
+        # experiências antigas) que ainda não conhecem o terceiro.
+        gerador = (self.motor.gerar(mensagens, esquema, opcoes) if opcoes
+                   else self.motor.gerar(mensagens, esquema))
+        for delta in gerador:
             conteudo += delta
             for evento in extrator.alimentar(delta):
                 yield from _tratar(evento)
@@ -730,11 +869,17 @@ class Cerebro:
         resposta["fala"] = " ".join(frases)
 
         with self._lock:
-            historico = self._sessoes.setdefault(sessao, [])
+            historico = self._sessoes.setdefault(chave, [])
             historico.append({"role": "user", "content": texto})
             if resposta["fala"]:
                 historico.append({"role": "assistant", "content": resposta["fala"]})
             del historico[:-max_historico]
+            self._ultima_vez[chave] = time.time()
+
+        guardados = self.memoria.lembrar(pessoa, resposta.get("lembrar")) if com_memoria else []
+        if guardados:
+            print(f"   🧠 lembrei-me sobre {pessoa}: {guardados}")
+        resposta["lembrar"] = guardados
 
         total_ms = int((time.perf_counter() - inicio) * 1000)
         resposta.update({
@@ -742,6 +887,9 @@ class Cerebro:
             "motor": self.motor.nome,
             "com_esquema": self.motor.usou_esquema,
             "tempo_ms": {"primeira_frase": primeira_frase_ms, "total": total_ms},
+            "explicar": explicar,
+            "nova_conversa": nova_conversa,
+            "sessao": chave,
             "estatisticas": dict(self.motor.estatisticas),
         })
         yield {"tipo": "resposta", **resposta}

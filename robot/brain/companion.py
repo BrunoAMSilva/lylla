@@ -68,7 +68,7 @@ def parar_de_seguir() -> str:
     _a_seguir = False
     attention.esquecer()
     eyes.expressao("a_dormir")
-    return "Pronto, deixei de olhar."
+    return "Okay, I stopped looking."
 
 
 def voltar_a_seguir() -> str:
@@ -76,7 +76,7 @@ def voltar_a_seguir() -> str:
     _a_seguir = True
     attention.esquecer()
     eyes.expressao("neutro")
-    return "Já estou a ver outra vez."
+    return "I can see again."
 
 
 def esta_a_seguir() -> bool:

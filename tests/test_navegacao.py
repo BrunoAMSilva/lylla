@@ -508,7 +508,7 @@ def test_perdida_recusa_partir(navegacao):
     navegacao._pose.deriva_cm = 999.0
     estado, mensagem = navegacao.comecar("sala")
     assert estado == "recusa"
-    assert "onde estou" in mensagem
+    assert mensagem == navegacao.PERDIDA
 
 
 @precisa_de_casa

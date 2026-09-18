@@ -94,10 +94,10 @@ def test_as_frases_saem_uma_a_uma_e_nao_todas_no_fim(tmp_path):
 
 
 @pytest.mark.parametrize("dito, esperado", [
-    ("pára", "Parei."),
-    ("olá robô pára", "Parei."),                       # ← o pré-rolo põe isto
-    ("Olá robô, STOP!", "Parei."),
-    ("olá lylla pára", "Parei."),
+    ("pára", "Stopped."),
+    ("olá robô pára", "Stopped."),                       # ← o pré-rolo põe isto
+    ("Olá robô, STOP!", "Stopped."),
+    ("olá lylla pára", "Stopped."),
     ("olá robô não olhes para mim", "Pronto, deixei de olhar."),
     ("não olhes para mim", "Pronto, deixei de olhar."),
 ])
@@ -410,7 +410,7 @@ def test_um_comando_direto_fecha_a_ligacao(robo):
 
     main._consumir_turno(Maquina(), eventos())
 
-    assert dito == ["Parei."]
+    assert dito == ["Stopped."]
     assert fechado, "a ligação tem de ser fechada, não abandonada"
 
 

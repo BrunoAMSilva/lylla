@@ -101,7 +101,7 @@ def test_parar_de_olhar_funciona_sempre(frase):
 
 @pytest.mark.parametrize("frase", ["pára", "PARA", "stop", "Quieto!"])
 def test_parar_funciona_sempre(frase):
-    assert comandos_diretos.tentar(frase) == "Parei."
+    assert comandos_diretos.tentar(frase) == "Stopped."
 
 
 def test_voltar_a_olhar():

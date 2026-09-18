@@ -1,7 +1,7 @@
 """VOZ — falar e ouvir.
 
     from lylla import voz
-    voz.dizer("olá Lara")
+    voz.dizer("hello Lara")
     nome = voz.ouvir()
 
 🔒 O áudio nunca vai para o disco: é transcrito em memória e deitado fora.

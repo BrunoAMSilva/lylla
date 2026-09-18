@@ -185,13 +185,13 @@ ACOES: dict[str, dict[str, Any]] = {
     "registar_cara": {
         "descricao": (
             "Aprende a cara de alguém, guiando a pessoa pelas poses em voz alta "
-            "('aprende a minha cara', 'guarda a cara da Lara'). PERGUNTA O NOME "
-            "primeiro se não to disserem — sem nome não dá."
+            "('learn my face', 'aprende a minha cara'). Se não souberes o nome, "
+            "deixa-o vazio: o robô pergunta-o sozinho, e pede licença antes."
         ),
         "parametros": {
-            "nome": {"type": "string", "description": "O nome da pessoa a aprender."},
+            "nome": {"type": "string", "description": "O nome da pessoa, se o disseram."},
         },
-        "obrigatorios": ["nome"],
+        "obrigatorios": [],
     },
 }
 

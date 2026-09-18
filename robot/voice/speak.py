@@ -143,6 +143,17 @@ def _pedir_ao_mac(texto: str) -> Path | None:
     return destino
 
 
+def em_cache(texto: str) -> bool:
+    """Garante que a frase está em cache (pede-a ao mini se faltar).
+
+    É o que prepara os «hmm» no arranque: a partir daí saem sem rede, logo.
+    Levanta nada; devolve False se o mini não a deu.
+    """
+    if config.a_simular():
+        return True
+    return _pedir_ao_mac(texto) is not None
+
+
 def frases_em_cache() -> int:
     return len(list(CACHE.glob("*.wav"))) if CACHE.is_dir() else 0
 
@@ -303,7 +314,7 @@ def _falar_agora(texto: str) -> None:
     # Último recurso: som robótico dos anos 90, mas melhor que silêncio.
     try:
         subprocess.run(
-            ["espeak-ng", "-v", "pt", "-s", "150", texto],
+            ["espeak-ng", "-v", "en", "-s", "150", texto],
             check=False, timeout=30, stderr=subprocess.DEVNULL,
         )
     except Exception as erro:  # noqa: BLE001

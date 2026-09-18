@@ -273,6 +273,8 @@ def test_modo_ingles_muda_o_system_prompt(monkeypatch):
     assert "Falas português de Portugal" not in em_ingles
 
     # O resto da personalidade que a Lara escreveu mantém-se toda.
-    for linha in em_portugues.splitlines():
+    # (As regras de tutor têm uma versão por língua; o que conta aqui é o
+    # texto DELA.)
+    for linha in personalidade.texto_base().splitlines():
         if linha.strip() and "portugu" not in linha.lower():
             assert linha in em_ingles, f"perdeu-se: {linha!r}"

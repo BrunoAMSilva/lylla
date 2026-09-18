@@ -42,6 +42,33 @@ _nivel: dict[str, float] = {}
 # O azul do Astro. É o mesmo "ciano" do catálogo do mBot2.
 COR = (54, 224, 255)
 
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║  AS CORES DA CONVERSA — para uma criança perceber quando pode falar      ║
+# ║                                                                          ║
+# ║  Só a velocidade do piscar não chega: a Lara não sabe se o robô ainda a  ║
+# ║  está a ouvir ou se já foi pensar. Por isso cada momento tem uma cor:    ║
+# ║                                                                          ║
+# ║    verde    → estou a ouvir, fala à vontade                              ║
+# ║    amarelo → laranja  → estás calada há um bocado… vou deixar de ouvir   ║
+# ║    roxo     → já não estou a ouvir, estou a pensar                       ║
+# ║    ciano    → estou a falar (a cor do Astro)                             ║
+# ║    vermelho → alguma coisa correu mal                                    ║
+# ║                                                                          ║
+# ║  Nos LEDs antigos do PCA9685 (só azuis) a cor não existe: fica o ritmo.  ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+VERDE = (0, 255, 70)
+AMARELO = (255, 200, 0)
+LARANJA = (255, 90, 0)
+ROXO = (150, 40, 255)
+VERMELHO = (255, 0, 0)
+BRANCO = (255, 255, 255)
+
+_NOMES = {VERDE: "verde (a ouvir)", AMARELO: "amarelo", LARANJA: "laranja (quase a parar)",
+          ROXO: "roxo (a pensar)", VERMELHO: "vermelho", BRANCO: "branco", COR: "ciano"}
+
+_cor = COR
+_escuta = {"fracao": 0.0}     # quanto do silêncio já passou (0 = a falar, 1 = acabou)
+
 # ⚠️ O mBot2 fala por SÉRIE, e as animações escrevem 25 vezes por segundo.
 #    Mandar tudo satura a ligação que também leva os comandos das rodas. Só
 #    se escreve quando o brilho muda de verdade, e no máximo 10 vezes por
@@ -50,6 +77,7 @@ _PASSO = 0.04
 _INTERVALO_S = 0.1
 _ultimo_envio = 0.0
 _ultimo_nivel = -1.0
+_ultima_cor: tuple[int, int, int] | None = None
 
 
 def _motor() -> str:
@@ -73,7 +101,7 @@ def _acender_no_mbot2() -> None:
     não houver LEDs próprios, o mais aceso manda: uma pulsação de atenção no
     peito sobrepõe-se à respiração lenta da base, que é a leitura certa.
     """
-    global _ultimo_envio, _ultimo_nivel
+    global _ultimo_envio, _ultimo_nivel, _ultima_cor
     from robot import config
     from robot.hardware import mbot2
 
@@ -85,12 +113,15 @@ def _acender_no_mbot2() -> None:
 
     nivel = max(_nivel.values(), default=0.0)
     agora = time.monotonic()
-    if abs(nivel - _ultimo_nivel) < _PASSO and nivel not in (0.0, 1.0):
+    mudou_cor = _cor != _ultima_cor
+    if not mudou_cor and abs(nivel - _ultimo_nivel) < _PASSO and nivel not in (0.0, 1.0):
         return
-    if agora - _ultimo_envio < _INTERVALO_S:
+    # ⚠️ Uma mudança de COR passa à frente do limite de 10/s: é ela que diz à
+    #    Lara que o robô deixou de ouvir, e não pode chegar 100 ms atrasada.
+    if not mudou_cor and agora - _ultimo_envio < _INTERVALO_S:
         return
-    _ultimo_envio, _ultimo_nivel = agora, nivel
-    mbot2.luz_rgb(*(int(c * nivel) for c in COR))
+    _ultimo_envio, _ultimo_nivel, _ultima_cor = agora, nivel, _cor
+    mbot2.luz_rgb(*(int(c * nivel) for c in _cor))
 
 
 def _canais() -> dict:
@@ -122,6 +153,19 @@ def brilho(grupo: str, valor: float) -> None:
         return
     if pca9685.iniciar(_endereco(), FREQ_HZ):
         pca9685.duty(_endereco(), int(canais[grupo]), valor)
+
+
+def cor(rgb: tuple[int, int, int]) -> None:
+    """Muda a cor das luzes (só nas que têm cor: os LEDs do CyberPi)."""
+    global _cor
+    nova = tuple(max(0, min(255, int(c))) for c in rgb)
+    if nova != _cor and config.a_simular() and _NOMES.get(nova):
+        config.sim(f"luzes → {_NOMES[nova]}")      # só as cores com nome: sem spam
+    _cor = nova
+
+
+def cor_atual() -> tuple[int, int, int]:
+    return _cor
 
 
 def tudo(valor: float) -> None:
@@ -177,6 +221,45 @@ def pulsar(grupo: str = "base", periodo: float = 0.6) -> None:
     _arrancar(passo, periodo)
 
 
+def _misturar(a, b, f: float) -> tuple[int, int, int]:
+    f = max(0.0, min(1.0, f))
+    return tuple(int(x + (y - x) * f) for x, y in zip(a, b))
+
+
+def progresso_escuta(fracao: float) -> None:
+    """Chamado pelo microfone a cada 80 ms: 0 = ela está a falar; a subir até
+    1 = o silêncio já chegou para acabar a frase. Só muda um número — quem
+    pinta é a animação `a_ouvir`, na thread dela."""
+    _escuta["fracao"] = max(0.0, min(1.0, float(fracao)))
+
+
+def ouvir(grupo: str = "base") -> None:
+    """Verde enquanto ela fala; amarelo → laranja, e cada vez mais depressa, à
+    medida que o silêncio se aproxima do fim da frase. É o relógio que uma
+    criança consegue ler: «se ficar laranja, ele vai deixar de me ouvir»."""
+    parar_animacao()
+    _escuta["fracao"] = 0.0
+    cor(VERDE)
+    fase = {"t": 0.0, "antes": time.monotonic()}
+
+    def passo(_t: float) -> None:
+        f = _escuta["fracao"]
+        agora = time.monotonic()
+        periodo = 1.4 - 1.1 * f                    # 1,4 s a falar → 0,3 s no fim
+        fase["t"] += (agora - fase["antes"]) / periodo
+        fase["antes"] = agora
+        if f < 0.05:
+            cor(VERDE)
+        elif f < 0.5:
+            cor(_misturar(VERDE, AMARELO, f / 0.5))
+        else:
+            cor(_misturar(AMARELO, LARANJA, (f - 0.5) / 0.5))
+        onda = (math.sin(fase["t"] * 2 * math.pi) + 1) / 2
+        brilho(grupo, 0.45 + onda * 0.55)
+
+    _arrancar(passo, 1.0)
+
+
 def _arrancar(funcao, periodo: float) -> None:
     global _animacao
     _parar.clear()
@@ -191,6 +274,111 @@ def parar_animacao() -> None:
         _animacao.join(timeout=0.5)
     _animacao = None
     _parar.clear()
+
+
+# ---------------------------------------------------------------------------
+# Enriquecimentos — as luzes de cada momento da conversa (ver robot/rotinas.py)
+# ---------------------------------------------------------------------------
+
+from robot.rotinas import enriquecimento  # noqa: E402
+
+
+def _sem_luzes() -> bool:
+    return not disponivel()
+
+
+@enriquecimento("luz.a_ouvir")
+def _luz_a_ouvir() -> None:
+    if not _sem_luzes():
+        ouvir("base")
+
+
+@enriquecimento("luz.a_pensar")
+def _luz_a_pensar() -> None:
+    if not _sem_luzes():
+        cor(ROXO)
+        pulsar("base", periodo=0.5)
+
+
+@enriquecimento("luz.a_falar")
+def _luz_a_falar() -> None:
+    if not _sem_luzes():
+        cor(COR)
+        respirar("base", periodo=1.6, minimo=0.45, maximo=0.9)
+
+
+@enriquecimento("luz.a_agir")
+def _luz_a_agir() -> None:
+    if not _sem_luzes():
+        cor(COR)
+        pulsar("base", periodo=1.0)
+
+
+@enriquecimento("luz.repouso")
+def _luz_repouso() -> None:
+    if not _sem_luzes():
+        cor(COR)
+        respirar("base")
+
+
+@enriquecimento("luz.a_dormir")
+def _luz_a_dormir() -> None:
+    if not _sem_luzes():
+        cor(COR)
+        respirar("base", periodo=7.0, minimo=0.03, maximo=0.15)
+
+
+@enriquecimento("luz.confusa")
+def _luz_confusa() -> None:
+    if not _sem_luzes():
+        cor(LARANJA)
+        respirar("base", periodo=1.2, minimo=0.2, maximo=0.8)
+
+
+@enriquecimento("luz.erro")
+def _luz_erro() -> None:
+    if not _sem_luzes():
+        cor(VERMELHO)
+        respirar("base", periodo=2.0, minimo=0.1, maximo=0.7)
+
+
+@enriquecimento("luz.preparar")
+def _luz_preparar() -> None:
+    if not _sem_luzes():
+        cor(BRANCO)
+        pulsar("base", periodo=0.4)
+
+
+@enriquecimento("luz.boa")
+def _luz_boa() -> None:
+    if not _sem_luzes():
+        parar_animacao()
+        cor(VERDE)
+        tudo(1.0)
+
+
+@enriquecimento("luz.ma")
+def _luz_ma() -> None:
+    if not _sem_luzes():
+        parar_animacao()
+        cor(VERMELHO)
+        tudo(0.8)
+
+
+@enriquecimento("luz.festa")
+def _luz_festa() -> None:
+    """Um arco-íris a correr — é a única vez que o robô usa todas as cores."""
+    if _sem_luzes():
+        return
+    parar_animacao()
+    cores = (VERMELHO, LARANJA, AMARELO, VERDE, COR, ROXO)
+
+    def passo(t: float) -> None:
+        i = t * len(cores)
+        cor(_misturar(cores[int(i) % len(cores)], cores[(int(i) + 1) % len(cores)], i % 1))
+        brilho("base", 1.0)
+
+    _arrancar(passo, 1.5)
 
 
 def nivel_atual() -> dict[str, float]:

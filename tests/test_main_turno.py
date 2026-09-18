@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import pytest
 
+from robot.voice import frases
+
 from robot.brain import cerebro
 from robot.brain.state import Estado, Maquina
 from robot.perception.attention import Observacao
@@ -168,7 +170,7 @@ def test_um_comando_direto_nao_espera_pela_resposta_do_modelo(robo, monkeypatch)
     main, registo = robo
     parou = []
     monkeypatch.setattr(main.comandos_diretos, "tentar",
-                        lambda t: "Parei." if t == "pára" else None)
+                        lambda t: "Stopped." if t == "pára" else None)
     eventos = _turno_falso([
         {"tipo": "ouvido", "texto": "pára"},
         {"tipo": "frase", "texto": "Claro, vou já!", "audio": b"x"},
@@ -178,7 +180,7 @@ def test_um_comando_direto_nao_espera_pela_resposta_do_modelo(robo, monkeypatch)
     ])
 
     main._consumir_turno(Maquina(), eventos())
-    assert registo["falado"] == ["Parei."]
+    assert registo["falado"] == ["Stopped."]
     assert registo["tocado"] == [], "o que o modelo já tinha escrito não chega a sair"
     assert registo["acoes"] == [], "e muito menos a mexer os motores"
 
@@ -251,7 +253,7 @@ def test_um_turno_sem_fala_nenhuma_admite_que_nao_percebeu(robo, monkeypatch):
         yield {"tipo": "fim", "tempo_ms": {}}
 
     main._consumir_turno(Maquina(), sem_fala())
-    assert registo["falado"] == ["Não percebi. Podes repetir?"]
+    assert registo["falado"] == [frases.dizer("nao_percebi")]
 
 
 def test_se_a_ligacao_cair_a_meio_o_que_ja_foi_dito_conta(robo, monkeypatch):
@@ -276,4 +278,4 @@ def test_um_silencio_nao_manda_uma_pergunta_vazia_ao_modelo(robo, monkeypatch):
         {"tipo": "fim", "motivo": "nao_percebi", "tempo_ms": {}},
     ])
     main._consumir_turno(Maquina(), eventos())
-    assert registo["falado"] == ["Não percebi. Podes repetir?"]
+    assert registo["falado"] == [frases.dizer("nao_percebi")]

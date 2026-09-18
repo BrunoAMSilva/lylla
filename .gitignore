@@ -42,3 +42,6 @@ config/robot.local.yaml
 # O venv do cérebro, no mac mini
 .venv-cerebro/
 config/cerebro.local.yaml
+
+# A memória da Lylla sobre a família (vive no mini; ver cerebro/memoria.py)
+data/memoria.json

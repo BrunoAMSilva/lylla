@@ -15,6 +15,8 @@ A API (tudo em JSON, exceto o áudio):
                               ouvido · expressao · frase (com áudio) · resposta · fim
     WS   /v1/escutar        o mesmo, mas com o áudio a chegar EM CONTÍNUO
     POST /v1/esquecer       apaga o histórico da conversa
+    GET  /v1/memoria        o que ela sabe de cada pessoa
+    POST /v1/memoria/esquecer   {"pessoa": "Lara"} apaga o que sabe dela
 
 O /v1/turno é o que o robô usa. Os outros existem para se testar cada peça
 sozinha com um `curl` — a regra da casa nº 1, aplicada à IA.
@@ -72,6 +74,10 @@ class PedidoTurno(BaseModel):
 
 class PedidoEsquecer(BaseModel):
     sessao: str | None = None
+
+
+class PedidoMemoria(BaseModel):
+    pessoa: str
 
 
 # ------------------------------------------------------------------ a app
@@ -145,7 +151,7 @@ def criar_app(
     def raiz():
         return {"nome": app.title, "versao": VERSAO, "documentacao": "/docs",
                 "endpoints": ["/v1/saude", "/v1/capacidades", "/v1/ouvir", "/v1/pensar",
-                              "/v1/falar", "/v1/turno", "/v1/esquecer"]}
+                              "/v1/falar", "/v1/turno", "/v1/esquecer", "/v1/memoria"]}
 
     @app.get("/v1/saude")
     def saude():
@@ -207,6 +213,26 @@ def criar_app(
     def esquecer(pedido: PedidoEsquecer | None = None):
         cerebro.esquecer(pedido.sessao if pedido else None)
         return {"ok": True, "sessoes": cerebro.sessoes()}
+
+    # -- memória ------------------------------------------------------------
+    #
+    # 🔒 AGENTS.md: «a pessoa pode ver a lista e apagar os seus dados». É isto.
+
+    @app.get("/v1/memoria")
+    def memoria_ver():
+        return cerebro.memoria.tudo()
+
+    @app.post("/v1/memoria/esquecer")
+    def memoria_esquecer(pedido: PedidoMemoria):
+        cerebro.memoria.esquecer(pedido.pessoa)
+        cerebro.esquecer(f"lylla:{pedido.pessoa.strip().lower()}")
+        return {"ok": True, "memoria": cerebro.memoria.tudo()}
+
+    @app.post("/v1/memoria/recarregar")
+    def memoria_recarregar():
+        """Depois de editar o data/memoria.json à mão, sem reiniciar o serviço."""
+        cerebro.memoria.recarregar()
+        return cerebro.memoria.tudo()
 
     # -- falar --------------------------------------------------------------
 

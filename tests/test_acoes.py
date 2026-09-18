@@ -123,7 +123,7 @@ def test_a_ordem_de_5000_cm_e_recusada_ate_no_pi():
     from robot.brain import tools
 
     resposta = tools.executar("mover", {"direcao": "frente", "cm": 5000})
-    assert "não posso" in resposta.lower()
+    assert "can't" in resposta.lower()
 
 
 # ---------------------------------------------------------------------------

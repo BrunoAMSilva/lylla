@@ -143,17 +143,17 @@ def comecar(quem: str = "Lara") -> tuple[str, str]:
     if erro:
         return ("recusa", erro)
     if not ir_para.permitido():
-        return ("recusa", "Ainda não me deixam andar pela casa sozinha.")
+        return ("recusa", "I'm not allowed to walk around the house on my own yet.")
     _quem = quem or "Lara"
     _por_visitar = ordem_de_procura(_quem)
     if not _por_visitar:
-        return ("recusa", "Não sei por onde havia de começar a procurar.")
+        return ("recusa", "I don't know where to start looking.")
     _visitadas = []
     _activo = True
     _fase = "parado"
     _inicio = time.monotonic()
     _proxima_divisao()
-    return ("a_procurar", f"Vou procurar-te! Começo {_onde_vou()}.")
+    return ("a_procurar", f"Ready or not, here I come! I'll start {_onde_vou()}.")
 
 
 def parar() -> None:
@@ -174,7 +174,7 @@ def estado() -> dict:
 
 
 def _onde_vou() -> str:
-    return ir_para.com_artigo(_alvo_nome, "por") if _alvo_nome else "por aqui"
+    return ir_para.em_ingles(_alvo_nome, "por") if _alvo_nome else "right here"
 
 
 def _proxima_divisao() -> bool:
@@ -198,7 +198,7 @@ def _proxima_divisao() -> bool:
             _visitadas.append(nome)
             _comecar_a_espreitar()
             return True
-        if "onde estou" in mensagem:
+        if mensagem == ir_para.PERDIDA:
             # A odometria gastou-se. Numa casa não há como corrigir isto
             # sozinho — mas há uma pessoa mesmo ali, a jogar. Perguntar-lhe é
             # a correção mais barata que existe, e dá um jogo melhor do que
@@ -289,14 +289,14 @@ def a_perguntar() -> bool:
 def responder(divisao: str) -> tuple[str, str]:
     """«Estás na cozinha.» — repõe a posição e o jogo continua de onde ia."""
     if not _activo:
-        return ("recusa", "Não estamos a jogar.")
+        return ("recusa", "We're not playing right now.")
     erro = ir_para.assumir(divisao)
     if erro:
         return ("recusa", erro)
     if not _proxima_divisao():
         parar()
-        return ("fim", "Já vi a casa toda. Onde é que tu estás?")
-    return ("a_procurar", f"Ah! Então continuo {_onde_vou()}.")
+        return ("fim", "I looked in the whole house. Where are you?")
+    return ("a_procurar", f"Aha! Then I'll keep looking {_onde_vou()}.")
 
 
 def _divisao_atual() -> str | None:

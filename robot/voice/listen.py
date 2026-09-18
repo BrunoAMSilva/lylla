@@ -74,25 +74,77 @@ def canal_util(dados: np.ndarray) -> np.ndarray:
 
 class _Silencio:
     """Decide quando a frase acabou. Vive à parte para os dois caminhos de
-    gravação usarem exatamente a mesma regra."""
+    gravação usarem exatamente a mesma regra.
+
+    ╔══════════════════════════════════════════════════════════════════════╗
+    ║  AS PAUSAS DE UMA CRIANÇA                                            ║
+    ║                                                                      ║
+    ║  «What is… hmm… classes?» — com 1 s fixo de silêncio, o robô partia  ║
+    ║  à procura de resposta depois de «What is». Por isso a pausa que     ║
+    ║  fecha a frase é MAIOR no princípio (ela ainda está a arrumar a      ║
+    ║  ideia) e volta ao normal depois de uns segundos de fala:            ║
+    ║                                                                      ║
+    ║      pausa = silencio_para_parar_s                                   ║
+    ║            + silencio_extra_inicio_s   (enquanto falou < fala_curta) ║
+    ║                                                                      ║
+    ║  E se ela ainda nem começou, espera `espera_inicio_s` antes de       ║
+    ║  desistir — o robô acordou, mas ela pode estar a pensar no que dizer.║
+    ╚══════════════════════════════════════════════════════════════════════╝
+
+    `progresso()` diz quanto do silêncio necessário já passou (0 → 1): é o
+    que as luzes usam para passar de verde a laranja.
+    """
 
     def __init__(self, silencio_s: float | None = None) -> None:
         self.silencio_s = float(
             silencio_s if silencio_s is not None
-            else config.obter("voz.silencio_para_parar_s", 1.0)
+            else config.obter("voz.silencio_para_parar_s", 1.2)
         )
+        self.extra_inicio_s = float(config.obter("voz.silencio_extra_inicio_s", 0.8))
+        self.fala_curta_s = float(config.obter("voz.fala_curta_s", 1.5))
+        self.espera_inicio_s = float(config.obter("voz.espera_inicio_s", 6.0))
         self.ruido_minimo = 1.0
         self.falou = False
-        self._ultimo_som = time.monotonic()
+        self.fala_s = 0.0               # quanto tempo com voz, ao todo
+        self._inicio = time.monotonic()
+        self._ultimo_som = self._inicio
+
+    def pausa_necessaria(self) -> float:
+        extra = self.extra_inicio_s if self.fala_s < self.fala_curta_s else 0.0
+        return self.silencio_s + extra
+
+    def progresso(self) -> float:
+        """0 enquanto ela fala; sobe até 1 quando o silêncio chega para acabar."""
+        if not self.falou:
+            return 0.0
+        return min(1.0, (time.monotonic() - self._ultimo_som) / self.pausa_necessaria())
 
     def acabou(self, amostra: np.ndarray) -> bool:
         energia = float(np.sqrt(np.mean(amostra.astype(np.float32) ** 2)))
         self.ruido_minimo = min(self.ruido_minimo, energia)
+        agora = time.monotonic()
         if energia > max(CHAO_ABSOLUTO, self.ruido_minimo * 3.0):
-            self._ultimo_som = time.monotonic()
+            self._ultimo_som = agora
             self.falou = True
+            self.fala_s += len(amostra) / TAXA
             return False
-        return self.falou and time.monotonic() - self._ultimo_som > self.silencio_s
+        if not self.falou:
+            # Ainda não disse nada: dá-lhe tempo, mas não para sempre.
+            return agora - self._inicio > self.espera_inicio_s
+        return agora - self._ultimo_som > self.pausa_necessaria()
+
+
+def _max_segundos(pedido: float | None) -> float:
+    return float(pedido if pedido is not None else config.obter("voz.max_frase_s", 15.0))
+
+
+def _avisar(ao_progresso, detetor: _Silencio) -> None:
+    if ao_progresso is None:
+        return
+    try:
+        ao_progresso(detetor.progresso())
+    except Exception:  # noqa: BLE001 — uma luz nunca pode parar o microfone
+        pass
 
 
 class Escuta:
@@ -110,9 +162,16 @@ class Escuta:
     1.6
     """
 
-    def __init__(self, max_segundos: float = 10.0, silencio_s: float | None = None) -> None:
-        self.max_segundos = max_segundos
+    def __init__(self, max_segundos: float | None = None, silencio_s: float | None = None,
+                 ao_progresso=None, ao_acabar=None) -> None:
+        self.max_segundos = _max_segundos(max_segundos)
         self.silencio_s = silencio_s
+        self.ao_progresso = ao_progresso
+        # ⚠️ Em contínuo, quem consome isto é o WebSocket, lá dentro do
+        #    cerebro.escutar(): o fim da frase acontece longe de quem chamou.
+        #    É por aqui que o «ouvi» (bip + luz roxa) sai no instante certo.
+        self.ao_acabar = ao_acabar
+        self.falou = False
         self.pre_rolo_s = 0.0
         self.segundos = 0.0
         self._gerador = self._correr()
@@ -155,21 +214,30 @@ class Escuta:
                     amostra = canal_util(dados)
                     self.segundos += BLOCO / TAXA
                     yield amostra.astype("<i2").tobytes()
-                    if detetor.acabou(amostra.astype(np.float32) / 32768.0):
-                        return
+                    acabou = detetor.acabou(amostra.astype(np.float32) / 32768.0)
+                    self.falou = detetor.falou
+                    _avisar(self.ao_progresso, detetor)
+                    if acabou:
+                        break
+            if self.ao_acabar is not None:
+                try:
+                    self.ao_acabar()
+                except Exception:  # noqa: BLE001
+                    pass
         except GeneratorExit:
             return          # quem consome desistiu: fechar o microfone e sair
         except Exception as erro:  # noqa: BLE001
             print(f"⚠️  Falha a gravar: {erro}")
 
 
-def escutar_em_directo(max_segundos: float = 10.0, silencio_s: float | None = None) -> Escuta:
+def escutar_em_directo(max_segundos: float | None = None, silencio_s: float | None = None,
+                       ao_progresso=None, ao_acabar=None) -> Escuta:
     """Uma frase, aos bocados, à medida que ela a diz. Ver `Escuta`."""
-    return Escuta(max_segundos, silencio_s)
+    return Escuta(max_segundos, silencio_s, ao_progresso, ao_acabar)
 
 
 def gravar_ate_silencio(
-    max_segundos: float = 10.0, silencio_s: float | None = None
+    max_segundos: float | None = None, silencio_s: float | None = None, ao_progresso=None
 ) -> np.ndarray | None:
     """Grava enquanto houver voz e para depois de um bocado de silêncio.
 
@@ -186,6 +254,7 @@ def gravar_ate_silencio(
         print(f"⚠️  Microfone indisponível ({erro}).")
         return None
 
+    max_segundos = _max_segundos(max_segundos)
     detetor = _Silencio(silencio_s)
     blocos: list[np.ndarray] = []
     inicio = time.monotonic()
@@ -195,7 +264,9 @@ def gravar_ate_silencio(
                 dados, _ = stream.read(BLOCO)
                 amostra = canal_util(dados)
                 blocos.append(amostra.copy())
-                if detetor.acabou(amostra):
+                acabou = detetor.acabou(amostra)
+                _avisar(ao_progresso, detetor)
+                if acabou:
                     break
     except Exception as erro:  # noqa: BLE001
         print(f"⚠️  Falha a gravar: {erro}")
@@ -204,11 +275,11 @@ def gravar_ate_silencio(
     return np.concatenate(blocos) if detetor.falou and blocos else None
 
 
-def gravar_wav(max_segundos: float = 10.0) -> bytes | None:
+def gravar_wav(max_segundos: float | None = None, ao_progresso=None) -> bytes | None:
     """Grava uma frase e devolve-a já em WAV, pronta a ir para o mini."""
     from robot.brain import cerebro
 
-    audio = gravar_ate_silencio(max_segundos)
+    audio = gravar_ate_silencio(max_segundos, ao_progresso=ao_progresso)
     return None if audio is None else cerebro.para_wav(audio, TAXA)
 
 
@@ -221,7 +292,7 @@ def transcrever(audio: np.ndarray) -> str:
     return cerebro.transcrever(cerebro.para_wav(audio, TAXA))
 
 
-def ouvir(max_segundos: float = 10.0) -> str:
+def ouvir(max_segundos: float | None = None, ao_progresso=None) -> str:
     """Grava uma frase e devolve o texto. É esta a função que se usa.
 
     >>> texto = ouvir()
@@ -236,7 +307,7 @@ def ouvir(max_segundos: float = 10.0) -> str:
             return input("[SIM] escreve o que dirias ao robô: ").strip()
         except (EOFError, KeyboardInterrupt):
             return ""
-    audio = gravar_ate_silencio(max_segundos)
+    audio = gravar_ate_silencio(max_segundos, ao_progresso=ao_progresso)
     if audio is None:
         return ""
     return transcrever(audio)

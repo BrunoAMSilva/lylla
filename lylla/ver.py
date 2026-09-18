@@ -25,21 +25,22 @@ from robot import config
 from robot.perception import camera, faces
 
 # A ordem importa: começa-se pela pose fácil, para haver logo uma foto boa.
+# (Em inglês: a voz do robô é inglesa e lê mal português.)
 POSES = (
-    "olha para mim",
-    "sorri",
-    "vira a cabeça um bocadinho para a esquerda",
-    "vira a cabeça um bocadinho para a direita",
-    "levanta um pouco o queixo",
-    "baixa um pouco o queixo",
-    "faz uma cara séria",
-    "chega-te mais perto",
+    "look at me",
+    "smile",
+    "turn your head a little to the left",
+    "turn your head a little to the right",
+    "lift your chin a little",
+    "lower your chin a little",
+    "make a serious face",
+    "come a bit closer",
 )
 
 PRIVACIDADE = (
-    "Vou aprender a tua cara. Não guardo fotografias: guardo cento e vinte e "
-    "oito números que me ajudam a saber que és tu. Ficam só dentro de mim, e "
-    "podes pedir-me para os esquecer quando quiseres."
+    "I'm going to learn your face. I don't keep photos: I keep one hundred and "
+    "twenty eight numbers that help me know it's you. They stay inside me, and "
+    "you can ask me to forget them any time."
 )
 
 MINIMO_DE_FOTOS_BOAS = 3
@@ -86,12 +87,12 @@ def guardar_face(nome: str, aviso=None, fotos: int | None = None,
     if config.a_simular():
         for i in range(quantas):
             falar(POSES[i % len(POSES)])
-        falar(f"Pronto. Em simulação não há câmara, portanto não guardei nada, "
-              f"mas a conversa toda funcionou, {nome}.")
+        falar(f"Done. In simulation there's no camera, so I didn't save anything, "
+              f"but the whole conversation worked, {nome}.")
         return False
 
     if not camera.disponivel():
-        falar("A minha câmara não está a funcionar. Não consigo aprender caras assim.")
+        falar("My camera isn't working. I can't learn faces like this.")
         return False
 
     boas = []
@@ -101,30 +102,30 @@ def guardar_face(nome: str, aviso=None, fotos: int | None = None,
 
         imagem = camera.tirar_foto()
         if imagem is None:
-            falar("Não consegui tirar a fotografia. Vamos tentar outra vez.")
+            falar("I couldn't take the photo. Let's try again.")
             continue
 
         caras = faces.detetar(imagem)
         if not caras:
-            falar("Não vi nenhuma cara. Chega-te mais perto de mim.")
+            falar("I didn't see a face. Come closer to me.")
             continue
         if len(caras) > 1:
-            falar("Estou a ver mais do que uma pessoa. Fica só tu à minha frente.")
+            falar("I can see more than one person. Just you in front of me, please.")
             continue
 
         vetor = faces.assinatura(imagem, caras[0])
         if vetor is None:
-            falar("Essa não ficou boa. Outra vez.")
+            falar("That one wasn't good. Again.")
             continue
 
         boas.append(vetor)
-        falar(f"Boa! Já tenho {len(boas)}.")
+        falar(f"Nice! I have {len(boas)}.")
 
     if len(boas) < MINIMO_DE_FOTOS_BOAS:
-        falar("Só consegui algumas fotografias boas, e preciso de mais. "
-              "Vamos tentar noutro sítio, com mais luz.")
+        falar("I only got a few good photos, and I need more. "
+              "Let's try somewhere else, with more light.")
         return False
 
     faces.guardar_pessoa(nome, boas)
-    falar(f"Já te conheço, {nome}.")
+    falar(f"Now I know you, {nome}.")
     return True

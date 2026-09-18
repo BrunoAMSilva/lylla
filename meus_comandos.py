@@ -26,19 +26,19 @@ def adicionar_face() -> str:
     do que uma. Isso é trabalho da biblioteca `ver`. Aqui só está a CONVERSA —
     que é a parte que tu decides.
     """
-    voz.dizer("Como te chamas?")
+    voz.dizer("What's your name?")
     nome = voz.ouvir()
 
     if not nome:
-        return "Não percebi o nome. Chama-me outra vez."
+        return "I didn't get your name. Call me again."
 
-    voz.dizer(f"Muito bem, {nome}. Fica à minha frente e faz o que eu disser.")
+    voz.dizer(f"Okay, {nome}. Stand in front of me and do what I say.")
 
     # O `aviso=voz.dizer` é o truque todo: a biblioteca dá as instruções, e nós
     # escolhemos que ela as DIGA em voz alta em vez de as escrever no ecrã.
     if ver.guardar_face(nome, aviso=voz.dizer):
-        return f"Já conheço a {nome}!"
-    return "Não consegui ver-te bem. Vamos tentar outra vez com mais luz."
+        return f"Now I know {nome}!"
+    return "I couldn't see you well. Let's try again with more light."
 
 
 @comando("quem conheces", "quem e que tu conheces")
@@ -46,8 +46,8 @@ def quem_conheces() -> str:
     """Diz as pessoas que o robô já sabe reconhecer."""
     pessoas = ver.conheces()
     if not pessoas:
-        return "Ainda não conheço ninguém. Diz-me «adicionar face»."
-    return "Conheço " + ", ".join(pessoas) + "."
+        return "I don't know anyone yet. Say: adicionar face."
+    return "I know " + ", ".join(pessoas) + "."
 
 
 @comando("da uma volta", "roda")
@@ -55,4 +55,4 @@ def dar_uma_volta() -> str:
     """Um exemplo curto, para veres a forma de um comando."""
     for _ in range(4):
         mover.virar_direita(90)
-    return "Tonta!"
+    return "I'm dizzy!"

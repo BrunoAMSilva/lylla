@@ -114,7 +114,10 @@ def test_a_cara_vem_antes_da_primeira_frase(mini):
     em vez de uma animação atrasada."""
     linhas = eventos(mini.post("/v1/pensar", json={"texto": "olá", "stream": True}))
     tipos = [e["tipo"] for e in linhas]
-    assert tipos[0] == "expressao"
+    # O `a_pensar` vem antes de tudo (é o que deixa o Pi reagir já); logo a
+    # seguir, a cara — antes de qualquer frase.
+    assert tipos[0] == "a_pensar"
+    assert tipos[1] == "expressao"
     assert "frase" in tipos
     assert tipos[-1] == "resposta"
 
@@ -135,9 +138,9 @@ def test_uma_ordem_vira_uma_acao(mini):
 def test_o_historico_e_por_sessao(mini):
     mini.post("/v1/pensar", json={"texto": "olá", "sessao": "a"})
     mini.post("/v1/pensar", json={"texto": "olá", "sessao": "b"})
-    assert set(mini.get("/v1/saude").json()["sessoes"]) == {"a", "b"}
+    assert set(mini.get("/v1/saude").json()["sessoes"]) == {"a:?", "b:?"}
     mini.post("/v1/esquecer", json={"sessao": "a"})
-    assert set(mini.get("/v1/saude").json()["sessoes"]) == {"b"}
+    assert set(mini.get("/v1/saude").json()["sessoes"]) == {"b:?"}
     mini.post("/v1/esquecer")
     assert mini.get("/v1/saude").json()["sessoes"] == {}
 

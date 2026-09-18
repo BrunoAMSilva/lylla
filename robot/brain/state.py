@@ -50,7 +50,9 @@ class Maquina:
         self.ultima_interacao = time.monotonic()
         self.pessoa: str | None = None
 
-    def mudar(self, novo: Estado) -> None:
+    def mudar(self, novo: Estado, olhos: bool = True) -> None:
+        """Muda de estado. `olhos=False` quando alguém já escolheu a cara — por
+        exemplo o cérebro, que manda a expressão antes da primeira frase."""
         if novo is self.estado:
             return
         from robot.hardware import eyes
@@ -67,7 +69,7 @@ class Maquina:
             eyes.animar("acordar")
         elif novo is Estado.A_DORMIR:
             eyes.animar("adormecer")
-        else:
+        elif olhos:
             eyes.expressao(OLHOS_POR_ESTADO.get(novo, "neutro"))
 
     @property

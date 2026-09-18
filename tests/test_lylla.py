@@ -186,7 +186,7 @@ def test_um_comando_que_rebenta_nao_mata_o_robo(lylla):
         raise ValueError("erro de propósito")
 
     resposta = comandos_diretos.tentar("comando marado")
-    assert resposta and "Enganei-me" in resposta
+    assert resposta and "mistake" in resposta
     lylla.comandos.esquecer_todos()
 
 
@@ -224,7 +224,7 @@ def test_guardar_face_diz_a_privacidade_antes_de_qualquer_pose(lylla):
     lylla.ver.guardar_face("Teste", aviso=ditas.append)
     assert ditas, "não disse nada nenhuma"
     assert ditas[0] == lylla.ver.PRIVACIDADE
-    assert any("olha para mim" in d for d in ditas)
+    assert any("look at me" in d for d in ditas)
 
 
 def test_guardar_face_em_simulacao_nao_guarda_nada(lylla):

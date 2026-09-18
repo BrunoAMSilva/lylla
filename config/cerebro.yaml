@@ -107,6 +107,35 @@ pensar:
   #    vezes, e das três foi por o valor estar só no mini e um sync o apagar.
   extra: {think: false}  # o que aqui estiver vai direito ao corpo do pedido
 
+  # O MEIO-TERMO: pensar SÓ quando a pergunta pede uma explicação («what are
+  # classes?», «porque é que o céu é azul?»). O resto continua com think:false.
+  # O Pi tapa a espera com um «let me think» assim que o mini decide isto.
+  # ⚠️ O `max_tokens` aqui conta o raciocínio TAMBÉM — é por isso que é 5×
+  #    maior. Se voltar a fala vazia (a frase de recurso), é este número.
+  #    Medir com `python -m cerebro.medir` antes de mexer.
+  explicar:
+    ativo: true
+    extra: {think: true}
+    max_tokens: 1500
+    max_frases: 5
+    timeout_s: 60
+
+  # Uma conversa nova ao fim de tanto tempo sem falar com ESSA pessoa: o
+  # histórico vai fora e fica só a memória. Cada pessoa tem o seu histórico.
+  minutos_ate_nova_conversa: 15
+
+# ----------------------------------------------------------------------------
+# MEMÓRIA — o que ela sabe de cada pessoa (ver cerebro/memoria.py)
+#
+# Um JSON fora do Git que se edita à mão: `partilhado` (vai para toda a gente)
+# e `pessoas` (só para essa pessoa). O modelo acrescenta factos sozinho pelo
+# campo `lembrar` — só de quem ela reconhece pela cara. Se o ficheiro não
+# existir, começa pelo config/memoria.exemplo.json.
+# ----------------------------------------------------------------------------
+memoria:
+  ativa: true
+  ficheiro: "data/memoria.json"
+
 # ----------------------------------------------------------------------------
 # FALAR — a voz
 #

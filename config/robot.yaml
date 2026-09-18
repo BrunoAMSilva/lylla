@@ -260,6 +260,9 @@ faces:
 #
 # As experiências antigas com vozes locais continuam nos scripts, mas a
 # montagem atual usa a voz produzida pelo mac mini.
+# ⚠️ A VOZ É INGLESA (GLaDOS, fonemizador en-us). As frases fixas do robô
+#    (robot/voice/frases.py, ferramentas, navegação) já são SÓ em inglês;
+#    pôr "pt" aqui só mudava o LLM — e o que ele dissesse sairia estropiado.
 lingua: "en"          # a Lara está a aprender inglês e gosta da GLaDOS
 
 voz:
@@ -287,7 +290,15 @@ voz:
   idioma: "auto"
   palavra_chave: "ola_robo"
   limiar_palavra_chave: 0.6          # subir se ele acordar sozinho
-  silencio_para_parar_s: 1.0         # quanto silêncio marca o fim da frase
+  # QUANDO É QUE A FRASE ACABOU. As crianças fazem pausas a meio («what is…
+  # hmm… classes?»), e com 1 s fixo o robô ia responder a meia pergunta.
+  # A pausa que fecha a frase é maior no princípio, enquanto ela arruma a
+  # ideia. As luzes mostram esta conta: verde → amarelo → laranja → roxo.
+  silencio_para_parar_s: 1.2         # a pausa normal que fecha a frase
+  silencio_extra_inicio_s: 0.8       # + isto enquanto ela falou menos de…
+  fala_curta_s: 1.5                  # … este tempo
+  espera_inicio_s: 6.0               # quanto espera que ela COMECE a falar
+  max_frase_s: 15.0                  # uma frase nunca passa disto
 
   # O MICROFONE I2S OCUPA UM SLOT DOS DOIS. O `L/R` do MEMS escolhe qual; o
   # outro fica vazio. Pedir um canal só à ALSA mistura os dois e o sinal cai
@@ -434,3 +445,19 @@ i2c:
   # NOTA: o endereço dos servos NÃO está aqui — vive em bracos.i2c, que é
   # onde o arms.py o vai buscar. Um valor em dois sítios é um valor que fica
   # dessincronizado.
+
+# ----------------------------------------------------------------------------
+# ROTINAS — o que o robô faz em cada momento da conversa (robot/rotinas.py)
+#
+# Cada momento é uma lista de enriquecimentos pequenos: luzes, sons, caras e
+# «hmm». Descomenta um e muda a lista para experimentar — por exemplo, tirar o
+# bip de «estou a ouvir», ou pôr os olhos em coração quando ela acaba de falar.
+# Nomes que existem: python -c "from robot import rotinas; print(rotinas.conhecidos())"
+# ----------------------------------------------------------------------------
+# rotinas:
+#   acordar:  [luz.a_ouvir, olhos.atento, som.a_ouvir]
+#   ouvi:     [som.ouvi, luz.a_pensar, olhos.a_pensar]
+#   a_pensar: [voz.hmm]
+#   a_pensar_muito: [voz.deixa_pensar]
+#   a_falar:  [luz.a_falar]
+#   acabei:   [luz.repouso]

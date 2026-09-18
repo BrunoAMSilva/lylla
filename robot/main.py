@@ -3,21 +3,21 @@
     python -m robot.main                    no Raspberry Pi
     ROBO_SIMULAR=1 python -m robot.main     no Mac, sem hardware nenhum
 
-O que acontece:
+O ciclo, dez vezes por segundo (ver `principal()`):
 
-    1. Espera pela palavra "Olá robô"                    (no Pi, sempre)
-    2. Acorda os olhos
-    3. Abre o WebSocket e começa a mandar áudio JÁ  ─────────┐
-       (a começar pelo pré-rolo: o que já estava em buffer)  │
-    4. O mini vai transcrevendo enquanto ela fala            │
-    5. O Pi deteta o silêncio e diz "acabou"                 │
-    6. O robô muda a cara e toca cada frase mal ela chega  ◄─┘
-    7. Executa as ações que vierem na resposta
+    1. cuidar do corpo      motores pendurados, sono, bateria
+    2. olhar à volta        quem está à frente
+    3. continuar tarefas    seguir, escondidas, ir a uma divisão
+    4. conversar            quando alguém chama (Enter, ou a palavra mágica)
 
-Os passos 3 a 6 são UMA ligação, e as duas pontas trabalham ao mesmo tempo:
-o mini transcreve enquanto ela fala, e escreve a segunda frase enquanto o
-robô diz a primeira. É essa sobreposição que faz a diferença entre uma
-conversa e um formulário.
+E cada conversa são quatro passos (robot/brain/conversa.py):
+
+    OUVIR → INTERPRETAR → CONFIRMAR → EXECUTAR
+    luzes verde→laranja · mini transcreve e pensa · bip, luz roxa, «hmm» ·
+    falar, andar, seguir, aprender uma cara…
+
+As luzes, os sons e as caras de cada momento são ROTINAS (robot/rotinas.py):
+listas de enriquecimentos pequenos, que se mudam no robot.yaml.
 
 Com o mini desligado o robô não percebe o que lhe dizem. Diz isso com a voz
 que tem em cache e continua a reconhecer pessoas. Nenhuma ordem falada pode ser
@@ -35,14 +35,16 @@ import sys
 import threading
 import time
 
-from robot import config
-from robot.brain import cerebro, comandos_diretos, companion, contexto, follow, tools
+from robot import config, rotinas
+# (comandos_diretos, contexto, tools, listen e sensors já não são usados aqui
+#  dentro, mas os testes chegam a eles por `main.` — ficam importados.)
+from robot.brain import cerebro, comandos_diretos, companion, contexto, conversa, follow, tools  # noqa: F401
 from robot.brain.state import Estado, Maquina
-from robot.hardware import arms, eyes, glow, motors, power, sensors
+from robot.hardware import arms, eyes, glow, motors, power, sensors  # noqa: F401
 from robot.navigation import ir_para as navegar
 from robot.navigation import procurar
 from robot.perception import faces
-from robot.voice import listen, speak, wakeword
+from robot.voice import enchimentos, frases, listen, speak, wakeword  # noqa: F401
 
 _a_correr = True
 
@@ -117,13 +119,15 @@ def _acordou(timeout: float) -> bool:
         return _enter.carregou(timeout)
     return wakeword.esperar_pela_palavra(timeout=timeout)
 
-# O que ele diz quando o mini não responde. É uma frase FIXA de propósito:
-# fica na cache de voz depois de ser dita uma vez, e a partir daí sai mesmo
-# sem rede nenhuma. Uma frase diferente de cada vez nunca estaria em cache.
-FRASE_SEM_CEREBRO = (
-    "O meu cérebro grande está a dormir. Ainda te vejo, mas não consigo "
-    "perceber novas ordens faladas."
-)
+def __getattr__(nome: str):
+    """`main.FRASE_SEM_CEREBRO` continua a existir, na língua do momento.
+
+    É uma frase FIXA de propósito: fica na cache de voz depois de ser dita uma
+    vez, e a partir daí sai mesmo sem rede nenhuma.
+    """
+    if nome == "FRASE_SEM_CEREBRO":
+        return frases.dizer("sem_cerebro")
+    raise AttributeError(nome)
 
 
 def _carregar_comandos_da_lara() -> None:
@@ -169,7 +173,7 @@ def arrancar() -> Maquina:
 
         print(f"   mBot2: {'✅ ligado' if mbot2.ligar() else '❌ não respondeu'}")
 
-    glow.respirar("base")   # a base pulsa devagar — lê-se como "vivo em repouso"
+    rotinas.correr("acabei")   # a base pulsa devagar — lê-se como "vivo em repouso"
 
     # ⚠️ O modo é definido ANTES de qualquer movimento poder acontecer. Se
     #    fosse definido mais tarde, havia uma janela em que um comando à
@@ -198,201 +202,34 @@ def arrancar() -> Maquina:
     else:
         print("\n   Faz um som para começar. Ctrl+C para parar.\n")
 
+    # Os «hmm» pedem-se já ao mini, em fundo: quando for preciso o primeiro,
+    # tem de estar em cache — um «hmm» que vai à rede chega depois da resposta.
+    enchimentos.preparar()
+
     maquina = Maquina()
     maquina.mudar(Estado.ATENTO)
-    speak.falar(f"Olá! Chamo-me {nome}.")
+    speak.falar(frases.dizer("ola", nome=nome))
     arms.acenar(2)
     maquina.mudar(Estado.A_DORMIR)
     return maquina
 
 
-def _fechar(eventos) -> None:
-    """Acaba um turno a meio, do lado do robô.
-
-    Fechar o gerador fecha o WebSocket; o mini vê o socket cair a meio de um
-    `send`, fecha o gerador dele, e não chega a escrever nada no histórico.
-    """
-    try:
-        eventos.close()
-    except Exception:  # noqa: BLE001
-        pass
-
-
-def _executar(acoes: list[dict], maquina: Maquina) -> None:
-    """Faz o que o cérebro pediu, e diz o que aconteceu se correr mal.
-
-    ⚠️ O resultado de uma ação só se fala quando é UMA RECUSA. Antes, com
-       tool calling, o texto vinha vazio e o resultado da ferramenta era a
-       única resposta possível — daí a armadilha nº 3. Agora a fala vem
-       sempre no mesmo JSON, e falar outra vez o "Andei 20 cm" só faz o robô
-       repetir-se. Mas um "não posso, está aí uma parede" tem de sair.
-    """
-    if not acoes:
-        return
-    maquina.mudar(Estado.A_AGIR)
-    for acao in acoes:
-        print(f"   ⚙️  {acao['nome']}({acao['argumentos']})")
-        resultado = tools.executar(acao["nome"], acao["argumentos"])
-        print(f"      → {resultado}")
-        if isinstance(resultado, tools.Recusa):
-            speak.falar(resultado)
+# ============================================================================
+# A CONVERSA vive em robot/brain/conversa.py — ouvir → interpretar →
+# confirmar → executar. Estes nomes ficam para quem já os usava (os testes).
+# ============================================================================
 
 
 def _consumir_turno(maquina: Maquina, eventos) -> bool:
-    """Lê os eventos de um turno e faz o robô reagir a cada um.
+    return conversa.consumir(maquina, eventos)
 
-    Devolve True se o robô chegou a dizer alguma coisa.
 
-    ⚠️ SAI SEMPRE COM O ROBÔ A TER DITO ALGUMA COISA. Qualquer que seja a
-       forma como isto corra mal — o mini a morrer, um evento estragado, um
-       erro que nunca previmos — a criança tem de ouvir uma explicação. Um
-       robô que se cala sem razão parece avariado, e é aí que o projeto morre.
-    """
-    ouvido = ""
-    falou = False
-    resposta: dict = {}
-
-    try:
-        for evento in eventos:
-            tipo = evento.get("tipo")
-
-            if tipo == "parcial":
-                # Só para o terminal: dá para ver o mini a perceber a frase
-                # enquanto ela ainda está a ser dita.
-                print(f"   … «{evento['texto']}»", end="\r", flush=True)
-
-            elif tipo == "ouvido":
-                ouvido = evento.get("texto", "")
-                print(f"   👤 «{ouvido}»" + " " * 20)
-                # Um comando direto não depende do LLM. Ainda depende desta
-                # transcrição, que vem do mini. Ver comandos_diretos.py.
-                directa = comandos_diretos.tentar(ouvido)
-                if directa is not None:
-                    print(f"   ⚡ comando direto → {directa}")
-                    speak.falar(directa)
-                    # ⚠️ Fechar o turno JÁ. Sem isto, o mini continuava a
-                    #    pensar e a sintetizar uma resposta que ninguém ia
-                    #    ouvir — e, pior, escrevia-a no histórico da conversa.
-                    #    Ao fim de uns turnos o modelo estava a raciocinar
-                    #    sobre uma conversa que nunca aconteceu.
-                    _fechar(eventos)
-                    return True
-
-            elif tipo == "expressao":
-                eyes.expressao(evento["nome"])
-
-            elif tipo == "frase":
-                if not falou:
-                    falou = True
-                    maquina.mudar(Estado.A_FALAR)
-                print(f"   🤖 «{evento['texto']}»")
-                if evento.get("audio"):
-                    speak.tocar(evento["audio"], esperar=False)
-                else:
-                    speak.falar(evento["texto"], esperar=False)
-
-            elif tipo == "resposta":
-                resposta = evento
-
-            elif tipo == "fim":
-                ms = evento.get("tempo_ms", {})
-                if evento.get("motivo") == "cancelado":
-                    return True
-                if ms.get("primeira_frase"):
-                    falou_s = ms.get("fala_s")
-                    quanto = f" · ela falou {falou_s} s" if falou_s else ""
-                    print(f"   ⏱️  primeira frase {ms['primeira_frase']} ms"
-                          f" · turno {ms.get('total')} ms{quanto}")
-    except cerebro.SemCerebro as erro:
-        # ⚠️ Se ainda não disse nada, TEM de dizer agora. O `escutar()` só
-        #    levanta quando alguém o consome — a excepção nasce aqui dentro,
-        #    não em quem nos chamou — e quem nos chamou não tem como saber
-        #    que o robô ficou calado. Já esteve assim, e o robô emudecia
-        #    sempre que a rede tossia.
-        print(f"⚠️  {erro}")
-        if not falou:
-            speak.falar(FRASE_SEM_CEREBRO)
-        return True
-    except Exception as erro:  # noqa: BLE001
-        # Qualquer outra coisa: um áudio estragado (binascii.Error, que é um
-        # ValueError), um evento sem a chave que esperávamos, o que for. O
-        # robô não sabe o que aconteceu, mas sabe que não conseguiu — e diz.
-        print(f"⚠️  {type(erro).__name__}: {erro}")
-        if not falou:
-            speak.falar("Baralhei-me toda. Dizes outra vez?")
-        return True
-
-    # Sem `and ouvido`: o que interessa é ele NÃO TER DITO NADA. Com a
-    # condição dupla, uma resposta com a fala vazia deixava o robô a
-    # executar a ação em silêncio.
-    if not falou:
-        speak.falar("Não percebi. Podes repetir?")
-        return True
-
-    for razao in resposta.get("recusadas", []):
-        print(f"   ↯ recusei: {razao}")
-
-    speak.esperar_acabar()      # as ações vêm DEPOIS da fala, não por cima
-    _executar(resposta.get("acoes", []), maquina)
-    return True
+def _executar(acoes: list[dict], maquina: Maquina) -> None:
+    conversa.executar_acoes(acoes, maquina)
 
 
 def uma_interacao(maquina: Maquina, obs=None) -> None:
-    """Um ciclo completo: ouvir → (mini) → falar → agir."""
-    maquina.mudar(Estado.A_OUVIR)
-    ctx = contexto.montar(maquina, obs)
-    if ctx.get("pessoa"):
-        maquina.pessoa = ctx["pessoa"]
-        print(f"   👁️  vejo: {ctx['pessoa']}")
-
-    if config.a_simular():
-        # Em simulação não há microfone: escreve-se a frase e manda-se texto.
-        texto = listen.ouvir()
-        if texto:
-            directa = comandos_diretos.tentar(texto)
-            if directa is not None:
-                print(f"   ⚡ comando direto → {directa}")
-                speak.falar(directa)
-            else:
-                maquina.mudar(Estado.A_PENSAR)
-                try:
-                    _consumir_turno(maquina, cerebro.turno(texto=texto, contexto=ctx))
-                except cerebro.SemCerebro as erro:
-                    print(f"⚠️  {erro}")
-                    speak.falar(FRASE_SEM_CEREBRO)
-        glow.respirar("base")
-        maquina.mudar(Estado.ATENTO)
-        return
-
-    maquina.mudar(Estado.A_PENSAR)
-    glow.pulsar("base")     # a pulsar depressa enquanto ouve e pensa
-    try:
-        if config.obter("cerebro.escutar_em_directo", True):
-            # O caminho normal: o áudio vai a caminho do mini enquanto ela
-            # fala, e ele vai transcrevendo. Ver docs/AI-config.md.
-            #
-            # O `cancelar` é o botão vermelho da conversa: se o robô tiver de
-            # parar enquanto ela ainda fala (bateria crítica, o botão de
-            # emergência), o turno acaba sem esperar pelo modelo.
-            eventos = cerebro.escutar(listen.escutar_em_directo(), contexto=ctx,
-                                      cancelar=lambda: not _a_correr)
-        else:
-            # O caminho antigo: gravar tudo, e só depois enviar. Fica como
-            # interruptor — se o streaming der problemas em casa, uma linha
-            # no robot.yaml põe o robô a funcionar como funcionava.
-            wav = listen.gravar_wav()
-            if wav is None:
-                speak.falar("Não percebi. Podes repetir?")
-                maquina.mudar(Estado.ATENTO)
-                return
-            eventos = cerebro.turno(wav=wav, contexto=ctx)
-        _consumir_turno(maquina, eventos)
-    except cerebro.SemCerebro as erro:
-        print(f"⚠️  {erro}")
-        speak.falar(FRASE_SEM_CEREBRO)
-
-    glow.respirar("base")
-    maquina.mudar(Estado.ATENTO)
+    conversa.uma_interacao(maquina, obs, cancelar=lambda: not _a_correr)
 
 
 _avisou_bateria = False
@@ -429,14 +266,14 @@ def _verificar_bateria(maquina: Maquina) -> None:
 
     if power.critico():
         eyes.expressao("a_dormir")
-        speak.falar("Já não tenho bateria nenhuma. Vou dormir. Até já!")
+        speak.falar(frases.dizer("bateria_critica"))
         motors.parar()
         arms.relaxar()
         _desligar_o_pi()
     elif power.tem_fome() and not _avisou_bateria:
         _avisou_bateria = True
         eyes.expressao("bateria_fraca")
-        speak.falar(f"Estou com fome. Tenho só {power.percentagem()} por cento de bateria.")
+        speak.falar(frases.dizer("bateria_fraca", pct=power.percentagem()))
 
 
 def principal(argv: list[str] | None = None) -> None:
@@ -446,64 +283,28 @@ def principal(argv: list[str] | None = None) -> None:
 
     maquina = arrancar()
 
+    # ╔══════════════════════════════════════════════════════════════════╗
+    # ║  O CICLO — dez vezes por segundo, sempre pela mesma ordem:       ║
+    # ║                                                                  ║
+    # ║    1. cuidar do corpo      motores pendurados, sono, bateria     ║
+    # ║    2. olhar à volta        quem está à frente (modo secretária)  ║
+    # ║    3. continuar tarefas    seguir, escondidas, ir a uma divisão  ║
+    # ║    4. conversar            se alguém chamou: ouvir → interpretar ║
+    # ║                            → confirmar → executar                ║
+    # ╚══════════════════════════════════════════════════════════════════╝
     while _a_correr:
         try:
-            # Rede de segurança: se um movimento ficou pendurado, parar.
-            motors.verificar_timeout()
-
-            # Cai no sono ao fim de 5 minutos sem ninguém falar com ele.
-            if maquina.deve_adormecer():
-                maquina.mudar(Estado.A_DORMIR)
-                arms.relaxar()   # servos parados deixam de aquecer
-                glow.respirar("base", periodo=7.0, minimo=0.03, maximo=0.15)
-
-            # Bateria a acabar — avisar uma vez, e desligar-se se for crítico.
-            _verificar_bateria(maquina)
-
-            # Modo secretária: reparar em quem chega, seguir com os olhos,
-            # entreter-se sozinho. Nunca fala — para isso é a palavra-chave.
-            obs = companion.tick(maquina, mexer=OPCOES.mbot)
-            if obs.presente:
-                maquina.registar_presenca()
-
-            # Modo seguir: andar atrás de quem o robô está a ver. Ligado pela
-            # ação `seguir` do cérebro; desligado pelo "pára" e pelo veto dos
-            # sensores, que estão dentro do um_passo(). Ver D17.
-            if OPCOES.mbot and follow.a_seguir():
-                comando = follow.um_passo(obs)
-                if comando.parado and not obs.presente:
-                    follow.parar()
-                    speak.falar("Perdi-te de vista!", esperar=False)
-
-            # Atravessar a casa sozinha, ligado pela ação `ir_para` do cérebro,
-            # e o jogo das escondidas, que é o mesmo em ciclo. Ou anda um ou
-            # anda o outro — nunca os dois a mandar nos mesmos motores.
-            #
-            # Os dois FALAM SEMPRE no fim: chegar em silêncio e desistir em
-            # silêncio parecem a mesma coisa a quem está a ver.
-            if OPCOES.mbot and procurar.a_procurar():
-                jogada = procurar.um_passo(obs)
-                if jogada.terminou:
-                    speak.falar(_fim_do_jogo(jogada), esperar=False)
-                    eyes.expressao("contente" if jogada.encontrou else "triste")
-                    # ⚠️ «perdi-me» NÃO acaba o jogo: ele fica à espera que lhe
-                    #    digam onde está (ação ir_para com estou_aqui=true).
-                    if jogada.razao != "onde estou":
-                        procurar.parar()
-            elif OPCOES.mbot and navegar.a_navegar():
-                passo = navegar.um_passo()
-                if passo.terminou:
-                    speak.falar(_fim_da_viagem(passo.razao), esperar=False)
+            _cuidar_do_corpo(maquina)
+            obs = _olhar_a_volta(maquina)
+            _continuar_tarefas(obs)
 
             # ⚠️ Timeout curto de propósito: o motors.verificar_timeout() só
-            #    corre entre chamadas desta função. Com timeout=30 a rede de
-            #    segurança de 3 s dos motores seria, na prática, de 30 s.
+            #    corre entre voltas. Com timeout=30 a rede de segurança de 3 s
+            #    dos motores seria, na prática, de 30 s.
             if _acordou(0.5):
                 maquina.mudar(Estado.ATENTO)
                 uma_interacao(maquina, obs)
             else:
-                # Sem palavra-chave — respirar e voltar ao topo do ciclo,
-                # onde o timeout dos motores é verificado outra vez.
                 time.sleep(0.05)
 
         except KeyboardInterrupt:
@@ -521,27 +322,81 @@ def principal(argv: list[str] | None = None) -> None:
             maquina.mudar(Estado.ATENTO)
 
 
+def _cuidar_do_corpo(maquina: Maquina) -> None:
+    """1. A rede de segurança dos motores, o sono e a bateria."""
+    motors.verificar_timeout()      # um movimento pendurado pára aqui
+
+    # Cai no sono ao fim de 5 minutos sem ninguém falar com ele.
+    if maquina.deve_adormecer():
+        maquina.mudar(Estado.A_DORMIR)
+        arms.relaxar()              # servos parados deixam de aquecer
+        rotinas.correr("adormecer")
+
+    _verificar_bateria(maquina)
+
+
+def _olhar_a_volta(maquina: Maquina):
+    """2. Modo secretária: reparar em quem chega, seguir com os olhos,
+    entreter-se sozinho. Nunca fala — para isso é a palavra-chave."""
+    obs = companion.tick(maquina, mexer=OPCOES.mbot)
+    if obs.presente:
+        maquina.registar_presenca()
+    return obs
+
+
+def _continuar_tarefas(obs) -> None:
+    """3. O que o robô está a meio de fazer: seguir, escondidas, navegar.
+
+    Ligados pelas ações do cérebro; desligados pelo «pára» e pelo veto dos
+    sensores (dentro de cada um_passo()). Os três FALAM SEMPRE no fim:
+    chegar em silêncio e desistir em silêncio parecem a mesma coisa.
+    """
+    if not OPCOES.mbot:
+        return
+
+    if follow.a_seguir():
+        comando = follow.um_passo(obs)
+        if comando.parado and not obs.presente:
+            follow.parar()
+            speak.falar(frases.dizer("perdi_te"), esperar=False)
+
+    # Ou anda a procura ou anda a navegação — nunca os dois nos mesmos motores.
+    if procurar.a_procurar():
+        jogada = procurar.um_passo(obs)
+        if jogada.terminou:
+            speak.falar(_fim_do_jogo(jogada), esperar=False)
+            eyes.expressao("contente" if jogada.encontrou else "triste")
+            # ⚠️ «perdi-me» NÃO acaba o jogo: ele fica à espera que lhe
+            #    digam onde está (ação ir_para com estou_aqui=true).
+            if jogada.razao != "onde estou":
+                procurar.parar()
+    elif navegar.a_navegar():
+        passo = navegar.um_passo()
+        if passo.terminou:
+            speak.falar(_fim_da_viagem(passo.razao), esperar=False)
+
+
 def _fim_do_jogo(jogada) -> str:
     if jogada.encontrou:
-        onde = f" {navegar.com_artigo(jogada.onde, 'em')}" if jogada.onde else ""
-        return f"Encontrei-te{onde}!"
+        onde = f" {navegar.em_ingles(jogada.onde, 'em')}" if jogada.onde else ""
+        return f"Found you{onde}!"
     return {
-        "não te encontrei": "Desisto! Onde é que tu estás?",
-        "onde estou": "Espera... perdi-me. Em que divisão é que eu estou?",
-        "desisti": "Não consigo lá chegar. Ganhaste.",
-        "precipício": "Parei o jogo — há aqui um degrau!",
-    }.get(jogada.razao, "Acabou o jogo.")
+        "não te encontrei": "I give up! Where are you?",
+        "onde estou": "Wait... I'm lost. Which room am I in?",
+        "desisti": "I can't get there. You win!",
+        "precipício": "I stopped the game, there's a step here!",
+    }.get(jogada.razao, "Game over.")
 
 
 def _fim_da_viagem(razao: str) -> str:
     """Uma frase para cada maneira de uma viagem acabar. Nunca «erro»."""
     return {
-        "cheguei": "Cheguei!",
-        "precipício": "Parei — há aqui um degrau!",
-        "encravada": "Estou entalada, não consigo passar.",
-        "perdi-me": "Já não sei bem onde estou. Diz-me em que divisão é que eu estou?",
-        "demorou de mais": "Desisti, estava a demorar demasiado.",
-    }.get(razao, "Parei.")
+        "cheguei": "I'm here!",
+        "precipício": "I stopped, there's a step here!",
+        "encravada": "I'm stuck, I can't get through.",
+        "perdi-me": "I'm not sure where I am. Which room am I in?",
+        "demorou de mais": "I gave up, it was taking too long.",
+    }.get(razao, "Stopped.")
 
 
 if __name__ == "__main__":

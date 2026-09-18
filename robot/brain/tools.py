@@ -66,7 +66,7 @@ class Recusa(str):
 
 def _mover(direcao: str = "frente", cm: int = 20, **_) -> str:
     if direcao not in ("frente", "tras"):
-        return Recusa(f"Não sei o que é '{direcao}'. Só sei ir para a frente ou para trás.")
+        return Recusa(f"I don't know what '{direcao}' means. I can only go forward or back.")
     # ⚠️ Um valor que não se percebe é uma RECUSA, não os 20 cm por omissão.
     #    Cair no valor por omissão é o robô inventar uma ordem que ninguém
     #    deu — e a única maneira de o notarmos era vê-lo andar. O _virar já
@@ -74,91 +74,92 @@ def _mover(direcao: str = "frente", cm: int = 20, **_) -> str:
     try:
         cm = int(cm)
     except (TypeError, ValueError, OverflowError):
-        return Recusa("Não percebi quantos centímetros.")
+        return Recusa("I didn't get how many centimetres.")
     if not 5 <= cm <= 50:
-        return Recusa(f"{cm} cm é demasiado. Só ando entre 5 e 50 cm de cada vez.")
+        return Recusa(f"{cm} centimetres is too much. I only move 5 to 50 centimetres at a time.")
 
     # A segurança física manda sempre mais que o LLM.
     if direcao == "frente" and not sensors.caminho_livre():
         eyes.expressao("surpreso")
-        return Recusa("Não posso — está alguma coisa à minha frente!")
+        return Recusa("I can't, something is in front of me!")
     if sensors.ha_precipicio():
-        return Recusa("Não posso — estou à beira de uma queda!")
+        return Recusa("I can't, I'm right at an edge!")
 
     motors.andar_cm(cm if direcao == "frente" else -cm)
-    return f"Andei {cm} cm para {'a frente' if direcao == 'frente' else 'trás'}."
+    return f"I moved {cm} centimetres {'forward' if direcao == 'frente' else 'back'}."
 
 
 def _virar(graus: int = 90, **_) -> str:
     try:
         graus = int(graus)
     except (TypeError, ValueError):
-        return Recusa("Não percebi quantos graus.")
+        return Recusa("I didn't get how many degrees.")
     if not -180 <= graus <= 180:
-        return Recusa(f"{graus} graus é demasiado. Só rodo entre -180 e 180.")
+        return Recusa(f"{graus} degrees is too much. I only turn up to 180.")
     if sensors.ha_precipicio():
-        return Recusa("Não me mexo — estou à beira de uma queda!")
+        return Recusa("I won't move, I'm right at an edge!")
     motors.virar_graus(graus)
-    return f"Rodei {abs(graus)} graus para a {'direita' if graus > 0 else 'esquerda'}."
+    return f"I turned {abs(graus)} degrees to the {'right' if graus > 0 else 'left'}."
 
 
 def _expressao(nome: str = "neutro", **_) -> str:
     if nome not in EXPRESSOES:
-        return Recusa(f"Não sei fazer a cara '{nome}'. Sei fazer: {', '.join(sorted(EXPRESSOES))}.")
+        return Recusa(f"I don't know the face '{nome}'. I know: {', '.join(sorted(EXPRESSOES))}.")
     eyes.expressao(nome)
-    return f"Fiquei com cara de {nome.replace('_', ' ')}."
+    return f"Now I look {nome.replace('_', ' ')}."
 
 
 def _quem_esta_aqui(**_) -> str:
     from robot.perception import faces
 
     nome = faces.quem_esta_a_ver()
-    return f"É a/o {nome}." if nome else "Não vejo ninguém que eu conheça."
+    return f"It's {nome}." if nome else "I don't see anyone I know."
 
 
 def _distancia(**_) -> str:
-    return f"O obstáculo mais próximo está a {sensors.distancia_cm():.0f} centímetros."
+    return f"The closest thing is {sensors.distancia_cm():.0f} centimetres away."
 
 
 def _gesto(nome: str = "acenar", **_) -> str:
     if nome not in GESTOS:
-        return Recusa(f"Não sei fazer o gesto '{nome}'. Sei: {', '.join(sorted(GESTOS))}.")
+        return Recusa(f"I don't know the gesture '{nome}'. I know: {', '.join(sorted(GESTOS))}.")
     arms.gesto(nome)
-    return f"Fiz o gesto: {nome.replace('_', ' ')}."
+    return f"I did the gesture: {nome.replace('_', ' ')}."
 
 
 def _apontar(direcao: str = "frente", **_) -> str:
     try:
         arms.apontar(direcao)
     except ValueError as erro:
-        return Recusa(str(erro))
-    return f"Apontei para {direcao}."
+        print(f"   ↯ apontar: {erro}")
+        return Recusa("I can't point there.")
+    return f"I pointed {direcao}."
 
 
 def _garra(acao: str = "abrir", **_) -> str:
     if acao not in ("abrir", "fechar"):
-        return Recusa("A minha mão só sabe abrir ou fechar.")
+        return Recusa("My hand can only open or close.")
     arms.garra(acao)
-    return "Abri a mão." if acao == "abrir" else "Fechei a mão."
+    return "I opened my hand." if acao == "abrir" else "I closed my hand."
 
 
 def _bateria(**_) -> str:
     pct = power.percentagem()
     if pct is None:
-        return Recusa("Não consigo medir a minha bateria.")
+        return Recusa("I can't measure my battery.")
     if pct <= 20:
-        return f"Tenho {pct}% de bateria. Estou com fome!"
-    return f"Tenho {pct}% de bateria."
+        return f"I have {pct}% battery. I'm hungry!"
+    return f"I have {pct}% battery."
 
 
 def _dancar(**_) -> str:
     import time
 
     if sensors.ha_precipicio():
-        return Recusa("Aqui não danço — estou à beira de uma queda!")
+        return Recusa("I won't dance here, I'm right at an edge!")
     if not sensors.caminho_livre():
         eyes.expressao("surpreso")
-        return Recusa("Não tenho espaço para dançar. Põe-me num sítio mais aberto!")
+        return Recusa("I don't have room to dance. Put me somewhere more open!")
     eyes.expressao("feliz")
     glow.pulsar("base", periodo=0.35)
     for _i in range(2):
@@ -176,7 +177,7 @@ def _dancar(**_) -> str:
     #    Passou despercebido enquanto o resultado das ações não era falado.
     eyes.expressao("contente")
     glow.respirar("base")
-    return "Dancei!"
+    return "I danced!"
 
 
 def _seguir(acao: str = "comecar", **_) -> str:
@@ -184,17 +185,17 @@ def _seguir(acao: str = "comecar", **_) -> str:
     com `seguir.ativo: false` no robot.yaml, o pedido é recusado com
     palavras, não ignorado em silêncio."""
     if acao not in ("comecar", "parar"):
-        return Recusa("Só sei começar ou parar de seguir.")
+        return Recusa("I can only start or stop following.")
     if acao == "parar":
         follow.parar()
-        return "Fiquei aqui."
+        return "I'm staying here."
     if not follow.permitido():
-        return Recusa("Ainda não me deixam andar atrás de ninguém. Fico aqui contigo.")
+        return Recusa("I'm not allowed to follow people yet. I'll stay here with you.")
     if sensors.ha_precipicio():
-        return Recusa("Não posso — estou à beira de uma queda!")
+        return Recusa("I can't, I'm right at an edge!")
     follow.comecar()
     eyes.expressao("atento")
-    return "Vou atrás de ti!"
+    return "I'm coming with you!"
 
 
 def _ir_para(sitio: str = "", estou_aqui: bool = False, **_) -> str:
@@ -205,7 +206,7 @@ def _ir_para(sitio: str = "", estou_aqui: bool = False, **_) -> str:
     de tudo. Esta função só traduz o resultado para uma frase.
     """
     if not isinstance(sitio, str) or not sitio.strip():
-        return Recusa("Não me disseste para onde.")
+        return Recusa("You didn't tell me where to go.")
 
     # «Estás na cozinha» — não é uma viagem, é uma correção. E se estivermos a
     # meio de um jogo às escondidas, é a resposta que ele estava à espera.
@@ -214,10 +215,10 @@ def _ir_para(sitio: str = "", estou_aqui: bool = False, **_) -> str:
             estado, mensagem = procurar.responder(sitio)
             return mensagem if estado != "recusa" else Recusa(mensagem)
         erro = navegar.assumir(sitio)
-        return Recusa(erro) if erro else f"Está bem, estou {navegar.com_artigo(sitio, 'em')}."
+        return Recusa(erro) if erro else f"Okay, I'm {navegar.em_ingles(sitio, 'em')}."
 
     if sensors.ha_precipicio():
-        return Recusa("Não posso — estou à beira de uma queda!")
+        return Recusa("I can't, I'm right at an edge!")
     estado, mensagem = navegar.comecar(sitio)
     if estado == "recusa":
         return Recusa(mensagem)
@@ -233,35 +234,40 @@ def _ver_caras(so_conhecidas: bool = False, **_) -> str:
     from robot.perception import faces
 
     if not faces.disponivel():
-        return Recusa("Não tenho os olhos a funcionar — não consigo ver nada.")
+        return Recusa("My eyes aren't working, I can't see anything.")
     try:
         from robot.perception import camera
 
         imagem = camera.tirar_foto()
     except Exception as erro:  # noqa: BLE001
-        return Recusa(f"Não consegui tirar a foto: {erro}")
+        return Recusa(f"I couldn't take the photo: {erro}")
     if imagem is None:
-        return Recusa("A câmara não me deu imagem nenhuma.")
+        return Recusa("My camera didn't give me a picture.")
 
     caras = faces.detetar(imagem)
     if not caras:
-        return "Não vejo cara nenhuma."
+        return "I don't see any faces."
 
     nome = faces.quem_esta_a_ver(imagem)
     if so_conhecidas:
-        return f"Sim, é {nome}." if nome else "Vejo uma cara, mas não sei de quem é."
-    quantas = ("uma cara" if len(caras) == 1 else f"{len(caras)} caras")
-    return f"Vejo {quantas}" + (f", e uma é a da {nome}." if nome else ", mas não conheço ninguém.")
+        return f"Yes, it's {nome}." if nome else "I see a face, but I don't know who it is."
+    quantas = ("one face" if len(caras) == 1 else f"{len(caras)} faces")
+    return f"I see {quantas}" + (f", and one is {nome}." if nome else ", but I don't know anyone.")
 
 
 def _registar_cara(nome: str = "", **_) -> str:
+    """O registo inteiro por voz (ver perception/registo.py). Ele próprio diz
+    tudo, incluindo o resultado — por isso nada daqui volta a ser falado."""
+    from robot.hardware import glow
     from robot.perception import registo
-    from robot.voice import speak
+    from robot.voice import listen, speak
 
     # `esperar=True`: cada pose tem de ser OUVIDA antes de a foto sair. Com a
     # fila assíncrona o robô tirava as oito fotos enquanto ainda dizia a
     # primeira instrução.
-    return registo.registar_pela_voz(nome, lambda t: speak.falar(t, esperar=True))
+    return registo.registar_pela_voz(
+        nome, lambda t: speak.falar(t, esperar=True),
+        ouvir=lambda: listen.ouvir(ao_progresso=glow.progresso_escuta))
 
 
 def _volume(percentagem: int = 70, **_) -> str:
@@ -269,15 +275,15 @@ def _volume(percentagem: int = 70, **_) -> str:
 
     ficou = speak.definir_volume(int(percentagem) / 100.0)
     if ficou == 0:
-        return "Fiquei em silêncio. Diz-me para voltar a falar."
-    return f"Volume nos {round(ficou * 100)} por cento."
+        return "I'm quiet now. Tell me to talk again."
+    return f"Volume at {round(ficou * 100)} percent."
 
 
 def _piscar_luzes(vezes: int = 3, **_) -> str:
     import time
 
     if not glow.disponivel():
-        return Recusa("Não tenho luzes ligadas.")
+        return Recusa("I don't have any lights connected.")
     antes = glow.nivel_atual().get("base", 0.0)
     glow.parar_animacao()
     for _i in range(int(vezes)):
@@ -286,7 +292,7 @@ def _piscar_luzes(vezes: int = 3, **_) -> str:
         glow.tudo(0.0)
         time.sleep(0.12)
     glow.tudo(antes)
-    return f"Pisquei {int(vezes)} vezes."
+    return f"I blinked {int(vezes)} times."
 
 
 def _diagnostico(**_) -> str:
@@ -296,20 +302,20 @@ def _diagnostico(**_) -> str:
 
     tenho, faltam = [], []
     for etiqueta, presente in (
-        ("o chassis do mBot2", mbot2.disponivel()),
-        ("a câmara", camera.disponivel()),
-        ("os olhos que reconhecem caras", faces.disponivel()),
-        ("os braços", arms.disponivel()),
-        ("as luzes", glow.disponivel()),
+        ("the mBot2 chassis", mbot2.disponivel()),
+        ("the camera", camera.disponivel()),
+        ("face recognition", faces.disponivel()),
+        ("the arms", arms.disponivel()),
+        ("the lights", glow.disponivel()),
     ):
         (tenho if presente else faltam).append(etiqueta)
 
     partes = []
     if tenho:
-        partes.append("Tenho " + ", ".join(tenho) + ".")
+        partes.append("I have " + ", ".join(tenho) + ".")
     if faltam:
-        partes.append("Falta-me " + ", ".join(faltam) + ".")
-    return " ".join(partes) or "Não consigo verificar nada."
+        partes.append("I'm missing " + ", ".join(faltam) + ".")
+    return " ".join(partes) or "I can't check anything."
 
 
 def _olhar(direcao: str = "frente", **_) -> str:
@@ -319,7 +325,7 @@ def _olhar(direcao: str = "frente", **_) -> str:
     }
     x, y = destinos.get(direcao, (0.0, 0.0))
     eyes.olhar_para(x, y)
-    return f"A olhar para {'a ' + direcao if direcao != 'frente' else 'a frente'}."
+    return f"Looking {({'esquerda': 'left', 'direita': 'right', 'cima': 'up', 'baixo': 'down'}).get(direcao, 'ahead')}."
 
 
 IMPLEMENTACOES = {
@@ -357,7 +363,7 @@ def executar(nome: str, argumentos: dict) -> str:
     """
     funcao = IMPLEMENTACOES.get(nome)
     if funcao is None:
-        return Recusa(f"Não sei fazer '{nome}'.")
+        return Recusa(f"I don't know how to do '{nome}'.")
     if not isinstance(argumentos, dict):
         argumentos = {}
 
@@ -367,7 +373,10 @@ def executar(nome: str, argumentos: dict) -> str:
     if nome in acoes.ACOES:
         ok, razao = acoes.validar({"nome": nome, "argumentos": argumentos})
         if not ok:
-            return Recusa(f"Não posso fazer isso assim ({razao}).")
+            # A razão fica no terminal: vem em português do acoes.py, e a voz
+            # é inglesa. Em voz alta chega dizer que não.
+            print(f"   ↯ {nome}: {razao}")
+            return Recusa("I can't do it like that.")
 
     # Deitar fora parâmetros que o LLM inventou, antes de chamar seja o que for.
     parametros = inspect.signature(funcao).parameters
@@ -380,4 +389,4 @@ def executar(nome: str, argumentos: dict) -> str:
     try:
         return funcao(**argumentos)
     except Exception as erro:  # noqa: BLE001
-        return Recusa(f"Tentei mas não consegui: {erro}")
+        return Recusa(f"I tried but I couldn't: {erro}")

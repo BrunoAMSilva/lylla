@@ -53,13 +53,13 @@ def _parar_tudo() -> str:
     ir_para.parar()
     motors.parar()
     arms.relaxar()
-    return "Parei."
+    return "Stopped."
 
 
 def _horas() -> str:
     agora = time.localtime()
-    return f"São {agora.tm_hour} e {agora.tm_min:02d}." if agora.tm_min else \
-        f"São {agora.tm_hour} horas."
+    return f"It's {agora.tm_hour}:{agora.tm_min:02d}." if agora.tm_min else \
+        f"It's {agora.tm_hour} o'clock."
 
 
 def _piscar() -> str:
@@ -91,6 +91,16 @@ def _tentar_volume(frase: str) -> str | None:
     return str(tools.executar("volume", {"percentagem": min(100, int(achou.group(1)))}))
 
 
+def _aprender_cara() -> str:
+    """«Learn my face» — o registo só por voz, sem depender do LLM acertar.
+
+    Devolve "" porque o registo já disse tudo o que havia a dizer."""
+    from robot.brain import tools
+
+    tools.executar("registar_cara", {"nome": ""})
+    return ""
+
+
 # Ordem importa: a primeira que casar é a que ganha.
 COMANDOS: tuple[tuple[tuple[str, ...], object], ...] = (
     (
@@ -111,6 +121,12 @@ COMANDOS: tuple[tuple[tuple[str, ...], object], ...] = (
     (
         ("para", "parar", "pare", "stop", "quieto", "para quieto"),
         _parar_tudo,
+    ),
+    (
+        ("learn my face", "learn my face please", "remember my face", "register my face",
+         "save my face", "guarda a minha cara", "regista a minha cara"),
+        # («aprende a minha cara» fica para o comando da Lara, em meus_comandos.py)
+        _aprender_cara,
     ),
     (
         ("que horas sao", "quais sao as horas", "diz me as horas", "horas"),

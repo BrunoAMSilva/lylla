@@ -56,7 +56,7 @@ def obter(caminho: str, omissao: Any = None) -> Any:
 
 
 def nome_do_robo() -> str:
-    return obter("nome", "Robô")
+    return obter("nome", "Lylla")
 
 
 @lru_cache(maxsize=1)
@@ -80,4 +80,4 @@ def a_simular() -> bool:
 def sim(mensagem: str) -> None:
     """Escreve uma linha de simulação, se estivermos em modo simulação."""
     if a_simular():
-        print(f"[SIM] {mensagem}", flush=True)
+        print(f"[YES] {mensagem}", flush=True)
