@@ -313,6 +313,10 @@ voz:
   # Com uma placa USB mono (o reSpeaker), voltar a 1 e 0.
   canais_microfone: 2
   canal_microfone: 0
+  # Ganho do microfone, em software (o MEMS não tem outro). 1.0 = como vem.
+  # Sobe se ele não te ouvir a 1 m; desce se a transcrição sair com ruído ou
+  # se ele acordar sozinho. ⚠️ Acima de ~4 a voz satura (fica cortada).
+  ganho_microfone: 2.5
 
 # ----------------------------------------------------------------------------
 # O CÉREBRO — o mac mini que ouve, pensa e fala

@@ -67,9 +67,22 @@ def abrir_microfone(sd, dtype: str):
 
 
 def canal_util(dados: np.ndarray) -> np.ndarray:
-    """A coluna onde o microfone está mesmo (ver `abrir_microfone`)."""
+    """A coluna onde o microfone está mesmo (ver `abrir_microfone`), já com o
+    ganho do `voz.ganho_microfone` aplicado.
+
+    O ganho é em SOFTWARE: o MEMS I2S não tem controlo de ganho nenhum que a
+    ALSA exponha. Aplica-se aqui porque é por aqui que passam as três
+    gravações (a palavra-chave, a escuta em contínuo e a gravação em lote) —
+    assim o detetor de silêncio e o mini ouvem o MESMO sinal.
+    """
     coluna = int(config.obter("voz.canal_microfone", 0))
-    return dados[:, min(coluna, dados.shape[1] - 1)]
+    amostra = dados[:, min(coluna, dados.shape[1] - 1)]
+    ganho = float(config.obter("voz.ganho_microfone", 1.0) or 1.0)
+    if ganho == 1.0:
+        return amostra
+    if np.issubdtype(amostra.dtype, np.integer):
+        return np.clip(amostra.astype(np.float32) * ganho, -32768, 32767).astype(amostra.dtype)
+    return np.clip(amostra * ganho, -1.0, 1.0).astype(amostra.dtype)
 
 
 class _Silencio:
