@@ -285,6 +285,29 @@ class SessaoParakeet(Sessao):
             raise
         self._ultimo = ""
 
+        # ⚠️ JUNTAR OS BOCADOS ANTES DE OS DAR AO MODELO.
+        #
+        #    O microfone do Pi dá 80 ms de cada vez, e um frame de encoder do
+        #    Parakeet é ~80 ms (mel de 10 ms, subamostragem 8×). Ou seja, cada
+        #    `add_audio()` entregava UM frame, quando o exemplo da biblioteca
+        #    usa 1 segundo. Medido a 17/09/2026, o mesmo WAV de 10 s:
+        #      lote      → a frase certa, 297 ms
+        #      contínuo  → «Yeah.» · «I'm not sure.» · vazio, 35 861 ms
+        #
+        #    São duas avarias com a mesma causa. A LENTIDÃO: cada chamada volta
+        #    a correr o encoder sobre a janela em cache, e com contexto
+        #    (256, 256) isso é muito trabalho — 125 vezes em vez de 10. O
+        #    DISPARATE: com `depth=1` só a primeira camada tem cache exata, o
+        #    resto é aproximação, e o erro acumula-se em cada FRONTEIRA entre
+        #    bocados. 125 fronteiras em vez de 10.
+        #
+        #    A rede continua a levar 80 ms — o que muda é só o tamanho com que
+        #    se alimenta o modelo.
+        self._por_juntar: list[np.ndarray] = []
+        self._amostras_juntas = 0
+        self._minimo = max(1, int(TAXA * float(
+            config.obter("ouvir.segundos_por_bocado", 1.0))))
+
     def _largar(self) -> None:
         if self._lock is not None:
             try:
@@ -301,17 +324,35 @@ class SessaoParakeet(Sessao):
         except ImportError:
             return audio.astype(np.float32)
 
-    def adicionar(self, audio: np.ndarray) -> str:
+    def _despejar(self) -> str:
+        """Dá ao modelo tudo o que está por juntar. Devolve o texto até aqui."""
+        if not self._por_juntar:
+            return self._ultimo
+        junto = (self._por_juntar[0] if len(self._por_juntar) == 1
+                 else np.concatenate(self._por_juntar))
+        self._por_juntar = []
+        self._amostras_juntas = 0
+
         # O `mx.array` também é MLX: tem de nascer no mesmo fio que o usa.
         def _passo() -> str:
-            self._transcritor.add_audio(self._mx(audio))
+            self._transcritor.add_audio(self._mx(junto))
             return (self._transcritor.result.text or "").strip()
 
         self._ultimo = no_fio_mlx(_passo)
         return self._ultimo
 
+    def adicionar(self, audio: np.ndarray) -> str:
+        self._por_juntar.append(np.asarray(audio, dtype=np.float32))
+        self._amostras_juntas += len(audio)
+        if self._amostras_juntas < self._minimo:
+            return self._ultimo     # ainda não há bocado que chegue
+        return self._despejar()
+
     def terminar(self) -> str:
         try:
+            # O resto que ficou por juntar vai agora: é o fim da frase dela, e
+            # é a parte que mais falta faz.
+            self._despejar()
             self._ultimo = no_fio_mlx(
                 lambda: (self._transcritor.result.text or "").strip())
         finally:

@@ -48,6 +48,16 @@ ouvir:
   contexto_streaming: [256, 256]
   profundidade_streaming: 1
 
+  # ⚠️ O TAMANHO DO BOCADO DADO AO MODELO — não é o da rede.
+  #    O Pi manda 80 ms de cada vez (é o que o microfone dá) e isso não muda.
+  #    Mas um frame de encoder do Parakeet é ~80 ms, portanto cada bocado era
+  #    UM frame, quando o exemplo da biblioteca usa 1 segundo. Medido a
+  #    17/09/2026 com o mesmo WAV de 10 s: em lote, a frase certa em 297 ms;
+  #    em contínuo, «Yeah.» · «I'm not sure.» · vazio, em 35 861 ms.
+  #    Baixar isto volta a partir a transcrição; subir atrasa a primeira
+  #    palavra. Mexer só com medição ao lado.
+  segundos_por_bocado: 1.0
+
   # Alternativas, quando motor: "mlx" ou "faster"
   modelo: "mlx-community/whisper-large-v3-turbo"
   modelo_faster: "small"

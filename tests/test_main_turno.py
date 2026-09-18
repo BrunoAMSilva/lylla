@@ -209,10 +209,17 @@ def test_o_que_correu_bem_nao_e_repetido(robo, monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def test_sem_mini_o_robo_explica_se_em_vez_de_emudecer(robo, monkeypatch):
+@pytest.mark.parametrize("em_directo", [True, False])
+def test_sem_mini_o_robo_explica_se_em_vez_de_emudecer(robo, monkeypatch, em_directo):
     """Já não há Whisper nem Ollama no Pi: sem o mini, o robô não percebe o
     que lhe dizem. O que NÃO pode acontecer é ficar calado — a Lara tem de
-    saber que ele a ouviu e não a percebeu."""
+    saber que ele a ouviu e não a percebeu.
+
+    ⚠️ PELOS DOIS CAMINHOS. O `cerebro.escutar_em_directo` escolhe entre o
+       contínuo e o lote, e ficou em `false` quando se mediu que o contínuo
+       partia a transcrição. Este teste só cobria o contínuo — a garantia
+       mais importante do projeto estava a depender de uma linha do YAML.
+    """
     main, registo = robo
     from robot.brain import cerebro
 
@@ -220,8 +227,13 @@ def test_sem_mini_o_robo_explica_se_em_vez_de_emudecer(robo, monkeypatch):
         raise cerebro.SemCerebro("o mini está desligado")
         yield  # noqa: pragma
 
+    monkeypatch.setattr(main.config, "obter",
+                        lambda chave, omissao=None:
+                        em_directo if chave == "cerebro.escutar_em_directo" else omissao)
     monkeypatch.setattr(main.cerebro, "escutar", sem_cerebro)
+    monkeypatch.setattr(main.cerebro, "turno", sem_cerebro)
     monkeypatch.setattr(main.listen, "escutar_em_directo", lambda *a, **k: iter([b""]))
+    monkeypatch.setattr(main.listen, "gravar_wav", lambda *a, **k: _wav_curto())
     monkeypatch.setattr(main.contexto, "montar", lambda *a, **k: {})
 
     main.uma_interacao(Maquina())
