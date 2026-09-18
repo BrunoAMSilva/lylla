@@ -231,16 +231,25 @@ class MotorMLX(_Base):
             import mlx_whisper  # importado aqui: só existe em Apple Silicon
 
             self._mlx = mlx_whisper
-            # Um pedido vazio força o download e aquece o modelo.
-            self._mlx.transcribe(np.zeros(TAXA, dtype=np.float32), path_or_hf_repo=self.modelo)
+            # Um pedido vazio força o download e aquece o modelo — no fio do
+            # MLX, pela mesma razão do Parakeet: o modelo nasce onde é usado.
+            no_fio_mlx(self._mlx.transcribe, np.zeros(TAXA, dtype=np.float32),
+                       path_or_hf_repo=self.modelo)
 
     def transcrever(self, audio: np.ndarray, lingua: str | None) -> dict:
         self.carregar()
+        # A PISTA: o Whisper escreve o que acha mais provável, e «Lylla» não é
+        # uma palavra que ele conheça. Um prompt inicial com o nome e o tipo
+        # de frase que costuma ouvir puxa-o para «Boa noite, Lylla» em vez de
+        # «Boa noite, Lila» (ou pior). Não é uma instrução — é contexto.
+        pista = config.obter("ouvir.prompt_inicial") or None
         with self._lock:
-            resultado = self._mlx.transcribe(
+            resultado = no_fio_mlx(
+                self._mlx.transcribe,
                 audio,
                 path_or_hf_repo=self.modelo,
                 language=lingua,
+                initial_prompt=pista,
                 fp16=True,
                 condition_on_previous_text=False,
             )

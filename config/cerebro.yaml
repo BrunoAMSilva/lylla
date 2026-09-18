@@ -37,7 +37,12 @@ porta: 8420
 #    uma frase gravada a sério (--audio), e escrever aqui o que sair.
 # ----------------------------------------------------------------------------
 ouvir:
-  motor: "parakeet"
+  # ⚠️ 18/09/2026: WHISPER FORÇADO A PORTUGUÊS, e não o Parakeet.
+  #    «Boa noite, Lylla» chegou ao LLM como «What I believe.» O Parakeet
+  #    deteta a língua sozinho e NÃO deixa escolhê-la — numa frase curta
+  #    decide mal, e a Lara fala português. O Whisper aceita `language`.
+  #    Voltar ao Parakeet é trocar esta linha (e a `lingua` deixa de contar).
+  motor: "mlx"
   modelo_parakeet: "mlx-community/parakeet-tdt-0.6b-v3"   # ~2,5 GB em F32
   # Se a RAM apertar depois de o LLM entrar, há uma versão de 8 bits com
   # 908 MB: "animaslabs/parakeet-tdt-0.6b-v3-mlx-8bit" (pouco validada — medir).
@@ -62,7 +67,12 @@ ouvir:
   modelo: "mlx-community/whisper-large-v3-turbo"
   modelo_faster: "small"
 
-  lingua: "auto"     # o Parakeet ignora isto (deteta sozinho); o Whisper não
+  # "pt" = português (o Whisper não distingue pt-PT de pt-BR; a pista abaixo
+  # ajuda). "auto" volta a deixá-lo adivinhar. ⚠️ Forçado a "pt", uma frase
+  # dita em INGLÊS sai transcrita à portuguesa — é o preço de acertar nas dela.
+  lingua: "pt"
+  # O que o Whisper «já ouviu» antes da frase — ensina-lhe o nome dela.
+  prompt_inicial: "Olá Lylla. Boa noite, Lylla. A Lara está a falar com a Lylla, o robô."
 
 # ----------------------------------------------------------------------------
 # PENSAR — o LLM
