@@ -292,8 +292,15 @@ def _com_contexto(texto: str, contexto: dict | None, lingua: str) -> str:
     pessoa = contexto.get("pessoa")
     if pessoa:
         partes.append(f"you are talking to {pessoa}" if en else f"estás a falar com {pessoa}")
-    elif contexto.get("ve_alguem") is False or "pessoa" in contexto:
-        partes.append("you see nobody you know" if en else "não vês ninguém que conheças")
+    elif contexto.get("ve_alguem"):
+        # Uma cara que ela ainda não conhece. NÃO é «não vejo ninguém» — é
+        # exatamente a pessoa a quem ela pode aprender a cara.
+        partes.append("you see someone you don't know yet (you can learn their face)" if en
+                      else "vês alguém que ainda não conheces (podes aprender a cara)")
+    elif contexto.get("ve_alguem") is False:
+        partes.append("you see nobody" if en else "não vês ninguém")
+    elif "pessoa" in contexto:
+        partes.append("you don't know who is talking" if en else "não sabes quem está a falar")
     if contexto.get("bateria_pct") is not None:
         partes.append(f"battery {contexto['bateria_pct']}%" if en else f"bateria {contexto['bateria_pct']}%")
     if contexto.get("distancia_cm") is not None:

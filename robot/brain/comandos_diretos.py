@@ -124,7 +124,11 @@ COMANDOS: tuple[tuple[tuple[str, ...], object], ...] = (
     ),
     (
         ("learn my face", "learn my face please", "remember my face", "register my face",
-         "save my face", "guarda a minha cara", "regista a minha cara"),
+         "save my face", "add my face", "add a face", "add a new face", "learn a face",
+         "learn a new face", "guarda a minha cara", "regista a minha cara",
+         "adicionar uma cara", "adiciona uma cara", "adiciona a minha cara",
+         "adicionar a minha cara", "adicionar uma face", "aprende uma cara",
+         "aprender uma cara", "regista uma cara", "nova cara"),
         # («aprende a minha cara» fica para o comando da Lara, em meus_comandos.py)
         _aprender_cara,
     ),

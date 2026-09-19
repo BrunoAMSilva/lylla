@@ -185,8 +185,10 @@ ACOES: dict[str, dict[str, Any]] = {
     "registar_cara": {
         "descricao": (
             "Aprende a cara de alguém, guiando a pessoa pelas poses em voz alta "
-            "('learn my face', 'aprende a minha cara'). Se não souberes o nome, "
-            "deixa-o vazio: o robô pergunta-o sozinho, e pede licença antes."
+            "('learn my face', 'adiciona a minha cara'). Usa-a SEMPRE que to "
+            "pedirem, mesmo que não conheças a pessoa — é para isso que serve; "
+            "a câmara verifica sozinha se há alguém. Se não souberes o nome, "
+            "deixa-o vazio: o robô pergunta-o, e pede licença antes."
         ),
         "parametros": {
             "nome": {"type": "string", "description": "O nome da pessoa, se o disseram."},

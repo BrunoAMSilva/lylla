@@ -30,6 +30,12 @@ def montar(maquina=None, obs=None, pessoa: str | None = None) -> dict:
 
     contexto: dict = {}
 
+    if obs is not None:
+        # ⚠️ «Vejo alguém» e «sei quem é» são perguntas diferentes. Sem isto, uma
+        #    cara DESCONHECIDA chegava ao cérebro como «não vês ninguém» — e ao
+        #    pedir «adiciona a minha cara» ela respondia que não via ninguém,
+        #    com a pessoa mesmo à frente da câmara.
+        contexto["ve_alguem"] = bool(getattr(obs, "presente", False))
     if pessoa is None and obs is not None:
         pessoa = obs.nome if getattr(obs, "presente", False) else None
     elif pessoa is None and companion.esta_a_seguir():

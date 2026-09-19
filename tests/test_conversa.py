@@ -341,3 +341,41 @@ def test_learn_my_face_nao_depende_do_llm(monkeypatch):
     monkeypatch.setattr(tools, "executar", lambda n, a: pedidos.append((n, a)) or "")
     assert comandos_diretos.tentar("Learn my face!") == ""
     assert pedidos == [("registar_cara", {"nome": ""})]
+
+
+# ---------------------------------------------------------------------------
+# 6 · Uma cara desconhecida NÃO é «não vejo ninguém»
+# ---------------------------------------------------------------------------
+
+
+def test_uma_cara_desconhecida_chega_ao_cerebro_como_alguem(cerebro_):
+    """⚠️ O BUG (19/09/2026): «adiciona uma cara» → «não vejo ninguém», com a
+    pessoa à frente da câmara. O contexto dizia «you see nobody you know»."""
+    cerebro_.responder("add my face please", contexto={"pessoa": None, "ve_alguem": True})
+    pedido = cerebro_.motor.ultimas_mensagens[-1]["content"]
+    assert "someone you don't know" in pedido or "alguém que ainda não conheces" in pedido
+    assert "nobody" not in pedido
+
+
+def test_sem_ninguem_a_frente_continua_a_dizer_que_nao_ve(cerebro_):
+    cerebro_.responder("olá", contexto={"pessoa": None, "ve_alguem": False})
+    pedido = cerebro_.motor.ultimas_mensagens[-1]["content"]
+    assert "nobody" in pedido or "não vês ninguém" in pedido
+
+
+def test_o_contexto_distingue_ver_de_conhecer(monkeypatch):
+    from robot.brain import contexto
+    from robot.perception.attention import Observacao
+
+    ctx = contexto.montar(obs=Observacao(presente=True, nome=None))
+    assert ctx["pessoa"] is None and ctx["ve_alguem"] is True
+
+
+@pytest.mark.parametrize("frase", ["Adiciona uma cara", "adicionar uma cara", "Add my face!"])
+def test_adicionar_uma_cara_vai_direto_ao_registo(frase, monkeypatch):
+    from robot.brain import comandos_diretos, tools
+
+    pedidos = []
+    monkeypatch.setattr(tools, "executar", lambda n, a: pedidos.append(n) or "")
+    assert comandos_diretos.tentar(frase) == ""
+    assert pedidos == ["registar_cara"]
