@@ -59,7 +59,7 @@ ROTINAS_OMISSAO: dict[str, list[str]] = {
     "foto_preparar": ["luz.preparar"],
     "foto_boa":      ["luz.boa", "som.boa"],
     "foto_ma":       ["luz.ma"],
-    "registo_feito": ["luz.festa", "olhos.festejar", "som.festa"],
+    "registo_feito": ["luz.festa", "olhos.coracao", "som.festa"],
 }
 
 

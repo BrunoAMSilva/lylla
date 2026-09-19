@@ -379,3 +379,32 @@ def test_adicionar_uma_cara_vai_direto_ao_registo(frase, monkeypatch):
     monkeypatch.setattr(tools, "executar", lambda n, a: pedidos.append(n) or "")
     assert comandos_diretos.tentar(frase) == ""
     assert pedidos == ["registar_cara"]
+
+
+# ---------------------------------------------------------------------------
+# 7 · Reconhecer logo a seguir a registar
+# ---------------------------------------------------------------------------
+
+
+def test_escalar_uma_cara_leva_os_cinco_pontos_com_ela():
+    """⚠️ O BUG: só a caixa era escalada; o alignCrop usava olhos e boca da
+    imagem pequena, e ninguém era reconhecido."""
+    import numpy as np
+
+    from robot.perception import faces
+
+    cara = np.arange(15, dtype=np.float32)       # x y w h + 5 pontos + confiança
+    grande = faces.escalar_cara(cara, 2.0, 3.0)
+    assert list(grande[0:14:2]) == [x * 2 for x in range(0, 14, 2)]
+    assert list(grande[1:14:2]) == [y * 3 for y in range(1, 14, 2)]
+    assert grande[14] == 14, "a confiança não é uma coordenada"
+    assert cara[4] == 4, "a original não muda"
+
+
+def test_as_caras_das_rotinas_existem_mesmo():
+    from robot.expressions import EXPRESSOES
+
+    for nome, passos in rotinas.ROTINAS_OMISSAO.items():
+        for passo in passos:
+            if passo.startswith("olhos."):
+                assert passo.split(".", 1)[1] in EXPRESSOES, (nome, passo)

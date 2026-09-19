@@ -133,7 +133,7 @@ def _apontar(direcao: str = "frente", **_) -> str:
     except ValueError as erro:
         print(f"   ↯ apontar: {erro}")
         return Recusa("I can't point there.")
-    return f"I pointed {direcao}."
+    return f"I pointed {({'esquerda': 'left', 'direita': 'right', 'cima': 'up'}).get(direcao, 'ahead')}."
 
 
 def _garra(acao: str = "abrir", **_) -> str:

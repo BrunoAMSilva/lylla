@@ -144,6 +144,26 @@ def detetar(imagem) -> list:
     return [] if caras is None else list(caras)
 
 
+def escalar_cara(cara, escala_x: float, escala_y: float):
+    """A mesma cara, noutra resolução — a caixa E os cinco pontos.
+
+    ⚠️ O BUG QUE A IMPEDIA DE RECONHECER QUEM QUER QUE FOSSE (19/09/2026).
+       Uma cara do YuNet são 15 números: a caixa (x, y, w, h), os olhos, o
+       nariz e os cantos da boca (5 pares x, y), e a confiança. O modo
+       secretária deteta numa imagem de 320×240 e tira a assinatura da de
+       640×480 — e só escalava a CAIXA. O `alignCrop` alinha a cara pelos
+       cinco pontos, que continuavam em coordenadas da imagem pequena: a
+       «cara» recortada era um bocado de testa e parede. Assinatura lixo,
+       ninguém reconhecido — mesmo logo a seguir a registar a cara. O registo
+       não sofria disto (deteta e assina na mesma imagem), por isso a cara
+       ficava bem guardada; era a leitura que estava errada.
+    """
+    escalada = np.array(cara, dtype=np.float32, copy=True)
+    escalada[0:14:2] *= escala_x      # x, w e os cinco x
+    escalada[1:14:2] *= escala_y      # y, h e os cinco y
+    return escalada
+
+
 def assinatura(imagem, cara) -> np.ndarray | None:
     """Transforma uma cara em 128 números.
 

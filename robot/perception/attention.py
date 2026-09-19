@@ -136,13 +136,8 @@ def observar() -> Observacao:
         t1 = time.perf_counter()
         # ⚠️ A assinatura sai da imagem GRANDE, não da pequena. Reconhecer
         #    numa cara de 40 px dá vetores instáveis e trocas de identidade.
-        escala_x = imagem.shape[1] / largura
-        escala_y = imagem.shape[0] / altura
-        grande = maior.copy()
-        grande[0] *= escala_x
-        grande[1] *= escala_y
-        grande[2] *= escala_x
-        grande[3] *= escala_y
+        grande = faces.escalar_cara(maior, imagem.shape[1] / largura,
+                                    imagem.shape[0] / altura)
         nome, _ = faces.identificar(faces.assinatura(imagem, grande))
         _nome_atual = nome
         _ultima_identificacao = time.monotonic()
